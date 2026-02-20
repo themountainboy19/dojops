@@ -1,0 +1,15 @@
+{
+  "name": "oda",
+  "private": true,
+  "packageManager": "pnpm@8.15.0",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  }
+}

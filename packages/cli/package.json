@@ -1,0 +1,11 @@
+{
+  "name": "@oda/cli",
+  "version": "0.1.0",
+  "bin": {
+    "oda": "dist/index.js"
+  },
+  "dependencies": {
+    "@oda/core": "workspace:*",
+    "dotenv": "^16.0.0"
+  }
+}
