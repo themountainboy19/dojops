@@ -9,7 +9,13 @@ import {
   LLMProvider,
 } from "@oda/core";
 import { decompose, PlannerExecutor } from "@oda/planner";
-import { GitHubActionsTool } from "@oda/tools";
+import {
+  GitHubActionsTool,
+  TerraformTool,
+  KubernetesTool,
+  HelmTool,
+  AnsibleTool,
+} from "@oda/tools";
 
 function createProvider(): LLMProvider {
   const providerName = process.env.ODA_PROVIDER ?? "openai";
@@ -24,7 +30,13 @@ function createProvider(): LLMProvider {
 }
 
 async function runPlan(prompt: string, provider: LLMProvider) {
-  const tools = [new GitHubActionsTool(provider)];
+  const tools = [
+    new GitHubActionsTool(provider),
+    new TerraformTool(provider),
+    new KubernetesTool(provider),
+    new HelmTool(provider),
+    new AnsibleTool(provider),
+  ];
 
   console.log("Decomposing goal into tasks...\n");
   const graph = await decompose(prompt, provider, tools);
