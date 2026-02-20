@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import { AnsibleTool } from "./ansible-tool";
 import { AnsiblePlaybook } from "./schemas";
 

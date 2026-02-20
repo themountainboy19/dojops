@@ -5,9 +5,11 @@ import { parseAndValidate } from "./json-validator";
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
   private client: OpenAI;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model = "gpt-4o-mini") {
     this.client = new OpenAI({ apiKey });
+    this.model = model;
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
@@ -16,7 +18,7 @@ export class OpenAIProvider implements LLMProvider {
       : (req.system ?? "");
 
     const completion = await this.client.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: this.model,
       messages: [
         { role: "system", content: systemContent },
         { role: "user", content: req.prompt },

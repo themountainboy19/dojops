@@ -19,13 +19,13 @@ AI-powered DevOps automation. Generate, validate, and execute infrastructure and
 ## Architecture
 
 ```
-@oda/cli          CLI entry point (--plan, --execute, --yes, --debug-ci, --diff)
-@oda/api          REST API (Express) + web dashboard
-@oda/planner      TaskGraph decomposition + topological executor
-@oda/executor     SafeExecutor: sandbox + policy engine + approval + audit log
-@oda/tools        GitHub Actions, Terraform, Kubernetes, Helm, Ansible
-@oda/core         LLM abstraction + multi-agent system + CI debugger + infra diff
-@oda/sdk          BaseTool<T> abstract class with Zod validation
+@odaops/cli          CLI entry point (--plan, --execute, --yes, --debug-ci, --diff)
+@odaops/api          REST API (Express) + web dashboard
+@odaops/planner      TaskGraph decomposition + topological executor
+@odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
+@odaops/tools        GitHub Actions, Terraform, Kubernetes, Helm, Ansible
+@odaops/core         LLM abstraction + multi-agent system + CI debugger + infra diff
+@odaops/sdk          BaseTool<T> abstract class with Zod validation
 ```
 
 Full details in [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -40,6 +40,14 @@ Full details in [ARCHITECTURE.md](ARCHITECTURE.md).
   - **Ollama** — requires local server running at `localhost:11434`
 
 ## Installation
+
+### From npm
+
+```bash
+npm i -g @odaops/cli
+```
+
+### From source
 
 ```bash
 git clone <repo-url> oda
@@ -152,9 +160,9 @@ pnpm format             # Prettier write
 pnpm format:check       # Prettier check
 
 # Per-package commands
-pnpm --filter @oda/core test
-pnpm --filter @oda/api build
-pnpm --filter @oda/tools lint
+pnpm --filter @odaops/core test
+pnpm --filter @odaops/api build
+pnpm --filter @odaops/tools lint
 ```
 
 ## Project Structure
@@ -190,6 +198,20 @@ All 5 planned phases are complete:
 3. **Execution** — Sandboxed executor, policy engine, approval workflows
 4. **Intelligence** — Multi-agent routing, CI debugging, infra diff analysis
 5. **Platform** — REST API, web dashboard
+
+## Publishing
+
+All packages are published under the `@odaops` scope. To publish:
+
+```bash
+# Login to npm (requires @odaops org membership)
+npm login
+
+# Build and publish all packages
+pnpm publish-packages
+```
+
+Packages are published in dependency order: `sdk` -> `core` -> `executor` -> `planner` -> `tools` -> `api` -> `cli`.
 
 ## Contributing
 

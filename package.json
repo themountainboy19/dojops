@@ -1,7 +1,16 @@
 {
   "name": "oda",
   "private": true,
+  "description": "ODA — AI-powered DevOps automation agent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git"
+  },
   "packageManager": "pnpm@8.15.0",
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "oda": "packages/cli/dist/index.js"
   },
@@ -13,7 +22,8 @@
     "test": "turbo test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "publish-packages": "pnpm build && pnpm -r publish --access public"
   },
   "lint-staged": {
     "*.{ts,mjs,js}": [

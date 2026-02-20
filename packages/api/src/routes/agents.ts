@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AgentRouter } from "@oda/core";
+import { AgentRouter } from "@odaops/core";
 
 export function createAgentsRouter(agentRouter: AgentRouter): Router {
   const router = Router();

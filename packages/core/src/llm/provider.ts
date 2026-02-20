@@ -4,6 +4,7 @@ export interface LLMRequest {
   system?: string;
   prompt: string;
   temperature?: number;
+  maxTokens?: number;
   schema?: ZodTypeAny;
 }
 

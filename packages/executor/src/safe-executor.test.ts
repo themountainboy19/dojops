@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BaseTool, ToolOutput, z } from "@oda/sdk";
+import { BaseTool, ToolOutput, z } from "@odaops/sdk";
 import { SafeExecutor } from "./safe-executor";
 import { AutoApproveHandler, AutoDenyHandler, CallbackApprovalHandler } from "./approval";
 

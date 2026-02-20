@@ -1,4 +1,4 @@
-import { ToolOutput } from "@oda/sdk";
+import { ToolOutput } from "@odaops/sdk";
 import { ApprovalDecision, ApprovalRequest, ExecutionPreview } from "./types";
 
 export interface ApprovalHandler {

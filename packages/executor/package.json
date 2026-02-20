@@ -1,15 +1,38 @@
 {
-  "name": "@oda/executor",
+  "name": "@odaops/executor",
   "version": "0.1.0",
+  "description": "Sandboxed execution engine with policy controls and approval workflows for ODA",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git",
+    "directory": "packages/executor"
+  },
+  "keywords": [
+    "devops",
+    "executor",
+    "sandbox",
+    "policy",
+    "approval"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run"
   },
   "dependencies": {
-    "@oda/sdk": "workspace:*",
+    "@odaops/sdk": "workspace:*",
     "zod": "^3.23.0"
   }
 }

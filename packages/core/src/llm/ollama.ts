@@ -4,8 +4,14 @@ import { parseAndValidate } from "./json-validator";
 
 export class OllamaProvider implements LLMProvider {
   name = "ollama";
+  private model: string;
 
-  constructor(private baseUrl = "http://localhost:11434") {}
+  constructor(
+    private baseUrl = "http://localhost:11434",
+    model = "llama3",
+  ) {
+    this.model = model;
+  }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const system = req.schema
@@ -13,7 +19,7 @@ export class OllamaProvider implements LLMProvider {
       : req.system;
 
     const response = await axios.post(`${this.baseUrl}/api/generate`, {
-      model: "llama3",
+      model: this.model,
       prompt: req.prompt,
       system,
       stream: false,

@@ -19,7 +19,7 @@ pnpm lint
 ### Lint a specific package
 
 ```bash
-pnpm --filter @oda/$ARGUMENTS lint
+pnpm --filter @odaops/$ARGUMENTS lint
 ```
 
 ## Notes

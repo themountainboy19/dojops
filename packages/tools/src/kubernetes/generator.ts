@@ -1,4 +1,4 @@
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import * as yaml from "js-yaml";
 import { KubernetesManifest, KubernetesManifestSchema } from "./schemas";
 
@@ -12,14 +12,34 @@ export async function generateKubernetesManifest(
 ): Promise<KubernetesManifest> {
   const response = await llm.generate({
     system: `You are a Kubernetes expert. Generate Kubernetes deployment and service configuration as structured JSON.
-Include container specs, resource limits, health checks info, and service routing.
-Respond with valid JSON only.`,
-    prompt: `Generate Kubernetes manifests for:
-App: ${appName}
-Image: ${image}
-Port: ${port}
-Replicas: ${replicas}
-Namespace: ${namespace}`,
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "deployment": {
+    "replicas": ${replicas},
+    "containers": [
+      {
+        "name": "${appName}",
+        "image": "${image}",
+        "ports": [{ "containerPort": ${port}, "protocol": "TCP" }],
+        "env": [],
+        "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } }
+      }
+    ],
+    "labels": {}
+  },
+  "service": {
+    "type": "ClusterIP",
+    "ports": [{ "port": ${port}, "targetPort": ${port}, "protocol": "TCP" }]
+  }
+}
+
+IMPORTANT:
+- Do NOT use standard Kubernetes manifest format (no apiVersion, kind, metadata)
+- "deployment" and "service" are top-level keys with the structure shown above
+- "containers" and "ports" must be ARRAYS
+- Respond with valid JSON only, no markdown`,
+    prompt: `Generate Kubernetes deployment and service config for app "${appName}" using image "${image}" on port ${port} with ${replicas} replicas in namespace "${namespace}".`,
     schema: KubernetesManifestSchema,
   });
 

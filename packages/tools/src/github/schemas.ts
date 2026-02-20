@@ -19,7 +19,11 @@ export const WorkflowSchema = z.object({
 });
 
 export const GitHubActionsInputSchema = z.object({
-  projectPath: z.string(),
+  projectPath: z
+    .string()
+    .describe(
+      "Root directory of the project (e.g. '.' or './my-app'), not the .github/workflows directory",
+    ),
   nodeVersion: z.string().default("20"),
   defaultBranch: z.string().default("main"),
 });

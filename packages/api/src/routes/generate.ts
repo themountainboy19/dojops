@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { AgentRouter } from "@oda/core";
+import { AgentRouter } from "@odaops/core";
 import { HistoryStore } from "../store";
 import { GenerateRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

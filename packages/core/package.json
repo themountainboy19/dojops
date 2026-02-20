@@ -1,8 +1,34 @@
 {
-  "name": "@oda/core",
+  "name": "@odaops/core",
   "version": "0.1.0",
+  "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for ODA",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "devops",
+    "llm",
+    "openai",
+    "anthropic",
+    "ollama",
+    "agent",
+    "ci-debugger",
+    "infra-diff"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",

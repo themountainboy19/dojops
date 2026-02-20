@@ -1,4 +1,4 @@
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import { TerraformConfig, TerraformConfigSchema } from "./schemas";
 
 export async function generateTerraformConfig(
@@ -9,14 +9,29 @@ export async function generateTerraformConfig(
 ): Promise<TerraformConfig> {
   const response = await llm.generate({
     system: `You are a Terraform expert. Generate Terraform configuration as structured JSON.
-The JSON must include provider config, variables, resources, and outputs.
 Use the ${provider} provider. Backend type: ${backendType}.
-Respond with valid JSON only.`,
-    prompt: `Generate Terraform configuration for the following infrastructure:
-${resources}
 
-Cloud provider: ${provider}
-Backend: ${backendType}`,
+You MUST respond with a JSON object matching this exact structure:
+{
+  "provider": { "name": "${provider}", "region": "us-east-1", "config": {} },
+  "backend": { "type": "${backendType}", "config": {} },
+  "variables": [
+    { "name": "var_name", "type": "string", "description": "desc", "default": "value" }
+  ],
+  "resources": [
+    { "type": "aws_instance", "name": "web", "config": { "ami": "ami-xxx", "instance_type": "t2.micro" } }
+  ],
+  "outputs": [
+    { "name": "output_name", "value": "aws_instance.web.public_ip", "description": "desc" }
+  ]
+}
+
+IMPORTANT:
+- "provider" must be an object with "name" (string), optional "region", and "config" (object)
+- "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
+- Each resource must have "type", "name", and "config" fields
+- Respond with valid JSON only, no markdown`,
+    prompt: `Generate Terraform configuration for: ${resources}`,
     schema: TerraformConfigSchema,
   });
 

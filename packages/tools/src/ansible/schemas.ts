@@ -4,7 +4,7 @@ export const AnsibleInputSchema = z.object({
   playbookName: z.string(),
   targetOS: z.enum(["ubuntu", "debian", "centos", "rhel", "amazon-linux"]).default("ubuntu"),
   tasks: z.string().describe("Description of tasks the playbook should perform"),
-  outputPath: z.string(),
+  outputPath: z.string().describe("Directory to write the Ansible playbook to (e.g. './ansible')"),
   hosts: z.string().default("all"),
   becomeRoot: z.boolean().default(true),
 });

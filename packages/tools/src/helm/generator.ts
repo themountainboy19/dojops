@@ -1,4 +1,4 @@
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import * as yaml from "js-yaml";
 import { HelmChartResponse, HelmChartResponseSchema, HelmInput } from "./schemas";
 
@@ -8,13 +8,26 @@ export async function generateHelmValues(
 ): Promise<HelmChartResponse> {
   const response = await llm.generate({
     system: `You are a Helm chart expert. Generate Helm chart values as structured JSON.
-Include image config, service config, resource limits, and environment variables.
-Respond with valid JSON only.`,
-    prompt: `Generate Helm values for:
-Chart: ${input.chartName}
-Image: ${input.image}
-Port: ${input.port}
-Description: ${input.description}`,
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "values": {
+    "replicaCount": 1,
+    "image": { "repository": "nginx", "tag": "latest", "pullPolicy": "IfNotPresent" },
+    "service": { "type": "ClusterIP", "port": 80 },
+    "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } },
+    "env": [{ "name": "NODE_ENV", "value": "production" }]
+  },
+  "notes": "Optional notes about the chart"
+}
+
+IMPORTANT:
+- The top-level object must have a "values" key containing all Helm values
+- "image" must have "repository", "tag", and "pullPolicy"
+- "service" must have "type" and "port"
+- "env" is an array of { "name", "value" } objects
+- Respond with valid JSON only, no markdown`,
+    prompt: `Generate Helm values for chart "${input.chartName}" using image "${input.image}" on port ${input.port}.`,
     schema: HelmChartResponseSchema,
   });
 

@@ -1,4 +1,4 @@
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import * as yaml from "js-yaml";
 import { LLMWorkflowResponseSchema, Workflow } from "./schemas";
 import { ProjectTypeResult } from "./detector";

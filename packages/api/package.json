@@ -1,8 +1,32 @@
 {
-  "name": "@oda/api",
+  "name": "@odaops/api",
   "version": "0.1.0",
+  "description": "REST API server and web dashboard for ODA DevOps agent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git",
+    "directory": "packages/api"
+  },
+  "keywords": [
+    "devops",
+    "api",
+    "rest",
+    "dashboard",
+    "express"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "public"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
@@ -11,11 +35,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@oda/core": "workspace:*",
-    "@oda/sdk": "workspace:*",
-    "@oda/planner": "workspace:*",
-    "@oda/tools": "workspace:*",
-    "@oda/executor": "workspace:*",
+    "@odaops/core": "workspace:*",
+    "@odaops/sdk": "workspace:*",
+    "@odaops/planner": "workspace:*",
+    "@odaops/tools": "workspace:*",
+    "@odaops/executor": "workspace:*",
     "express": "^4.21.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",

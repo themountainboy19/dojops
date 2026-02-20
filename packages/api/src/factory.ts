@@ -6,25 +6,26 @@ import {
   AgentRouter,
   CIDebugger,
   InfraDiffAnalyzer,
-} from "@oda/core";
+} from "@odaops/core";
 import {
   GitHubActionsTool,
   TerraformTool,
   KubernetesTool,
   HelmTool,
   AnsibleTool,
-} from "@oda/tools";
-import { DevOpsTool } from "@oda/sdk";
+} from "@odaops/tools";
+import { DevOpsTool } from "@odaops/sdk";
 
 export function createProvider(): LLMProvider {
   const providerName = process.env.ODA_PROVIDER ?? "openai";
+  const model = process.env.ODA_MODEL;
 
   if (providerName === "ollama") {
-    return new OllamaProvider();
+    return new OllamaProvider(undefined, model);
   } else if (providerName === "anthropic") {
-    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!);
+    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!, model);
   } else {
-    return new OpenAIProvider(process.env.OPENAI_API_KEY!);
+    return new OpenAIProvider(process.env.OPENAI_API_KEY!, model);
   }
 }
 

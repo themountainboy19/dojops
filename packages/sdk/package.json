@@ -1,8 +1,31 @@
 {
-  "name": "@oda/sdk",
+  "name": "@odaops/sdk",
   "version": "0.1.0",
+  "description": "Base tool abstraction and Zod validation for ODA DevOps agents",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "devops",
+    "sdk",
+    "tools",
+    "zod",
+    "validation"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",

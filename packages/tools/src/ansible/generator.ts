@@ -1,4 +1,4 @@
-import { LLMProvider } from "@oda/core";
+import { LLMProvider } from "@odaops/core";
 import * as yaml from "js-yaml";
 import { AnsiblePlaybook, AnsiblePlaybookSchema, AnsibleInput } from "./schemas";
 
@@ -8,13 +8,28 @@ export async function generateAnsiblePlaybook(
 ): Promise<AnsiblePlaybook> {
   const response = await llm.generate({
     system: `You are an Ansible expert. Generate Ansible playbook tasks as structured JSON.
-Target OS: ${input.targetOS}. Include proper module names, arguments, handlers, and variables.
-Respond with valid JSON only.`,
-    prompt: `Generate an Ansible playbook for:
-Name: ${input.playbookName}
-Target: ${input.targetOS}
-Hosts: ${input.hosts}
-Tasks: ${input.tasks}`,
+Target OS: ${input.targetOS}.
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "tasks": [
+    { "name": "Install packages", "module": "apt", "args": { "name": "nginx", "state": "present" } },
+    { "name": "Start service", "module": "service", "args": { "name": "nginx", "state": "started" }, "notify": "Restart nginx" }
+  ],
+  "handlers": [
+    { "name": "Restart nginx", "module": "service", "args": { "name": "nginx", "state": "restarted" } }
+  ],
+  "variables": { "app_port": 8080 }
+}
+
+IMPORTANT:
+- "tasks" must be an ARRAY with at least one entry
+- Each task needs "name" (string) and "module" (string, e.g. "apt", "yum", "service", "copy", "template")
+- "args" is an object of module arguments
+- Optional task fields: "when", "notify", "register"
+- "handlers" is an array (can be empty), "variables" is an object (can be empty)
+- Keep the response concise. Respond with valid JSON only, no markdown`,
+    prompt: `Generate an Ansible playbook for: ${input.tasks}`,
     schema: AnsiblePlaybookSchema,
   });
 

@@ -19,7 +19,7 @@ pnpm test
 ### Run tests for a specific package
 
 ```bash
-pnpm --filter @oda/$ARGUMENTS test
+pnpm --filter @odaops/$ARGUMENTS test
 ```
 
 ### Run tests matching a pattern

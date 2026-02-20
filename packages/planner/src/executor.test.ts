@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BaseTool, ToolOutput, z } from "@oda/sdk";
+import { BaseTool, ToolOutput, z } from "@odaops/sdk";
 import { PlannerExecutor } from "./executor";
 import { TaskGraph } from "./types";
 

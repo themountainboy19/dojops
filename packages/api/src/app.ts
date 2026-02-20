@@ -1,8 +1,8 @@
 import express, { Express } from "express";
 import cors from "cors";
 import path from "path";
-import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@oda/core";
-import { DevOpsTool } from "@oda/sdk";
+import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@odaops/core";
+import { DevOpsTool } from "@odaops/sdk";
 import { HistoryStore } from "./store";
 import { errorHandler } from "./middleware";
 import {

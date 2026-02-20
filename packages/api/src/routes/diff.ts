@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { InfraDiffAnalyzer } from "@oda/core";
+import { InfraDiffAnalyzer } from "@odaops/core";
 import { HistoryStore } from "../store";
 import { DiffRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";

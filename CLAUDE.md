@@ -17,9 +17,9 @@ pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
 # Per-package
-pnpm --filter @oda/core build
-pnpm --filter @oda/sdk build
-pnpm --filter @oda/core test
+pnpm --filter @odaops/core build
+pnpm --filter @odaops/sdk build
+pnpm --filter @odaops/core test
 
 # Run CLI (after `npm link` for global `oda`, or use `pnpm oda --`)
 oda "Create a Terraform config for S3"
@@ -41,21 +41,21 @@ pnpm oda -- serve                 # in-repo alternative
 
 ## Architecture
 
-**Monorepo**: pnpm workspaces + Turbo. TypeScript (ES2022, CommonJS). Packages use `@oda/*` scope.
+**Monorepo**: pnpm workspaces + Turbo. TypeScript (ES2022, CommonJS). Packages use `@odaops/*` scope.
 
 **Package dependency flow** (top → bottom):
 
 ```
-@oda/cli          → Entry point: `oda "prompt"` and `oda serve`, imports factories from @oda/api
-@oda/api          → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
-@oda/planner      → TaskGraph decomposition (LLM) + topological executor
-@oda/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
-@oda/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
-@oda/core         → LLM abstraction: DevOpsAgent + providers + structured output (Zod)
-@oda/sdk          → BaseTool<T> abstract class with Zod inputSchema validation
+@odaops/cli          → Entry point: `oda "prompt"` and `oda serve`, imports factories from @odaops/api
+@odaops/api          → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
+@odaops/planner      → TaskGraph decomposition (LLM) + topological executor
+@odaops/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
+@odaops/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
+@odaops/core         → LLM abstraction: DevOpsAgent + providers + structured output (Zod)
+@odaops/sdk          → BaseTool<T> abstract class with Zod inputSchema validation
 ```
 
-**API endpoints** (`@oda/api`):
+**API endpoints** (`@odaops/api`):
 
 | Method | Path               | Description                         |
 | ------ | ------------------ | ----------------------------------- |
@@ -103,13 +103,13 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 **Implemented (Phase 1 + 2 + 3 + 4 + 5):**
 
-- `@oda/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 5 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
-- `@oda/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
-- `@oda/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution
-- `@oda/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
-- `@oda/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
-- `@oda/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode
-- `@oda/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
+- `@odaops/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 5 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
+- `@odaops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
+- `@odaops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution
+- `@odaops/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
+- `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
+- `@odaops/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode
+- `@odaops/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
 - Dev tooling — Vitest (139 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
@@ -133,9 +133,9 @@ Set in `.env` (see `.env.example`):
 
 Defined in root `tsconfig.json`:
 
-- `@oda/core/*` → `packages/core/src/*`
-- `@oda/sdk/*` → `packages/sdk/src/*`
-- `@oda/planner/*` → `packages/planner/src/*`
-- `@oda/tools/*` → `packages/tools/src/*`
-- `@oda/executor/*` → `packages/executor/src/*`
-- `@oda/api/*` → `packages/api/src/*`
+- `@odaops/core/*` → `packages/core/src/*`
+- `@odaops/sdk/*` → `packages/sdk/src/*`
+- `@odaops/planner/*` → `packages/planner/src/*`
+- `@odaops/tools/*` → `packages/tools/src/*`
+- `@odaops/executor/*` → `packages/executor/src/*`
+- `@odaops/api/*` → `packages/api/src/*`

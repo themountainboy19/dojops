@@ -6,7 +6,7 @@ export const KubernetesInputSchema = z.object({
   port: z.number().int().positive(),
   replicas: z.number().int().positive().default(1),
   namespace: z.string().default("default"),
-  outputPath: z.string(),
+  outputPath: z.string().describe("Directory to write Kubernetes manifests to (e.g. './k8s')"),
 });
 
 export type KubernetesInput = z.infer<typeof KubernetesInputSchema>;

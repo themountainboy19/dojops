@@ -5,9 +5,11 @@ import { parseAndValidate } from "./json-validator";
 export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
   private client: Anthropic;
+  private model: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
     this.client = new Anthropic({ apiKey });
+    this.model = model;
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
@@ -22,8 +24,8 @@ export class AnthropicProvider implements LLMProvider {
     }
 
     const message = await this.client.messages.create({
-      model: "claude-3-sonnet-20240229",
-      max_tokens: 1024,
+      model: this.model,
+      max_tokens: req.maxTokens ?? 8192,
       system,
       messages,
     });
@@ -31,6 +33,11 @@ export class AnthropicProvider implements LLMProvider {
     let content = message.content[0].type === "text" ? message.content[0].text : "";
 
     if (req.schema) {
+      if (message.stop_reason === "max_tokens") {
+        throw new Error(
+          "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
+        );
+      }
       content = "{" + content;
       const parsed = parseAndValidate(content, req.schema);
       return { content, parsed };

@@ -62,7 +62,7 @@ Capabilities:
 
 Deliverable:
 
-- @oda/tools/github
+- @odaops/tools/github
 - Schema validation for workflow structure
 
 ---

@@ -4,7 +4,7 @@ export const HelmInputSchema = z.object({
   chartName: z.string(),
   appVersion: z.string().default("0.1.0"),
   description: z.string().default("A Helm chart"),
-  outputPath: z.string(),
+  outputPath: z.string().describe("Directory to write the Helm chart to (e.g. './charts/my-app')"),
   image: z.string(),
   port: z.number().int().positive(),
 });

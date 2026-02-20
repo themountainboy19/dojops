@@ -1,20 +1,49 @@
 {
-  "name": "@oda/cli",
+  "name": "@odaops/cli",
   "version": "0.1.0",
+  "description": "CLI for ODA — AI-powered DevOps automation agent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oda-devops/oda.git",
+    "directory": "packages/cli"
+  },
+  "keywords": [
+    "devops",
+    "cli",
+    "ai",
+    "automation",
+    "terraform",
+    "kubernetes",
+    "github-actions",
+    "infrastructure-as-code"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "oda": "dist/index.js"
   },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run"
   },
   "dependencies": {
-    "@oda/api": "workspace:*",
-    "@oda/core": "workspace:*",
-    "@oda/executor": "workspace:*",
-    "@oda/planner": "workspace:*",
-    "@oda/tools": "workspace:*",
-    "dotenv": "^16.0.0"
+    "@odaops/api": "workspace:*",
+    "@odaops/core": "workspace:*",
+    "@odaops/executor": "workspace:*",
+    "@odaops/planner": "workspace:*",
+    "@odaops/tools": "workspace:*",
+    "dotenv": "^16.0.0",
+    "picocolors": "^1.1.1"
   }
 }

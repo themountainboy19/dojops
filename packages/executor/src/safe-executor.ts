@@ -1,4 +1,4 @@
-import { DevOpsTool, ToolOutput } from "@oda/sdk";
+import { DevOpsTool, ToolOutput } from "@odaops/sdk";
 import { ExecutionPolicy, ExecutionResult, AuditEntry, ApprovalDecision } from "./types";
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError } from "./policy";

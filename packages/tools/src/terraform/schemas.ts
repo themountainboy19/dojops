@@ -3,7 +3,9 @@ import { z } from "zod";
 export const TerraformProviderEnum = z.enum(["aws", "gcp", "azure"]);
 
 export const TerraformInputSchema = z.object({
-  projectPath: z.string(),
+  projectPath: z
+    .string()
+    .describe("Directory to write Terraform files to (e.g. './infra' or './terraform')"),
   provider: TerraformProviderEnum,
   resources: z.string().describe("Description of infrastructure resources to provision"),
   backendType: z.enum(["local", "s3", "gcs", "azurerm"]).default("local"),
