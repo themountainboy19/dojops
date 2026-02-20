@@ -45,6 +45,43 @@ describe("factory", () => {
       const provider = createProvider();
       expect(provider.name).toBe("openai");
     });
+
+    it("uses ProviderOptions.provider over env", () => {
+      process.env.ODA_PROVIDER = "openai";
+      process.env.OPENAI_API_KEY = "test-key";
+      const provider = createProvider({ provider: "ollama" });
+      expect(provider.name).toBe("ollama");
+    });
+
+    it("uses ProviderOptions.apiKey for anthropic", () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      const provider = createProvider({ provider: "anthropic", apiKey: "opts-key" });
+      expect(provider.name).toBe("anthropic");
+    });
+
+    it("uses ProviderOptions.apiKey for openai", () => {
+      delete process.env.OPENAI_API_KEY;
+      const provider = createProvider({ provider: "openai", apiKey: "opts-key" });
+      expect(provider.name).toBe("openai");
+    });
+
+    it("throws when anthropic key is missing", () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      expect(() => createProvider({ provider: "anthropic" })).toThrow(
+        /Anthropic API key is required/,
+      );
+    });
+
+    it("throws when openai key is missing", () => {
+      delete process.env.OPENAI_API_KEY;
+      expect(() => createProvider({ provider: "openai" })).toThrow(/OpenAI API key is required/);
+    });
+
+    it("backward compatible: no options argument works", () => {
+      process.env.ODA_PROVIDER = "ollama";
+      const provider = createProvider();
+      expect(provider.name).toBe("ollama");
+    });
   });
 
   describe("createTools", () => {

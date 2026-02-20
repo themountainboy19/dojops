@@ -1,0 +1,113 @@
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+
+export interface OdaConfig {
+  defaultProvider?: string;
+  defaultModel?: string;
+  tokens?: Record<string, string>;
+}
+
+export const VALID_PROVIDERS = ["openai", "anthropic", "ollama"] as const;
+export type Provider = (typeof VALID_PROVIDERS)[number];
+
+const TOKEN_ENV_MAP: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+};
+
+function configDir(): string {
+  return path.join(os.homedir(), ".oda");
+}
+
+function configFile(): string {
+  return path.join(configDir(), "config.json");
+}
+
+/** Returns the path to the config file (for display purposes). */
+export function getConfigPath(): string {
+  return configFile();
+}
+
+/** Loads config from ~/.oda/config.json. Returns empty config if missing or invalid. */
+export function loadConfig(): OdaConfig {
+  try {
+    const raw = fs.readFileSync(configFile(), "utf-8");
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    return parsed as OdaConfig;
+  } catch {
+    return {};
+  }
+}
+
+/** Writes config to ~/.oda/config.json. Creates directory with 0o700 and file with 0o600. */
+export function saveConfig(config: OdaConfig): void {
+  const dir = configDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  fs.writeFileSync(configFile(), JSON.stringify(config, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+}
+
+/** Validates that a provider name is supported. Throws with a clear message if not. */
+export function validateProvider(name: string): Provider {
+  if (!VALID_PROVIDERS.includes(name as Provider)) {
+    throw new Error(`Unknown provider "${name}". Supported: ${VALID_PROVIDERS.join(", ")}`);
+  }
+  return name as Provider;
+}
+
+/**
+ * Resolves the LLM provider to use.
+ * Priority: CLI flag > ODA_PROVIDER env > config defaultProvider > "openai"
+ */
+export function resolveProvider(cliFlag: string | undefined, config: OdaConfig): string {
+  const raw = cliFlag ?? process.env.ODA_PROVIDER ?? config.defaultProvider ?? "openai";
+  return validateProvider(raw);
+}
+
+/**
+ * Resolves the LLM model to use.
+ * Priority: CLI flag > ODA_MODEL env > config defaultModel > undefined
+ */
+export function resolveModel(cliFlag: string | undefined, config: OdaConfig): string | undefined {
+  return cliFlag ?? process.env.ODA_MODEL ?? config.defaultModel ?? undefined;
+}
+
+/**
+ * Resolves the API token for a given provider.
+ * Priority: environment variable > config token
+ * Returns undefined for ollama (no token needed).
+ */
+export function resolveToken(provider: string, config: OdaConfig): string | undefined {
+  if (provider === "ollama") return undefined;
+
+  const envVar = TOKEN_ENV_MAP[provider];
+  if (envVar && process.env[envVar]) {
+    return process.env[envVar];
+  }
+
+  return config.tokens?.[provider];
+}
+
+/**
+ * Parses a flag value from CLI args. Supports both `--flag=value` and `--flag value` forms.
+ * Returns undefined if the flag is not present.
+ */
+export function parseFlagValue(args: string[], flag: string): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length) {
+      return args[i + 1];
+    }
+    if (args[i].startsWith(`${flag}=`)) {
+      return args[i].slice(flag.length + 1);
+    }
+  }
+  return undefined;
+}

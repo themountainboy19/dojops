@@ -16,16 +16,34 @@ import {
 } from "@odaops/tools";
 import { DevOpsTool } from "@odaops/sdk";
 
-export function createProvider(): LLMProvider {
-  const providerName = process.env.ODA_PROVIDER ?? "openai";
-  const model = process.env.ODA_MODEL;
+export interface ProviderOptions {
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+}
+
+export function createProvider(options?: ProviderOptions): LLMProvider {
+  const providerName = options?.provider ?? process.env.ODA_PROVIDER ?? "openai";
+  const model = options?.model ?? process.env.ODA_MODEL;
 
   if (providerName === "ollama") {
     return new OllamaProvider(undefined, model);
   } else if (providerName === "anthropic") {
-    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!, model);
+    const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
+    if (!key) {
+      throw new Error(
+        "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: oda login --token <KEY> --provider anthropic",
+      );
+    }
+    return new AnthropicProvider(key, model);
   } else {
-    return new OpenAIProvider(process.env.OPENAI_API_KEY!, model);
+    const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
+    if (!key) {
+      throw new Error(
+        "OpenAI API key is required. Set OPENAI_API_KEY or run: oda login --token <KEY> --provider openai",
+      );
+    }
+    return new OpenAIProvider(key, model);
   }
 }
 

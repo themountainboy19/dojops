@@ -16,3 +16,4 @@ export {
   createDebugger,
   createDiffAnalyzer,
 } from "./factory";
+export type { ProviderOptions } from "./factory";

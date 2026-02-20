@@ -56,19 +56,75 @@ pnpm install
 cp .env.example .env    # then edit with your API keys
 pnpm build
 
-# Optional: register `oda` as a global command
-npm link
+# Register `oda` as a global command (pick one):
+sudo npm link                       # system-wide (requires root)
+# or
+ln -s $PWD/packages/cli/dist/index.js ~/bin/oda   # user-local
+export PATH="$HOME/bin:$PATH"       # add to ~/.bashrc or ~/.zshrc
 ```
 
 ## Configuration
 
-Edit `.env`:
+### 1. Set your LLM provider
+
+ODA supports three providers. Set the `ODA_PROVIDER` environment variable (or add it to `.env`):
+
+| Provider      | `ODA_PROVIDER` | Required env var      | Default model                |
+| ------------- | -------------- | --------------------- | ---------------------------- |
+| **OpenAI**    | `openai`       | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
+| **Anthropic** | `anthropic`    | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
+| **Ollama**    | `ollama`       | _(none — runs local)_ | `llama3`                     |
+
+### 2. Configure your API key
+
+**Option A — `.env` file** (recommended for development):
 
 ```bash
-ODA_PROVIDER=openai          # openai | anthropic | ollama
-OPENAI_API_KEY=sk-...        # required for openai provider
-ANTHROPIC_API_KEY=sk-ant-... # required for anthropic provider
-ODA_API_PORT=3000            # API server port (default: 3000)
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```bash
+ODA_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+**Option B — Shell exports** (useful for CI or one-off usage):
+
+```bash
+export ODA_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-api03-...
+oda "Create a Terraform config for S3"
+```
+
+### 3. Select a model (optional)
+
+Override the default model per-provider using `ODA_MODEL` env var or the `--model` CLI flag:
+
+```bash
+# Via environment variable
+export ODA_MODEL=gpt-4o
+oda "Create a Kubernetes deployment for nginx"
+
+# Via CLI flag (takes precedence)
+oda --model=claude-haiku-4-5-20251001 "Create a Terraform config for S3"
+```
+
+**Supported models (examples):**
+
+| Provider  | Models                                                              |
+| --------- | ------------------------------------------------------------------- |
+| OpenAI    | `gpt-4o`, `gpt-4o-mini` (default), `gpt-4-turbo`, `o1-mini`         |
+| Anthropic | `claude-sonnet-4-5-20250929` (default), `claude-haiku-4-5-20251001` |
+| Ollama    | `llama3` (default), `mistral`, `codellama`, `deepseek-coder`        |
+
+Any model string accepted by the provider's API can be used.
+
+### 4. Other settings
+
+```bash
+ODA_API_PORT=3000    # API server port (default: 3000)
 ```
 
 ## Usage
