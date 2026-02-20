@@ -11,7 +11,7 @@ export class OllamaProvider implements LLMProvider {
       model: "llama3",
       prompt: req.prompt,
       system: req.system,
-      stream: false
+      stream: false,
     });
 
     return { content: response.data.response };

@@ -13,15 +13,15 @@ It is a structured, safe, extensible orchestration framework.
 ## High-Level Architecture
 
 User
- ↓
+↓
 CLI / API
- ↓
+↓
 Planner Engine
- ↓
+↓
 Agent Core (LLM Abstraction)
- ↓
+↓
 Tool SDK Layer
- ↓
+↓
 Execution Engine (Sandboxed)
 
 ---
@@ -31,6 +31,7 @@ Execution Engine (Sandboxed)
 ### 1. LLM Layer
 
 Provides abstraction over:
+
 - OpenAI
 - Anthropic
 - Ollama
@@ -38,7 +39,7 @@ Provides abstraction over:
 Each provider implements:
 
 interface LLMProvider {
-  generate(request): Promise<Response>
+generate(request): Promise<Response>
 }
 
 ---
@@ -54,9 +55,9 @@ Input:
 
 Output:
 [
-  { task: "detect_language" },
-  { task: "generate_dockerfile" },
-  { task: "generate_workflow_yaml" }
+{ task: "detect_language" },
+{ task: "generate_dockerfile" },
+{ task: "generate_workflow_yaml" }
 ]
 
 ---
@@ -66,12 +67,13 @@ Output:
 Each DevOps tool implements:
 
 interface DevOpsTool {
-  validate(input)
-  generate(input)
-  execute(input)
+validate(input)
+generate(input)
+execute(input)
 }
 
 This ensures:
+
 - Deterministic behavior
 - Input validation
 - Controlled execution
@@ -109,4 +111,3 @@ Responsible for:
 - Drift detection
 - Infra diff intelligence
 - Cloud provider integrations
-

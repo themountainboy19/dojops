@@ -10,9 +10,13 @@ coverage/
 # Turbo
 .turbo/
 
+# Vitest
+.vitest/
+
 # Env files
 .env
 .env.local
+.env.*.local
 
 # Logs
 *.log
@@ -25,9 +29,16 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
 
 # TypeScript
 *.tsbuildinfo
 
 # Temporary
 tmp/
+
+# Claude Code (keep settings.json and skills/, ignore personal/local config)
+.claude/settings.local.json

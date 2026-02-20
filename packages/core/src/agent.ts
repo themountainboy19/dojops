@@ -6,7 +6,7 @@ export class DevOpsAgent {
   async run(prompt: string) {
     return this.provider.generate({
       system: "You are an expert DevOps engineer.",
-      prompt
+      prompt,
     });
   }
 }

@@ -4,6 +4,10 @@
   "bin": {
     "oda": "dist/index.js"
   },
+  "scripts": {
+    "lint": "eslint src/",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@oda/core": "workspace:*",
     "dotenv": "^16.0.0"

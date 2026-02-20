@@ -14,8 +14,8 @@ export class OpenAIProvider implements LLMProvider {
       model: "gpt-4o-mini",
       messages: [
         { role: "system", content: req.system ?? "" },
-        { role: "user", content: req.prompt }
-      ]
+        { role: "user", content: req.prompt },
+      ],
     });
 
     return { content: completion.choices[0].message.content ?? "" };

@@ -14,7 +14,7 @@ export class AnthropicProvider implements LLMProvider {
       model: "claude-3-sonnet-20240229",
       max_tokens: 1024,
       system: req.system,
-      messages: [{ role: "user", content: req.prompt }]
+      messages: [{ role: "user", content: req.prompt }],
     });
 
     return { content: message.content[0].text };

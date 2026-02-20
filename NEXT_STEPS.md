@@ -16,6 +16,7 @@ The goal is to move from foundation to production-grade DevOps agent.
 - Prevent arbitrary free-text execution
 
 Deliverable:
+
 - JSON contract system
 - Validation middleware
 
@@ -36,12 +37,13 @@ User Input:
 
 Planner Output:
 [
-  { task: "detect_project_type" },
-  { task: "generate_workflow_yaml" },
-  { task: "validate_yaml" }
+{ task: "detect_project_type" },
+{ task: "generate_workflow_yaml" },
+{ task: "validate_yaml" }
 ]
 
 Deliverable:
+
 - Deterministic task execution system
 - Logging system for traceability
 
@@ -52,12 +54,14 @@ Deliverable:
 ## 3. GitHub Actions Tool
 
 Capabilities:
+
 - Detect project language
 - Generate workflow YAML
 - Validate YAML
 - Optional PR creation (future)
 
 Deliverable:
+
 - @oda/tools/github
 - Schema validation for workflow structure
 
@@ -66,12 +70,14 @@ Deliverable:
 ## 4. Terraform Tool
 
 Capabilities:
+
 - Generate Terraform templates
 - Validate HCL
 - Run terraform plan (sandboxed)
 - Output diff preview
 
 Deliverable:
+
 - Terraform execution wrapper
 - Plan-only safe mode
 
@@ -80,12 +86,14 @@ Deliverable:
 ## 5. Kubernetes Tool
 
 Capabilities:
+
 - Generate deployment/service YAML
 - Helm chart generation
 - Kustomize overlays
 - Validate via kubectl --dry-run
 
 Deliverable:
+
 - Kubernetes adapter layer
 
 ---
@@ -121,6 +129,7 @@ Before destructive operations:
 ## 8. Multi-Agent System
 
 Agents:
+
 - Planner Agent
 - Terraform Specialist
 - Kubernetes Specialist
@@ -137,6 +146,7 @@ Specialized reasoning per domain.
 User pastes failing logs.
 
 Agent:
+
 - Analyzes logs
 - Detects root cause
 - Suggests fix
@@ -177,6 +187,7 @@ Enable integration with:
 ## 12. Web Dashboard (Future)
 
 Features:
+
 - Task history
 - Execution logs
 - Diff visualization
