@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { parseAndValidate } from "./json-validator";
 
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
@@ -10,14 +11,26 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
+    const systemContent = req.schema
+      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
+      : (req.system ?? "");
+
     const completion = await this.client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: req.system ?? "" },
+        { role: "system", content: systemContent },
         { role: "user", content: req.prompt },
       ],
+      ...(req.schema ? { response_format: { type: "json_object" } } : {}),
     });
 
-    return { content: completion.choices[0].message.content ?? "" };
+    const content = completion.choices[0].message.content ?? "";
+
+    if (req.schema) {
+      const parsed = parseAndValidate(content, req.schema);
+      return { content, parsed };
+    }
+
+    return { content };
   }
 }

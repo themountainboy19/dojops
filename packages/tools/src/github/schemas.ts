@@ -1,0 +1,31 @@
+import { z } from "zod";
+
+export const WorkflowStepSchema = z.object({
+  name: z.string(),
+  uses: z.string().optional(),
+  run: z.string().optional(),
+  with: z.record(z.string()).optional(),
+});
+
+export const WorkflowJobSchema = z.object({
+  "runs-on": z.string(),
+  steps: z.array(WorkflowStepSchema).min(1),
+});
+
+export const WorkflowSchema = z.object({
+  name: z.string(),
+  on: z.union([z.record(z.unknown()), z.array(z.string()), z.string()]),
+  jobs: z.record(WorkflowJobSchema),
+});
+
+export const GitHubActionsInputSchema = z.object({
+  projectPath: z.string(),
+  nodeVersion: z.string().default("20"),
+  defaultBranch: z.string().default("main"),
+});
+
+export type GitHubActionsInput = z.infer<typeof GitHubActionsInputSchema>;
+
+export const LLMWorkflowResponseSchema = WorkflowSchema;
+
+export type Workflow = z.infer<typeof WorkflowSchema>;

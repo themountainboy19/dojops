@@ -1,5 +1,6 @@
 import axios from "axios";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { parseAndValidate } from "./json-validator";
 
 export class OllamaProvider implements LLMProvider {
   name = "ollama";
@@ -7,13 +8,25 @@ export class OllamaProvider implements LLMProvider {
   constructor(private baseUrl = "http://localhost:11434") {}
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
+    const system = req.schema
+      ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
+      : req.system;
+
     const response = await axios.post(`${this.baseUrl}/api/generate`, {
       model: "llama3",
       prompt: req.prompt,
-      system: req.system,
+      system,
       stream: false,
+      ...(req.schema ? { format: "json" } : {}),
     });
 
-    return { content: response.data.response };
+    const content: string = response.data.response;
+
+    if (req.schema) {
+      const parsed = parseAndValidate(content, req.schema);
+      return { content, parsed };
+    }
+
+    return { content };
   }
 }

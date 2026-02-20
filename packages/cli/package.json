@@ -5,11 +5,14 @@
     "oda": "dist/index.js"
   },
   "scripts": {
+    "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run"
   },
   "dependencies": {
     "@oda/core": "workspace:*",
+    "@oda/planner": "workspace:*",
+    "@oda/tools": "workspace:*",
     "dotenv": "^16.0.0"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@oda/core",
+  "name": "@oda/tools",
   "version": "0.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,9 +9,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "openai": "^4.0.0",
-    "@anthropic-ai/sdk": "^0.20.0",
-    "axios": "^1.6.0",
-    "zod": "^3.23.0"
+    "@oda/core": "workspace:*",
+    "@oda/sdk": "workspace:*",
+    "zod": "^3.23.0",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
   }
 }

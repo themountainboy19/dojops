@@ -12,7 +12,9 @@
     "baseUrl": ".",
     "paths": {
       "@oda/core/*": ["packages/core/src/*"],
-      "@oda/sdk/*": ["packages/sdk/src/*"]
+      "@oda/sdk/*": ["packages/sdk/src/*"],
+      "@oda/planner/*": ["packages/planner/src/*"],
+      "@oda/tools/*": ["packages/tools/src/*"]
     }
   }
 }

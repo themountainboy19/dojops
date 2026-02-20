@@ -50,6 +50,30 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev <prompt>
 
 **Design principles** (from ARCHITECTURE.md): No blind execution. Structured JSON outputs. Schema validation before tool execution. Idempotent operations.
 
+## Current Status
+
+**Implemented:**
+
+- `@oda/core` — `DevOpsAgent` class + 3 LLM providers (OpenAI, Anthropic, Ollama)
+- `@oda/sdk` — `DevOpsTool` interface (validate/generate/execute)
+- `@oda/cli` — CLI entry point, reads `ODA_PROVIDER` env var
+- Dev tooling — Vitest, ESLint, Prettier, Husky + lint-staged
+
+**Empty scaffolding:** `@oda/planner`, `@oda/executor`, `@oda/tools`, `@oda/api`
+
+## Roadmap (from NEXT_STEPS.md)
+
+**Phase 1 — Core Intelligence (current):**
+
+1. Structured output enforcement — Zod schema validation, JSON contracts, validation middleware
+2. Planner engine — TaskGraph class, task nodes, deterministic execution pipeline
+3. GitHub Actions tool — first real tool implementation
+
+**Phase 2 — More tools:** Terraform, Kubernetes, Helm, Ansible
+**Phase 3 — Execution:** Sandboxed execution engine, approval workflows
+**Phase 4 — Intelligence:** Multi-agent system, CI debugging, infra diff
+**Phase 5 — Platform:** REST API, web dashboard
+
 ## Environment
 
 Set in `.env` (see `.env.example`):

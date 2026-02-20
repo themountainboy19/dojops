@@ -7,12 +7,6 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   eslintConfigPrettier,
   {
-    files: ["**/sdk/src/tool.ts"],
-    rules: {
-      "@typescript-eslint/no-explicit-any": "off",
-    },
-  },
-  {
     ignores: ["**/dist/", "**/node_modules/", "**/coverage/", "**/.turbo/"],
   },
 );

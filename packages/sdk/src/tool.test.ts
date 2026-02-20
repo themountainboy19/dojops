@@ -1,28 +1,42 @@
 import { describe, it, expect } from "vitest";
-import { DevOpsTool, ToolInput, ToolOutput } from "./tool";
+import { BaseTool, ToolOutput, z } from "./tool";
 
-class EchoTool implements DevOpsTool {
+const EchoInputSchema = z.object({
+  message: z.string().min(1),
+});
+
+type EchoInput = z.infer<typeof EchoInputSchema>;
+
+class EchoTool extends BaseTool<EchoInput> {
   name = "echo";
+  description = "Echoes the input message";
+  inputSchema = EchoInputSchema;
 
-  async validate(input: ToolInput): Promise<boolean> {
-    return typeof input.message === "string" && input.message.length > 0;
-  }
-
-  async generate(input: ToolInput): Promise<ToolOutput> {
+  async generate(input: EchoInput): Promise<ToolOutput> {
     return { success: true, data: { echo: input.message } };
   }
 }
 
-describe("DevOpsTool interface", () => {
-  it("validates correct input", async () => {
+describe("BaseTool", () => {
+  it("validates correct input", () => {
     const tool = new EchoTool();
-    expect(await tool.validate({ message: "hello" })).toBe(true);
+    const result = tool.validate({ message: "hello" });
+    expect(result.valid).toBe(true);
+    expect(result.error).toBeUndefined();
   });
 
-  it("rejects invalid input", async () => {
+  it("rejects input with wrong type", () => {
     const tool = new EchoTool();
-    expect(await tool.validate({ message: "" })).toBe(false);
-    expect(await tool.validate({})).toBe(false);
+    const result = tool.validate({ message: 123 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it("rejects input with missing fields", () => {
+    const tool = new EchoTool();
+    const result = tool.validate({});
+    expect(result.valid).toBe(false);
+    expect(result.error).toBeDefined();
   });
 
   it("generates output from valid input", async () => {
@@ -32,8 +46,9 @@ describe("DevOpsTool interface", () => {
     expect(output.data).toEqual({ echo: "hello" });
   });
 
-  it("exposes tool name", () => {
+  it("exposes tool name and description", () => {
     const tool = new EchoTool();
     expect(tool.name).toBe("echo");
+    expect(tool.description).toBe("Echoes the input message");
   });
 });
