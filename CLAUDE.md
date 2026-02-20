@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, and infra diff intelligence are implemented.
+ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, infra diff intelligence, a REST API, and a web dashboard are implemented.
 
 ## Commands
 
@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructur
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (95 tests)
+pnpm test               # Vitest across all packages (139 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -29,6 +29,9 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute "Create CI for Node app
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --execute --yes "Create CI for Node app"
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --debug-ci "ERROR: tsc failed..."
 ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
+
+# Run API server + dashboard
+ODA_PROVIDER=ollama pnpm --filter @oda/api dev    # http://localhost:3000
 ```
 
 ## Architecture
@@ -39,13 +42,27 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
 
 ```
 @oda/cli          → Entry point, --plan/--execute/--yes/--debug-ci/--diff flags
+@oda/api          → REST API (Express) + web dashboard, exposes all capabilities via HTTP
 @oda/planner      → TaskGraph decomposition (LLM) + topological executor
 @oda/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
 @oda/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
 @oda/core         → LLM abstraction: DevOpsAgent + providers + structured output (Zod)
 @oda/sdk          → BaseTool<T> abstract class with Zod inputSchema validation
-@oda/api          → (planned) REST API layer
 ```
+
+**API endpoints** (`@oda/api`):
+
+| Method | Path               | Description                         |
+| ------ | ------------------ | ----------------------------------- |
+| GET    | `/api/health`      | Provider status                     |
+| POST   | `/api/generate`    | Agent-routed LLM generation         |
+| POST   | `/api/plan`        | Decompose goal + optional execution |
+| POST   | `/api/debug-ci`    | CI log diagnosis                    |
+| POST   | `/api/diff`        | Infrastructure diff analysis        |
+| GET    | `/api/agents`      | List specialist agents              |
+| GET    | `/api/history`     | Execution history                   |
+| GET    | `/api/history/:id` | Single history entry                |
+| DELETE | `/api/history`     | Clear history                       |
 
 **Key abstractions:**
 
@@ -62,6 +79,9 @@ ODA_PROVIDER=ollama pnpm --filter @oda/cli dev --diff "terraform plan output..."
 - `SafeExecutor` (`packages/executor/src/safe-executor.ts`) — orchestrates generate → approval → execute with policy checks, timeout, and audit logging
 - `ExecutionPolicy` (`packages/executor/src/types.ts`) — controls write permissions, allowed paths, denied paths, env vars, timeout, file size limits, approval requirements
 - `ApprovalHandler` (`packages/executor/src/approval.ts`) — interface for approval workflows; ships with `AutoApproveHandler`, `AutoDenyHandler`, `CallbackApprovalHandler`
+- `createApp(deps)` (`packages/api/src/app.ts`) — Express app factory with dependency injection (`AppDependencies` interface). Testable without `listen()`
+- `HistoryStore` (`packages/api/src/store.ts`) — in-memory operation history with `add/getAll/getById/clear`
+- Route factory functions (`packages/api/src/routes/*.ts`) — each returns an Express `Router`, receives dependencies via function params
 
 **Tool pattern** (all tools follow this):
 
@@ -76,7 +96,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 ## Current Status
 
-**Implemented (Phase 1 + 2 + 3 + 4):**
+**Implemented (Phase 1 + 2 + 3 + 4 + 5):**
 
 - `@oda/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 5 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@oda/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
@@ -84,9 +104,8 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 - `@oda/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
 - `@oda/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
 - `@oda/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode
-- Dev tooling — Vitest (95 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
-
-**Empty scaffolding:** `@oda/api`
+- `@oda/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
+- Dev tooling — Vitest (139 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
 
@@ -94,7 +113,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 **Phase 2 — More tools: DONE**
 **Phase 3 — Execution: DONE**
 **Phase 4 — Intelligence: DONE**
-**Phase 5 — Platform:** REST API, web dashboard
+**Phase 5 — Platform: DONE** (REST API, web dashboard)
 
 ## Environment
 
@@ -102,6 +121,7 @@ Set in `.env` (see `.env.example`):
 
 - `ODA_PROVIDER`: `openai` (default) | `anthropic` | `ollama`
 - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` as needed
+- `ODA_API_PORT`: API server port (default `3000`)
 - Ollama requires local server at `localhost:11434`
 
 ## Path Aliases
@@ -113,3 +133,4 @@ Defined in root `tsconfig.json`:
 - `@oda/planner/*` → `packages/planner/src/*`
 - `@oda/tools/*` → `packages/tools/src/*`
 - `@oda/executor/*` → `packages/executor/src/*`
+- `@oda/api/*` → `packages/api/src/*`

@@ -1,0 +1,18 @@
+import { Router } from "express";
+import { AgentRouter } from "@oda/core";
+
+export function createAgentsRouter(agentRouter: AgentRouter): Router {
+  const router = Router();
+
+  router.get("/", (_req, res) => {
+    const agents = agentRouter.getAgents().map((agent) => ({
+      name: agent.name,
+      domain: agent.domain,
+      keywords: agent.keywords,
+    }));
+
+    res.json({ agents });
+  });
+
+  return router;
+}

@@ -1,0 +1,51 @@
+import {
+  OpenAIProvider,
+  OllamaProvider,
+  AnthropicProvider,
+  LLMProvider,
+  AgentRouter,
+  CIDebugger,
+  InfraDiffAnalyzer,
+} from "@oda/core";
+import {
+  GitHubActionsTool,
+  TerraformTool,
+  KubernetesTool,
+  HelmTool,
+  AnsibleTool,
+} from "@oda/tools";
+import { DevOpsTool } from "@oda/sdk";
+
+export function createProvider(): LLMProvider {
+  const providerName = process.env.ODA_PROVIDER ?? "openai";
+
+  if (providerName === "ollama") {
+    return new OllamaProvider();
+  } else if (providerName === "anthropic") {
+    return new AnthropicProvider(process.env.ANTHROPIC_API_KEY!);
+  } else {
+    return new OpenAIProvider(process.env.OPENAI_API_KEY!);
+  }
+}
+
+export function createTools(provider: LLMProvider): DevOpsTool[] {
+  return [
+    new GitHubActionsTool(provider),
+    new TerraformTool(provider),
+    new KubernetesTool(provider),
+    new HelmTool(provider),
+    new AnsibleTool(provider),
+  ];
+}
+
+export function createRouter(provider: LLMProvider): AgentRouter {
+  return new AgentRouter(provider);
+}
+
+export function createDebugger(provider: LLMProvider): CIDebugger {
+  return new CIDebugger(provider);
+}
+
+export function createDiffAnalyzer(provider: LLMProvider): InfraDiffAnalyzer {
+  return new InfraDiffAnalyzer(provider);
+}
