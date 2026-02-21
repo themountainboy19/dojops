@@ -3,6 +3,7 @@ import { SpecialistAgent, SpecialistConfig } from "./specialist";
 import { AgentRouter } from "./router";
 import { ALL_SPECIALIST_CONFIGS } from "./specialists";
 import { LLMProvider, LLMResponse } from "../llm/provider";
+import { ToolDependency } from "./tool-deps";
 
 function mockProvider(response: string): LLMProvider {
   return {
@@ -44,6 +45,27 @@ describe("SpecialistAgent", () => {
     };
     const agent = new SpecialistAgent(provider, config);
     expect(agent.description).toBeUndefined();
+  });
+
+  it("returns toolDependencies from config", () => {
+    const deps: ToolDependency[] = [
+      {
+        name: "ShellCheck",
+        npmPackage: "shellcheck",
+        binary: "shellcheck",
+        description: "Linter",
+        required: false,
+      },
+    ];
+    const provider = mockProvider("ok");
+    const agent = new SpecialistAgent(provider, { ...testConfig, toolDependencies: deps });
+    expect(agent.toolDependencies).toEqual(deps);
+  });
+
+  it("returns empty array when toolDependencies is absent", () => {
+    const provider = mockProvider("ok");
+    const agent = new SpecialistAgent(provider, testConfig);
+    expect(agent.toolDependencies).toEqual([]);
   });
 
   it("delegates to provider with config systemPrompt", async () => {
@@ -206,6 +228,35 @@ describe("AgentRouter", () => {
 
     const result = router.route("Debug this error: build failed with exit code 1");
     expect(result.agent.domain).toBe("ci-debugging");
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it("routes appsec prompts to application-security specialist", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider);
+
+    const result = router.route(
+      "Run owasp sast code review to find xss and injection vulnerabilities",
+    );
+    expect(result.agent.domain).toBe("application-security");
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it("routes shell scripting prompts to shell-scripting specialist", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider);
+
+    const result = router.route("Write a bash shell script with shellcheck and pipefail");
+    expect(result.agent.domain).toBe("shell-scripting");
+    expect(result.confidence).toBeGreaterThan(0);
+  });
+
+  it("routes python prompts to python-scripting specialist", () => {
+    const provider = mockProvider("ok");
+    const router = new AgentRouter(provider);
+
+    const result = router.route("Create a python script with pytest tests and mypy types");
+    expect(result.agent.domain).toBe("python-scripting");
     expect(result.confidence).toBeGreaterThan(0);
   });
 });

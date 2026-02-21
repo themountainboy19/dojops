@@ -2,6 +2,8 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@odaops/api";
 import { CLIContext } from "../types";
+import { preflightCheck } from "../preflight";
+import { ExitCode } from "../exit-codes";
 
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const prompt = args.filter((a) => !a.startsWith("-")).join(" ");
@@ -24,6 +26,15 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
       : "Using default agent.",
   );
+
+  // Pre-flight: check tool dependencies before running LLM
+  const canProceed = preflightCheck(route.agent.name, route.agent.toolDependencies, {
+    quiet: ctx.globalOpts.quiet,
+    json: ctx.globalOpts.output === "json",
+  });
+  if (!canProceed) {
+    process.exit(ExitCode.VALIDATION_ERROR);
+  }
 
   const s2 = p.spinner();
   s2.start("Thinking...");

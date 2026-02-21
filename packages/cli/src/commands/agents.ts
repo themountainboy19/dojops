@@ -1,7 +1,9 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@odaops/api";
+import { getInstallCommand } from "@odaops/core";
 import { CLIContext } from "../types";
+import { runPreflight } from "../preflight";
 
 export async function agentsCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -61,6 +63,9 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     process.exit(1);
   }
 
+  const deps = agent.toolDependencies;
+  const preflight = deps.length > 0 ? runPreflight(agent.name, deps) : null;
+
   if (ctx.globalOpts.output === "json") {
     console.log(
       JSON.stringify(
@@ -68,6 +73,16 @@ function agentInfo(args: string[], ctx: CLIContext): void {
           name: agent.name,
           domain: agent.domain,
           description: agent.description ?? null,
+          toolDependencies:
+            deps.length > 0
+              ? preflight!.checks.map((c) => ({
+                  name: c.dependency.name,
+                  npmPackage: c.dependency.npmPackage,
+                  binary: c.dependency.binary ?? null,
+                  available: c.available,
+                  resolvedPath: c.resolvedPath ?? null,
+                }))
+              : [],
         },
         null,
         2,
@@ -81,5 +96,18 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     `${pc.bold("Domain:")}      ${agent.domain}`,
     `${pc.bold("Description:")} ${agent.description ?? pc.dim("(none)")}`,
   ];
+
+  if (preflight && preflight.checks.length > 0) {
+    lines.push("");
+    lines.push(pc.bold("Tool Dependencies:"));
+    for (const check of preflight.checks) {
+      const icon = check.available ? pc.green("\u2713") : pc.yellow("!");
+      const status = check.available
+        ? pc.dim(check.resolvedPath ?? "found")
+        : `Not found — ${pc.dim(getInstallCommand(check.dependency, "npx"))}`;
+      lines.push(`  ${icon} ${pc.bold(check.dependency.name)}  ${status}`);
+    }
+  }
+
   p.note(lines.join("\n"), `Agent: ${agent.name}`);
 }

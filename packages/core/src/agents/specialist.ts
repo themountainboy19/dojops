@@ -1,4 +1,5 @@
 import { LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
+import { ToolDependency } from "./tool-deps";
 
 export interface SpecialistConfig {
   name: string;
@@ -6,6 +7,7 @@ export interface SpecialistConfig {
   description?: string;
   systemPrompt: string;
   keywords: string[];
+  toolDependencies?: ToolDependency[];
 }
 
 export class SpecialistAgent {
@@ -28,6 +30,10 @@ export class SpecialistAgent {
 
   get keywords(): string[] {
     return this.config.keywords;
+  }
+
+  get toolDependencies(): ToolDependency[] {
+    return this.config.toolDependencies ?? [];
   }
 
   async run(request: Omit<LLMRequest, "system">): Promise<LLMResponse> {

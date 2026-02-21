@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import { ALL_SPECIALIST_CONFIGS, ToolDependency } from "@odaops/core";
 import { CLIContext } from "../types";
 import { getConfigPath } from "../config";
 import { findProjectRoot } from "../state";
+import { resolveBinary, resolveModule } from "../preflight";
 
 interface Check {
   name: string;
@@ -85,6 +87,26 @@ export async function doctorCommand(_args: string[], ctx: CLIContext): Promise<v
         detail: "Could not check",
       });
     }
+  }
+
+  // Agent tool dependencies (deduplicated by npmPackage)
+  const seen = new Set<string>();
+  const uniqueDeps: ToolDependency[] = [];
+  for (const config of ALL_SPECIALIST_CONFIGS) {
+    for (const dep of config.toolDependencies ?? []) {
+      if (!seen.has(dep.npmPackage)) {
+        seen.add(dep.npmPackage);
+        uniqueDeps.push(dep);
+      }
+    }
+  }
+  for (const dep of uniqueDeps) {
+    const found = dep.binary ? resolveBinary(dep.binary) : resolveModule(dep.npmPackage);
+    checks.push({
+      name: `Tool: ${dep.name}`,
+      status: found ? "pass" : "warn",
+      detail: found ?? "Not found (optional)",
+    });
   }
 
   // Output

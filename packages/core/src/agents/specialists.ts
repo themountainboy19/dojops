@@ -1,4 +1,5 @@
 import { SpecialistConfig } from "./specialist";
+import { ToolDependency } from "./tool-deps";
 
 /**
  * Shared suffix appended to all specialist system prompts.
@@ -8,6 +9,64 @@ import { SpecialistConfig } from "./specialist";
 const NO_FOLLOWUP_INSTRUCTION = `
 
 IMPORTANT: Do NOT ask follow-up questions or offer to continue the conversation. This is a single-shot interaction — the user cannot reply. Provide a complete, self-contained response.`;
+
+// ---------------------------------------------------------------------------
+// Tool dependency constants (shared across specialist configs)
+// ---------------------------------------------------------------------------
+const SHELLCHECK_DEP: ToolDependency = {
+  name: "ShellCheck",
+  npmPackage: "shellcheck",
+  binary: "shellcheck",
+  description: "Shell script linting",
+  required: false,
+};
+
+const PYRIGHT_DEP: ToolDependency = {
+  name: "Pyright",
+  npmPackage: "pyright",
+  binary: "pyright",
+  description: "Python type checking",
+  required: false,
+};
+
+const SNYK_DEP: ToolDependency = {
+  name: "Snyk",
+  npmPackage: "snyk",
+  binary: "snyk",
+  description: "Vulnerability scanning",
+  required: false,
+};
+
+const DOCKERFILELINT_DEP: ToolDependency = {
+  name: "Dockerfilelint",
+  npmPackage: "dockerfilelint",
+  binary: "dockerfilelint",
+  description: "Dockerfile linting",
+  required: false,
+};
+
+const YAMLLINT_DEP: ToolDependency = {
+  name: "yaml-lint",
+  npmPackage: "yaml-lint",
+  binary: "yamllint",
+  description: "YAML validation",
+  required: false,
+};
+
+const HCL2JSON_DEP: ToolDependency = {
+  name: "hcl2json",
+  npmPackage: "hcl2json",
+  binary: "hcl2json",
+  description: "HCL validation",
+  required: false,
+};
+
+const OPA_WASM_DEP: ToolDependency = {
+  name: "OPA WASM",
+  npmPackage: "@open-policy-agent/opa-wasm",
+  description: "Policy evaluation",
+  required: false,
+};
 
 // ---------------------------------------------------------------------------
 // 1. OpsCortex — orchestrator / fallback
@@ -32,6 +91,9 @@ You have access to the following specialist domains:
   - gitops (Flux, ArgoCD, declarative delivery)
   - compliance (SOC2, HIPAA, PCI-DSS, audit frameworks)
   - ci-debugging (CI log analysis, build failure diagnosis)
+  - application-security (code review, OWASP, SAST/DAST, ethical pentesting)
+  - shell-scripting (Bash/POSIX scripts, ShellCheck, automation)
+  - python-scripting (Python automation, CLI tools, best practices)
 
 When planning:
 - Identify dependencies between tasks and produce a topological ordering.
@@ -63,6 +125,7 @@ export const TERRAFORM_SPECIALIST_CONFIG: SpecialistConfig = {
   name: "terraform-specialist",
   domain: "infrastructure",
   description: "Terraform and infrastructure-as-code expert",
+  toolDependencies: [HCL2JSON_DEP],
   systemPrompt: `You are a Terraform and infrastructure-as-code expert. You specialize in:
 - AWS, GCP, and Azure resource provisioning
 - Terraform HCL configuration, modules, and best practices
@@ -101,6 +164,7 @@ export const KUBERNETES_SPECIALIST_CONFIG: SpecialistConfig = {
   name: "kubernetes-specialist",
   domain: "container-orchestration",
   description: "Kubernetes and container orchestration expert",
+  toolDependencies: [YAMLLINT_DEP],
   systemPrompt: `You are a Kubernetes and container orchestration expert. You specialize in:
 - Deployment strategies (rolling, blue-green, canary)
 - Service mesh and cluster networking (Istio, Linkerd)
@@ -139,6 +203,7 @@ export const CICD_SPECIALIST_CONFIG: SpecialistConfig = {
   name: "cicd-specialist",
   domain: "ci-cd",
   description: "CI/CD pipeline design and automation expert",
+  toolDependencies: [YAMLLINT_DEP],
   systemPrompt: `You are a CI/CD pipeline expert. You specialize in:
 - GitHub Actions, GitLab CI, Jenkins, CircleCI, and Azure Pipelines
 - Build optimization, layer caching, and parallelism
@@ -177,6 +242,7 @@ export const SECURITY_AUDITOR_CONFIG: SpecialistConfig = {
   name: "security-auditor",
   domain: "security",
   description: "DevOps security auditor and vulnerability assessor",
+  toolDependencies: [SNYK_DEP],
   systemPrompt: `You are a DevOps security auditor. You specialize in:
 - Infrastructure security review and hardening
 - Secret management, rotation, and vault integration
@@ -253,6 +319,7 @@ export const DOCKER_SPECIALIST_CONFIG: SpecialistConfig = {
   name: "docker-specialist",
   domain: "containerization",
   description: "Docker and container image build expert",
+  toolDependencies: [DOCKERFILELINT_DEP],
   systemPrompt: `You are a Docker and containerization expert. You specialize in:
 - Dockerfile best practices, multi-stage builds, and layer optimization
 - Docker Compose for local and multi-service development
@@ -405,6 +472,7 @@ export const GITOPS_SPECIALIST_CONFIG: SpecialistConfig = {
   name: "gitops-specialist",
   domain: "gitops",
   description: "GitOps and declarative delivery expert",
+  toolDependencies: [YAMLLINT_DEP],
   systemPrompt: `You are a GitOps and declarative delivery expert. You specialize in:
 - ArgoCD setup, application definitions, and sync policies
 - Flux CD controllers, kustomizations, and helm releases
@@ -442,6 +510,7 @@ export const COMPLIANCE_AUDITOR_CONFIG: SpecialistConfig = {
   name: "compliance-auditor",
   domain: "compliance",
   description: "Regulatory compliance and governance framework expert",
+  toolDependencies: [OPA_WASM_DEP],
   systemPrompt: `You are a compliance and governance expert. You specialize in:
 - SOC 2 Type I/II controls and evidence collection
 - HIPAA technical safeguards and PHI handling
@@ -510,6 +579,136 @@ Always provide actionable fixes with high confidence.${NO_FOLLOWUP_INSTRUCTION}`
 };
 
 // ---------------------------------------------------------------------------
+// 14. AppSec specialist — application security & ethical pentesting
+// ---------------------------------------------------------------------------
+export const APPSEC_SPECIALIST_CONFIG: SpecialistConfig = {
+  name: "appsec-specialist",
+  domain: "application-security",
+  description: "Application security analyst and ethical pentesting expert",
+  toolDependencies: [SNYK_DEP],
+  systemPrompt: `You are an application security specialist and ethical hacker. You specialize in:
+- Static application security testing (SAST) — reviewing source code for vulnerabilities
+- Dynamic application security testing (DAST) — runtime vulnerability discovery
+- OWASP Top 10 analysis (injection, XSS, CSRF, SSRF, broken auth, misconfigurations)
+- Dependency vulnerability scanning (npm audit, Snyk, Dependabot, Trivy)
+- Penetration testing methodology (reconnaissance, enumeration, exploitation, reporting)
+- Secure coding practices and code review for common languages (JS/TS, Python, Go, Java)
+- API security (authentication, authorization, rate limiting, input validation)
+- Web application firewall (WAF) configuration and bypass testing
+- Security headers, CSP, CORS, and cookie security
+- Secrets detection in source code (git-secrets, truffleHog, gitleaks)
+- Reporting findings with CVSS scoring, proof-of-concept, and remediation steps
+
+Related agents: security-auditor (infrastructure security), compliance-auditor (regulatory), network-specialist (WAF/firewall).
+Always act ethically — only analyze code and systems you have authorization to test. Provide actionable remediation for every finding.${NO_FOLLOWUP_INSTRUCTION}`,
+  keywords: [
+    "appsec",
+    "owasp",
+    "xss",
+    "injection",
+    "csrf",
+    "ssrf",
+    "pentest",
+    "sast",
+    "dast",
+    "code review",
+    "secure coding",
+    "exploit",
+    "snyk",
+    "trivy",
+    "gitleaks",
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// 15. Shell scripting specialist — Bash/POSIX best practices
+// ---------------------------------------------------------------------------
+export const SHELL_SPECIALIST_CONFIG: SpecialistConfig = {
+  name: "shell-specialist",
+  domain: "shell-scripting",
+  description: "Shell scripting and Bash/POSIX best practices expert",
+  toolDependencies: [SHELLCHECK_DEP],
+  systemPrompt: `You are a shell scripting expert specializing in Bash, Zsh, and POSIX sh. You specialize in:
+- Writing robust, portable shell scripts following POSIX standards
+- ShellCheck linting — understanding and fixing all SC warnings and errors
+- Proper quoting, word splitting, and glob expansion handling
+- Error handling patterns (set -euo pipefail, trap, exit codes)
+- Secure scripting practices (avoiding eval, injection, unsafe temp files)
+- Process management (signals, background jobs, wait, process substitution)
+- Text processing (sed, awk, grep, cut, sort, xargs) and pipeline design
+- Shell parameter expansion, arrays, and associative arrays
+- Cron jobs, systemd timers, and task scheduling
+- Init scripts, daemon management, and service wrappers
+- Cross-platform portability (Linux, macOS, Alpine/BusyBox)
+- Performance optimization (avoiding subshells, reducing forks)
+- Here documents, heredocs, and input/output redirection
+- Automation scripts for CI/CD, deployment, backup, and log rotation
+
+Related agents: cicd-specialist (pipeline scripts), docker-specialist (entrypoint scripts), observability-specialist (log processing).
+Always follow ShellCheck recommendations and produce scripts that are safe, portable, and well-documented with usage help.${NO_FOLLOWUP_INSTRUCTION}`,
+  keywords: [
+    "bash",
+    "shell",
+    "shellcheck",
+    "sh",
+    "zsh",
+    "posix",
+    "script",
+    "cron",
+    "sed",
+    "awk",
+    "grep",
+    "pipefail",
+    "trap",
+    "shebang",
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// 16. Python specialist — Python scripting best practices
+// ---------------------------------------------------------------------------
+export const PYTHON_SPECIALIST_CONFIG: SpecialistConfig = {
+  name: "python-specialist",
+  domain: "python-scripting",
+  description: "Python scripting and automation best practices expert",
+  toolDependencies: [PYRIGHT_DEP],
+  systemPrompt: `You are a Python scripting and automation expert. You specialize in:
+- Writing clean, idiomatic Python following PEP 8 and PEP 20 (Zen of Python)
+- Type hints and static analysis (mypy, pyright, ruff)
+- Linting and formatting (ruff, flake8, black, isort)
+- Virtual environments, dependency management (pip, poetry, uv, pipenv)
+- CLI tool development (argparse, click, typer, rich)
+- Automation scripts for DevOps tasks (file processing, API calls, data transformation)
+- Error handling patterns (exceptions, logging, contextmanagers)
+- Testing best practices (pytest, fixtures, mocking, coverage)
+- Async programming (asyncio, aiohttp, httpx)
+- Security best practices (input validation, secrets handling, subprocess safety)
+- Packaging and distribution (pyproject.toml, setuptools, wheel)
+- Data processing (json, csv, yaml, pathlib, dataclasses)
+- System administration scripts (os, shutil, subprocess, paramiko)
+- Performance profiling and optimization (cProfile, functools.lru_cache)
+
+Related agents: shell-specialist (Bash interop), cicd-specialist (CI scripts), appsec-specialist (secure coding).
+Always produce well-typed, well-tested, and production-ready Python code.${NO_FOLLOWUP_INSTRUCTION}`,
+  keywords: [
+    "python",
+    "pip",
+    "pytest",
+    "mypy",
+    "ruff",
+    "poetry",
+    "venv",
+    "asyncio",
+    "flask",
+    "django",
+    "fastapi",
+    "pep8",
+    "pylint",
+    "typer",
+  ],
+};
+
+// ---------------------------------------------------------------------------
 // Exported collection
 // ---------------------------------------------------------------------------
 export const ALL_SPECIALIST_CONFIGS: SpecialistConfig[] = [
@@ -526,4 +725,7 @@ export const ALL_SPECIALIST_CONFIGS: SpecialistConfig[] = [
   GITOPS_SPECIALIST_CONFIG,
   COMPLIANCE_AUDITOR_CONFIG,
   CI_DEBUGGER_SPECIALIST_CONFIG,
+  APPSEC_SPECIALIST_CONFIG,
+  SHELL_SPECIALIST_CONFIG,
+  PYTHON_SPECIALIST_CONFIG,
 ];

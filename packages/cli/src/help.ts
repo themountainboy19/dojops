@@ -350,6 +350,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  - .oda/ project initialized`);
       console.log(`  - Ollama reachability (if applicable)`);
       console.log(`  - Config file permissions`);
+      console.log(`  - Agent tool dependencies (ShellCheck, Snyk, etc.)`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda doctor`);
       console.log();
