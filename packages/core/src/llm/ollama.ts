@@ -35,4 +35,10 @@ export class OllamaProvider implements LLMProvider {
 
     return { content };
   }
+
+  async listModels(): Promise<string[]> {
+    const response = await axios.get(`${this.baseUrl}/api/tags`);
+    const models: string[] = (response.data.models ?? []).map((m: { name: string }) => m.name);
+    return models.sort();
+  }
 }

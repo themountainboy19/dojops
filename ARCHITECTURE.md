@@ -62,19 +62,25 @@ Execution Engine (Sandboxed, policy-enforced, approval-gated, audit-logged)
 
 ### 1. LLM Layer (`@odaops/core`)
 
-Provides abstraction over three providers:
+Provides abstraction over five providers:
 
 - **OpenAI** — `response_format: { type: "json_object" }` for structured output
 - **Anthropic** — JSON prefill technique for structured output
 - **Ollama** — `format: "json"` for local model structured output
+- **DeepSeek** — OpenAI-compatible API with custom `baseURL` (reuses `openai` package)
+- **Gemini** — `responseMimeType: "application/json"` via `@google/genai` SDK
 
 Each provider implements:
 
 ```typescript
 interface LLMProvider {
+  name: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
+  listModels?(): Promise<string[]>;
 }
 ```
+
+The optional `listModels()` method fetches available models from the provider's API, used by `oda config` for dynamic model selection.
 
 All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema.
 

@@ -11,6 +11,7 @@ import {
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { extractFlagValue } from "../parser";
+import { createProvider } from "@odaops/api";
 
 function showConfig(config: OdaConfig): void {
   const lines = [
@@ -19,6 +20,8 @@ function showConfig(config: OdaConfig): void {
     `${pc.bold("Tokens:")}`,
     `  openai:    ${maskToken(config.tokens?.openai)}`,
     `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
+    `  deepseek:  ${maskToken(config.tokens?.deepseek)}`,
+    `  gemini:    ${maskToken(config.tokens?.gemini)}`,
     `  ollama:    ${pc.dim("(no token needed)")}`,
   ];
   p.note(lines.join("\n"), `Configuration ${pc.dim(`(${getConfigPath()})`)}`);
@@ -99,6 +102,8 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     openai: "e.g. gpt-4o, gpt-4o-mini",
     anthropic: "e.g. claude-sonnet-4-5-20250929",
     ollama: "e.g. llama3, mistral, codellama",
+    deepseek: "e.g. deepseek-chat, deepseek-reasoner",
+    gemini: "e.g. gemini-2.5-flash, gemini-2.5-pro",
   };
 
   const answers = await p.group(
@@ -117,12 +122,50 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
           message: `API key for ${results.provider}${hint}:`,
         });
       },
-      model: ({ results }) =>
-        p.text({
+      model: async ({ results }) => {
+        const provider = results.provider as string;
+        const token = (results.token as string) || config.tokens?.[provider];
+
+        // Try fetching models dynamically
+        if (token || provider === "ollama") {
+          try {
+            const s = p.spinner();
+            s.start("Fetching available models...");
+            const llm = createProvider({ provider, apiKey: token || undefined });
+            const models = await llm.listModels?.();
+            s.stop("Models fetched.");
+
+            if (models && models.length > 0) {
+              const customValue = "__custom__";
+              const choice = await p.select({
+                message: "Select default model:",
+                options: [
+                  ...models.map((m) => ({ value: m, label: m })),
+                  { value: customValue, label: "Custom model..." },
+                ],
+                initialValue: config.defaultModel ?? models[0],
+              });
+
+              if (choice === customValue) {
+                return p.text({
+                  message: "Enter custom model name:",
+                  placeholder: modelSuggestions[provider] ?? "",
+                  defaultValue: config.defaultModel ?? "",
+                });
+              }
+              return Promise.resolve(choice as string);
+            }
+          } catch {
+            // Fall back to text input on failure
+          }
+        }
+
+        return p.text({
           message: "Default model (press Enter to skip):",
-          placeholder: modelSuggestions[results.provider!] ?? "",
+          placeholder: modelSuggestions[provider] ?? "",
           defaultValue: config.defaultModel ?? "",
-        }),
+        });
+      },
     },
     {
       onCancel: () => {

@@ -76,7 +76,8 @@ oda "Create a Kubernetes deployment for nginx with 3 replicas"
 - **REST API** — 9 endpoints exposing all capabilities over HTTP
 - **Web dashboard** — Dark-themed single-page app for visual interaction with all features
 - **Structured output** — Zod schema enforcement on all LLM responses with JSON validation
-- **3 LLM providers** — OpenAI, Anthropic, Ollama (local models)
+- **5 LLM providers** — OpenAI, Anthropic, Ollama (local models), DeepSeek, Google Gemini
+- **Dynamic model selection** — `oda config` fetches available models from the provider API for interactive selection
 
 ## Architecture
 
@@ -136,7 +137,7 @@ rollback           Reverse an applied plan
 ### Global Options
 
 ```
---provider=NAME    LLM provider: openai, anthropic, ollama
+--provider=NAME    LLM provider: openai, anthropic, ollama, deepseek, gemini
 --model=NAME       LLM model override
 --profile=NAME     Use named config profile
 --output=FORMAT    Output: table (default), json, yaml
@@ -234,6 +235,8 @@ curl -X POST http://localhost:3000/api/diff \
 | **OpenAI**    | `openai`       | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
 | **Anthropic** | `anthropic`    | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
 | **Ollama**    | `ollama`       | _(none — runs local)_ | `llama3`                     |
+| **DeepSeek**  | `deepseek`     | `DEEPSEEK_API_KEY`    | `deepseek-chat`              |
+| **Gemini**    | `gemini`       | `GEMINI_API_KEY`      | `gemini-2.5-flash`           |
 
 ### Models
 
@@ -242,15 +245,17 @@ curl -X POST http://localhost:3000/api/diff \
 | OpenAI    | `gpt-4o`, `gpt-4o-mini` (default), `gpt-4-turbo`, `o1-mini`         |
 | Anthropic | `claude-sonnet-4-5-20250929` (default), `claude-haiku-4-5-20251001` |
 | Ollama    | `llama3` (default), `mistral`, `codellama`, `deepseek-coder`        |
+| DeepSeek  | `deepseek-chat` (default), `deepseek-reasoner`                      |
+| Gemini    | `gemini-2.5-flash` (default), `gemini-2.5-pro`                      |
 
-Any model string accepted by the provider's API can be used.
+Any model string accepted by the provider's API can be used. Run `oda config` to fetch and select from available models dynamically.
 
 ### Configuration precedence
 
 ```
 Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai
 Model:     --model     >  $ODA_MODEL     >  config  >  provider default
-Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY  >  config token
+Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token
 ```
 
 ## Development

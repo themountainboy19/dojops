@@ -2,13 +2,13 @@ import OpenAI from "openai";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
 import { parseAndValidate } from "./json-validator";
 
-export class OpenAIProvider implements LLMProvider {
-  name = "openai";
+export class DeepSeekProvider implements LLMProvider {
+  name = "deepseek";
   private client: OpenAI;
   private model: string;
 
-  constructor(apiKey: string, model = "gpt-4o-mini") {
-    this.client = new OpenAI({ apiKey });
+  constructor(apiKey: string, model = "deepseek-chat") {
+    this.client = new OpenAI({ apiKey, baseURL: "https://api.deepseek.com/v1" });
     this.model = model;
   }
 
@@ -40,9 +40,7 @@ export class OpenAIProvider implements LLMProvider {
     const list = await this.client.models.list();
     const models: string[] = [];
     for await (const model of list) {
-      if (model.id.startsWith("gpt-")) {
-        models.push(model.id);
-      }
+      models.push(model.id);
     }
     return models.sort();
   }

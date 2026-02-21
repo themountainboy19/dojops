@@ -8,12 +8,14 @@ export interface OdaConfig {
   tokens?: Record<string, string>;
 }
 
-export const VALID_PROVIDERS = ["openai", "anthropic", "ollama"] as const;
+export const VALID_PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini"] as const;
 export type Provider = (typeof VALID_PROVIDERS)[number];
 
 const TOKEN_ENV_MAP: Record<string, string> = {
   openai: "OPENAI_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
+  deepseek: "DEEPSEEK_API_KEY",
+  gemini: "GEMINI_API_KEY",
 };
 
 function configDir(): string {

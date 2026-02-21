@@ -28,7 +28,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
-  console.log(`  ${pc.cyan("--provider=NAME")}    LLM provider: openai, anthropic, ollama`);
+  console.log(
+    `  ${pc.cyan("--provider=NAME")}    LLM provider: openai, anthropic, ollama, deepseek, gemini`,
+  );
   console.log(`  ${pc.cyan("--model=NAME")}       LLM model override`);
   console.log(`  ${pc.cyan("--profile=NAME")}     Use named config profile`);
   console.log(
@@ -83,12 +85,16 @@ export function printHelp(): void {
   console.log(pc.bold("CONFIGURATION PRECEDENCE"));
   console.log(`  Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai`);
   console.log(`  Model:     --model     >  $ODA_MODEL     >  config  >  provider default`);
-  console.log(`  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY  >  config token`);
+  console.log(
+    `  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token`,
+  );
   console.log();
   console.log(pc.bold("MODELS"));
   console.log(`  ${pc.dim("OpenAI:")}    gpt-4o, gpt-4o-mini`);
   console.log(`  ${pc.dim("Anthropic:")} claude-sonnet-4-5-20250929, claude-haiku-4-5-20251001`);
   console.log(`  ${pc.dim("Ollama:")}    llama3, mistral, codellama`);
+  console.log(`  ${pc.dim("DeepSeek:")} deepseek-chat, deepseek-reasoner`);
+  console.log(`  ${pc.dim("Gemini:")}   gemini-2.5-flash, gemini-2.5-pro`);
   console.log();
   console.log(pc.bold("EXIT CODES"));
   console.log(`  0    Success`);

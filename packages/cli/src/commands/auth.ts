@@ -77,6 +77,8 @@ async function authStatus(): Promise<void> {
     `${pc.bold("Tokens:")}`,
     `  openai:    ${maskToken(config.tokens?.openai)}`,
     `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
+    `  deepseek:  ${maskToken(config.tokens?.deepseek)}`,
+    `  gemini:    ${maskToken(config.tokens?.gemini)}`,
     `  ollama:    ${pc.dim("(local, no token needed)")}`,
   ];
   p.note(lines.join("\n"), "Auth Status");

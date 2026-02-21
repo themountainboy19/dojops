@@ -16,4 +16,5 @@ export interface LLMResponse {
 export interface LLMProvider {
   name: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
+  listModels?(): Promise<string[]>;
 }

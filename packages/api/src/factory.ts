@@ -2,6 +2,8 @@ import {
   OpenAIProvider,
   OllamaProvider,
   AnthropicProvider,
+  DeepSeekProvider,
+  GeminiProvider,
   LLMProvider,
   AgentRouter,
   CIDebugger,
@@ -36,6 +38,22 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
       );
     }
     return new AnthropicProvider(key, model);
+  } else if (providerName === "deepseek") {
+    const key = options?.apiKey ?? process.env.DEEPSEEK_API_KEY;
+    if (!key) {
+      throw new Error(
+        "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: oda login --token <KEY> --provider deepseek",
+      );
+    }
+    return new DeepSeekProvider(key, model);
+  } else if (providerName === "gemini") {
+    const key = options?.apiKey ?? process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error(
+        "Gemini API key is required. Set GEMINI_API_KEY or run: oda login --token <KEY> --provider gemini",
+      );
+    }
+    return new GeminiProvider(key, model);
   } else {
     const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {

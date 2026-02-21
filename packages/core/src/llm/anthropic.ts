@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import axios from "axios";
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
 import { parseAndValidate } from "./json-validator";
 
@@ -7,7 +8,10 @@ export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
   private model: string;
 
+  private apiKey: string;
+
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
+    this.apiKey = apiKey;
     this.client = new Anthropic({ apiKey });
     this.model = model;
   }
@@ -44,5 +48,18 @@ export class AnthropicProvider implements LLMProvider {
     }
 
     return { content };
+  }
+
+  async listModels(): Promise<string[]> {
+    const response = await axios.get("https://api.anthropic.com/v1/models", {
+      headers: {
+        "x-api-key": this.apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+    });
+    const models: string[] = (response.data.data ?? [])
+      .filter((m: { id: string }) => m.id.startsWith("claude-"))
+      .map((m: { id: string }) => m.id);
+    return models.sort();
   }
 }

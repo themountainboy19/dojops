@@ -72,8 +72,8 @@ pnpm oda -- serve                 # in-repo alternative
 
 **Key abstractions:**
 
-- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, supports optional `schema` field for structured JSON output
-- `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 3 providers
+- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, optional `listModels(): Promise<string[]>`, supports optional `schema` field for structured JSON output
+- `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 5 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
 - `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring
 - `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python)
@@ -104,7 +104,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 **Implemented (Phase 1 + 2 + 3 + 4 + 5 + 6 + CLI hardening):**
 
-- `@odaops/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
+- `@odaops/core` — DevOpsAgent + 5 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@odaops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
 - `@odaops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
 - `@odaops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, tool class, tests)
@@ -127,8 +127,8 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 Set in `.env` (see `.env.example`):
 
-- `ODA_PROVIDER`: `openai` (default) | `anthropic` | `ollama`
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` as needed
+- `ODA_PROVIDER`: `openai` (default) | `anthropic` | `ollama` | `deepseek` | `gemini`
+- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `GEMINI_API_KEY` as needed
 - `ODA_API_PORT`: API server port (default `3000`)
 - Ollama requires local server at `localhost:11434`
 
