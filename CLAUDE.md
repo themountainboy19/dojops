@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, infra diff intelligence, a REST API, and a web dashboard are implemented.
+ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, infra diff intelligence, a REST API, a web dashboard, and a rich terminal UI (@clack/prompts) are implemented.
 
 ## Commands
 
@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructur
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (139 tests)
+pnpm test               # Vitest across all packages (241 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -108,9 +108,9 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 - `@odaops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution
 - `@odaops/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
 - `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
-- `@odaops/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode
+- `@odaops/cli` — CLI with `--plan` (generate only), `--execute` (generate + sandboxed execute with approval), `--yes` (auto-approve), `--debug-ci` (CI log diagnosis), `--diff` (infra diff analysis), multi-agent routing in default mode, rich TUI via `@clack/prompts` (interactive prompts, spinners, styled notes/boxes, semantic log levels, session framing with intro/outro)
 - `@odaops/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
-- Dev tooling — Vitest (139 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (241 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
 
@@ -119,6 +119,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 **Phase 3 — Execution: DONE**
 **Phase 4 — Intelligence: DONE**
 **Phase 5 — Platform: DONE** (REST API, web dashboard)
+**Phase 6 — CLI TUI Overhaul: DONE** (@clack/prompts: interactive prompts, spinners, styled panels, semantic logs)
 
 ## Environment
 

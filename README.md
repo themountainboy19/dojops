@@ -1,6 +1,6 @@
 # ODA — Open DevOps Agent
 
-AI-powered DevOps automation. Generate, validate, and execute infrastructure and CI/CD configurations safely through a CLI, REST API, or web dashboard.
+AI-powered DevOps automation. Generate, validate, and execute infrastructure and CI/CD configurations safely through a rich terminal UI, REST API, or web dashboard.
 
 ## Features
 
@@ -11,6 +11,7 @@ AI-powered DevOps automation. Generate, validate, and execute infrastructure and
 - **Approval workflows** — Auto-approve, auto-deny, or callback-based approval before destructive operations
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, and suggested fixes
 - **Infra diff analysis** — Risk level, cost impact, security implications, and rollback complexity for infrastructure changes
+- **Rich terminal UI** — Interactive arrow-key prompts, spinners for async ops, styled note panels, semantic log levels (success/error/warn/info), session framing — powered by `@clack/prompts`
 - **REST API** — 9 endpoints exposing all capabilities over HTTP
 - **Web dashboard** — Dark-themed single-page app for visual interaction with all features
 - **Structured output** — Zod schema enforcement on all LLM responses with JSON validation
@@ -19,7 +20,7 @@ AI-powered DevOps automation. Generate, validate, and execute infrastructure and
 ## Architecture
 
 ```
-@odaops/cli          CLI entry point (--plan, --execute, --yes, --debug-ci, --diff)
+@odaops/cli          CLI entry point + rich TUI (@clack/prompts)
 @odaops/api          REST API (Express) + web dashboard
 @odaops/planner      TaskGraph decomposition + topological executor
 @odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
@@ -131,6 +132,8 @@ ODA_API_PORT=3000    # API server port (default: 3000)
 
 ### CLI
 
+All CLI commands feature a rich terminal UI with interactive prompts, spinners, styled panels, and semantic log levels.
+
 ```bash
 # After `npm link` (global install):
 oda "Create a Terraform config for S3 with versioning"
@@ -138,6 +141,13 @@ oda --plan "Set up CI/CD for a Node.js app"
 oda --execute --yes "Create CI for Node app"
 oda --debug-ci "ERROR: tsc failed with exit code 1..."
 oda --diff "terraform plan output..."
+
+# Interactive configuration (arrow-key provider select, password input, model picker):
+oda config
+
+# Direct configuration:
+oda config --provider anthropic --token <KEY> --model <MODEL>
+oda config --show
 
 # In-repo development (no global link needed):
 pnpm oda -- "Create a Terraform config for S3 with versioning"
@@ -210,7 +220,7 @@ curl http://localhost:3000/api/history
 ```bash
 pnpm build              # Build all packages
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 139 tests
+pnpm test               # Run all 241 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check
@@ -247,13 +257,14 @@ packages/
 
 See [VISION.md](VISION.md) and [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
 
-All 5 planned phases are complete:
+All 6 planned phases are complete:
 
 1. **Core Intelligence** — Structured output, Zod validation, planner engine
 2. **DevOps Tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible
 3. **Execution** — Sandboxed executor, policy engine, approval workflows
 4. **Intelligence** — Multi-agent routing, CI debugging, infra diff analysis
 5. **Platform** — REST API, web dashboard
+6. **CLI TUI Overhaul** — Rich terminal UI with `@clack/prompts` (interactive prompts, spinners, styled panels, semantic log levels)
 
 ## Publishing
 

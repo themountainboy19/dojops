@@ -195,6 +195,28 @@ Features:
 
 ---
 
+# Phase 6 – CLI TUI Overhaul (DONE)
+
+## 13. Rich Terminal UI (@clack/prompts)
+
+Replaced all raw `console.log`/`console.error` + `readline` prompts with `@clack/prompts` components:
+
+- **Interactive config**: `p.group()` with `p.select()`, `p.password()`, `p.text()` for `oda config`
+- **Spinners**: `p.spinner()` around all async LLM calls (decompose, diagnose, analyze, route, run)
+- **Styled panels**: `p.note(body, title)` for config display, CI diagnosis, infra diff analysis, task graphs, generated output, server info, approval requests
+- **Semantic logs**: `p.log.success()`, `p.log.error()`, `p.log.warn()`, `p.log.info()`, `p.log.step()` replacing all `console.log`/`console.error`
+- **Session framing**: `p.intro()` / `p.outro()` wrapping LLM-powered commands
+- **Approval flow**: `p.note()` + `p.confirm()` with `p.isCancel()` for interactive approval
+- **Help text**: Unchanged — plain `console.log` + `picocolors` for pipe/grep compatibility
+
+Deliverable:
+
+- Full TUI overhaul of `packages/cli/src/index.ts`
+- Deleted `prompts.ts` and `prompts.test.ts` (replaced by @clack)
+- All 241 tests passing
+
+---
+
 # Engineering Priorities
 
 1. Safety over speed
