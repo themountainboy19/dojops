@@ -154,7 +154,7 @@ rollback           Reverse an applied plan
 | -------------- | ----------------- | -------- | ---------------------------- | ----------------------------------- |
 | GitHub Actions | `github/`         | Yes      | js-yaml                      | `.github/workflows/ci.yml`          |
 | Terraform      | `terraform/`      | Yes      | Custom HCL builder           | `main.tf`, `variables.tf`           |
-| Kubernetes     | `kubernetes/`     | No       | js-yaml                      | K8s manifests                       |
+| Kubernetes     | `kubernetes/`     | No       | js-yaml                      | `K8s manifests`                     |
 | Helm           | `helm/`           | No       | js-yaml                      | `Chart.yaml`, `values.yaml`         |
 | Ansible        | `ansible/`        | No       | js-yaml                      | `{name}.yml`                        |
 | Docker Compose | `docker-compose/` | Yes      | js-yaml                      | `docker-compose.yml`                |
@@ -240,15 +240,23 @@ curl -X POST http://localhost:3000/api/diff \
 
 ### Models
 
-| Provider  | Models                                                              |
-| --------- | ------------------------------------------------------------------- |
-| OpenAI    | `gpt-4o`, `gpt-4o-mini` (default), `gpt-4-turbo`, `o1-mini`         |
-| Anthropic | `claude-sonnet-4-5-20250929` (default), `claude-haiku-4-5-20251001` |
-| Ollama    | `llama3` (default), `mistral`, `codellama`, `deepseek-coder`        |
-| DeepSeek  | `deepseek-chat` (default), `deepseek-reasoner`                      |
-| Gemini    | `gemini-2.5-flash` (default), `gemini-2.5-pro`                      |
+Each provider ships with a sensible default model, but you can choose any model your provider supports. Run `oda config` to interactively fetch available models from the provider's API and pick one, or set it directly with `--model`:
 
-Any model string accepted by the provider's API can be used. Run `oda config` to fetch and select from available models dynamically.
+```bash
+oda config                          # Interactive: fetches models, shows select list
+oda config --model=gpt-4o           # Set directly
+oda --model=deepseek-reasoner "..." # One-off override
+```
+
+| Provider  | Default model                | Other examples                           |
+| --------- | ---------------------------- | ---------------------------------------- |
+| OpenAI    | `gpt-4o-mini`                | `gpt-4o`, `gpt-4-turbo`, `o1-mini`       |
+| Anthropic | `claude-sonnet-4-5-20250929` | `claude-haiku-4-5-20251001`              |
+| Ollama    | `llama3`                     | `mistral`, `codellama`, `deepseek-coder` |
+| DeepSeek  | `deepseek-chat`              | `deepseek-reasoner`                      |
+| Gemini    | `gemini-2.5-flash`           | `gemini-2.5-pro`                         |
+
+Any model string accepted by the provider's API can be used — the table above shows common examples, not an exhaustive list.
 
 ### Configuration precedence
 
