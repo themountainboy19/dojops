@@ -1,279 +1,125 @@
-# ODA – Next Steps Roadmap
+# ODA – Roadmap
 
-This document defines the execution plan for ODA after the initial monorepo scaffold.
-
-The goal is to move from foundation to production-grade DevOps agent.
+This document tracks ODA's development from initial scaffold to production-grade DevOps agent.
 
 ---
 
-# Phase 1 – Core Intelligence Layer
+# v1.0.0 — Shipped
 
-## 1. Structured Output Enforcement
-
-- Force LLM to return strict JSON
-- Introduce Zod schema validation
-- Add output validation layer before tool execution
-- Prevent arbitrary free-text execution
-
-Deliverable:
-
-- JSON contract system
-- Validation middleware
+All six phases are complete. ODA v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI.
 
 ---
 
-## 2. Planner Engine (Task Graph System)
+## Phase 1 — Core Intelligence Layer (DONE)
 
-Implement:
-
-- TaskGraph class
-- Task node structure
-- Execution pipeline
-
-Example:
-
-User Input:
-"Create GitHub workflow for Node app"
-
-Planner Output:
-[
-{ task: "detect_project_type" },
-{ task: "generate_workflow_yaml" },
-{ task: "validate_yaml" }
-]
-
-Deliverable:
-
-- Deterministic task execution system
-- Logging system for traceability
+- **Structured output enforcement** — LLM responses constrained to JSON via provider-native modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`)
+- **Zod schema validation** — Every tool input and LLM output validated with Zod schemas via `parseAndValidate()`
+- **Planner engine** — `TaskGraph` decomposition via LLM, `PlannerExecutor` with Kahn's topological sort, `$ref:<taskId>` input wiring, failure cascading, `completedTaskIds` for resume
 
 ---
 
-# Phase 2 – DevOps Tool Implementations
+## Phase 2 — DevOps Tools (DONE)
 
-## 3. GitHub Actions Tool
+12 tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services:
 
-Capabilities:
+| Tool           | Detector | Serialization                |
+| -------------- | -------- | ---------------------------- |
+| GitHub Actions | Yes      | js-yaml                      |
+| Terraform      | Yes      | Custom HCL builder           |
+| Kubernetes     | No       | js-yaml                      |
+| Helm           | No       | js-yaml                      |
+| Ansible        | No       | js-yaml                      |
+| Docker Compose | Yes      | js-yaml                      |
+| Dockerfile     | Yes      | Custom string builder        |
+| Nginx          | No       | Custom string builder        |
+| Makefile       | Yes      | Custom string builder (tabs) |
+| GitLab CI      | Yes      | js-yaml                      |
+| Prometheus     | No       | js-yaml                      |
+| Systemd        | No       | Custom string builder (INI)  |
 
-- Detect project language
-- Generate workflow YAML
-- Validate YAML
-- Optional PR creation (future)
-
-Deliverable:
-
-- @odaops/tools/github
-- Schema validation for workflow structure
-
----
-
-## 4. Terraform Tool
-
-Capabilities:
-
-- Generate Terraform templates
-- Validate HCL
-- Run terraform plan (sandboxed)
-- Output diff preview
-
-Deliverable:
-
-- Terraform execution wrapper
-- Plan-only safe mode
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `*-tool.ts` → tests.
 
 ---
 
-## 5. Kubernetes Tool
+## Phase 3 — Secure Execution Layer (DONE)
 
-Capabilities:
-
-- Generate deployment/service YAML
-- Helm chart generation
-- Kustomize overlays
-- Validate via kubectl --dry-run
-
-Deliverable:
-
-- Kubernetes adapter layer
+- **SafeExecutor** — generate → approval → execute pipeline with policy checks, timeout, and audit logging
+- **ExecutionPolicy** — write permissions, allowed/denied paths, env vars, timeout, file size limits
+- **ApprovalHandler** — auto-approve, auto-deny, or interactive callback with diff preview
+- **SandboxedFs** — path-restricted file operations with per-file audit logging
+- **Resume & recovery** — `oda apply --resume` skips completed tasks, retries failed ones
+- **Hash-chained audit trail** — SHA-256 hash-chained JSONL with tamper detection via `oda history verify`
+- **Execution locking** — PID-based lock files prevent concurrent mutations
 
 ---
 
-# Phase 3 – Secure Execution Layer
+## Phase 4 — Intelligence Expansion (DONE)
 
-## 6. Sandbox Engine
-
-Implement:
-
-- Docker-based isolated execution
-- Restricted filesystem access
-- Environment whitelisting
-- Timeout limits
-
-Goal:
-No direct host-level execution.
+- **16 specialist agents** — ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python
+- **AgentRouter** — keyword-based routing with confidence scoring and fallback
+- **CI Debugger** — paste CI logs, get structured diagnosis (error type, root cause, fixes, confidence)
+- **InfraDiffAnalyzer** — risk level, cost impact, security implications, rollback complexity, recommendations
 
 ---
 
-## 7. Approval Workflow System
+## Phase 5 — Platform Layer (DONE)
 
-Before destructive operations:
-
-- Show diff preview
-- Require explicit approval
-- Log execution metadata
+- **REST API** — 9 Express endpoints exposing all capabilities over HTTP with Zod request validation
+- **Web dashboard** — dark-themed SPA with 6 tabs (Generate, Plan, Debug CI, Infra Diff, Agents, History)
+- **In-memory HistoryStore** — operation history with add/getAll/getById/clear
 
 ---
 
-# Phase 4 – Intelligence Expansion
+## Phase 6 — CLI TUI Overhaul (DONE)
 
-## 8. Multi-Agent System
-
-Agents:
-
-- Planner Agent
-- Terraform Specialist
-- Kubernetes Specialist
-- CI/CD Specialist
-- Security Auditor
-
-Goal:
-Specialized reasoning per domain.
+- **@clack/prompts** — interactive arrow-key prompts, spinners, styled note panels, semantic log levels
+- **Full command set** — init, plan, validate, apply, destroy, rollback, explain, debug ci, analyze diff, inspect, agents, history, doctor, config, auth, serve
+- **Session framing** — intro/outro wrapping, approval flow with confirm/cancel
 
 ---
 
-## 9. CI Debugging Mode
+# v2.0.0 — Planned
 
-User pastes failing logs.
+## Phase 7 — Enterprise Readiness
 
-Agent:
-
-- Analyzes logs
-- Detects root cause
-- Suggests fix
-
----
-
-## 10. Infrastructure Diff Intelligence
-
-Explain:
-
-- What changed
-- Cost impact
-- Risk level
-- Security impact
-
----
-
-# Phase 5 – Platform Layer
-
-## 11. REST API
-
-Expose:
-
-- /generate
-- /plan
-- /execute
-- /explain
-
-Goal:
-Enable integration with:
-
-- DevOps platforms
-- Internal tools
-- Web UI
-
----
-
-## 12. Web Dashboard (Future)
-
-Features:
-
-- Task history
-- Execution logs
-- Diff visualization
-- Agent trace debugging
-
----
-
-# Phase 6 – CLI TUI Overhaul (DONE)
-
-## 13. Rich Terminal UI (@clack/prompts)
-
-Replaced all raw `console.log`/`console.error` + `readline` prompts with `@clack/prompts` components:
-
-- **Interactive config**: `p.group()` with `p.select()`, `p.password()`, `p.text()` for `oda config`
-- **Spinners**: `p.spinner()` around all async LLM calls (decompose, diagnose, analyze, route, run)
-- **Styled panels**: `p.note(body, title)` for config display, CI diagnosis, infra diff analysis, task graphs, generated output, server info, approval requests
-- **Semantic logs**: `p.log.success()`, `p.log.error()`, `p.log.warn()`, `p.log.info()`, `p.log.step()` replacing all `console.log`/`console.error`
-- **Session framing**: `p.intro()` / `p.outro()` wrapping LLM-powered commands
-- **Approval flow**: `p.note()` + `p.confirm()` with `p.isCancel()` for interactive approval
-- **Help text**: Unchanged — plain `console.log` + `picocolors` for pipe/grep compatibility
-
-Deliverable:
-
-- Full TUI overhaul of `packages/cli/src/index.ts`
-- Deleted `prompts.ts` and `prompts.test.ts` (replaced by @clack)
-- All 241 tests passing
-
----
-
-# Phase 7 — Enterprise Readiness
-
-## 14. RBAC & Multi-Tenancy
+### RBAC & Multi-Tenancy
 
 - Role-based access control for plan/apply/destroy operations
 - Multi-tenant project isolation
 - API key scoping per tenant
 
-## 15. Persistent Storage
+### Persistent Storage
 
-- Pluggable storage backends (filesystem, SQLite, PostgreSQL)
+- Pluggable storage backends (filesystem → SQLite → PostgreSQL)
 - Migrate in-memory HistoryStore to persistent backend
-- Plan and audit log archival
+- Plan and audit log archival with retention policies
 
-## 16. Observability
+### Observability
 
 - OpenTelemetry instrumentation for LLM calls, tool execution, and plan lifecycle
 - Prometheus metrics endpoint (`/metrics`)
 - Structured logging with correlation IDs
 
-## 17. Enterprise Integrations
+### Enterprise Integrations
 
 - SSO (OIDC/SAML) for API authentication
 - Webhook notifications for plan lifecycle events
 - Slack/Teams integration for approval workflows
 - Git provider integration (auto-PR for applied plans)
 
-## 18. Resume & Recovery (DONE)
+### Advanced Execution
 
-- `oda apply --resume` — skip completed tasks, retry failed
-- Per-task result tracking with execution status and files created
-- PARTIAL plan status for incomplete executions
-
-## 19. Audit Integrity (DONE)
-
-- Hash-chained JSONL audit trail (SHA-256)
-- `oda history verify` for tamper detection
-- Backward-compatible with legacy (pre-chain) entries
+- Docker-based isolated execution environments
+- Cost estimation engine for infrastructure changes
+- Drift detection for applied configurations
+- Cloud provider SDK integrations (AWS, GCP, Azure)
 
 ---
 
-# Engineering Priorities
+# Engineering Principles
 
 1. Safety over speed
 2. Deterministic execution
 3. Schema validation everywhere
 4. Modular plugin architecture
 5. Clear separation of orchestration vs execution
-
----
-
-# Immediate Next Task (Recommended)
-
-Implement:
-
-1. JSON schema enforcement
-2. Planner task graph
-3. GitHub Actions tool
-
-These provide visible value quickly while keeping architecture clean.

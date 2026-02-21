@@ -1,6 +1,6 @@
 {
   "name": "@odaops/tools",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "DevOps tools for GitHub Actions, Terraform, Kubernetes, Helm, and Ansible",
   "license": "MIT",
   "repository": {

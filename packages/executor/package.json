@@ -1,6 +1,6 @@
 {
   "name": "@odaops/executor",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Sandboxed execution engine with policy controls and approval workflows for ODA",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@odaops/core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for ODA",
   "license": "MIT",
   "repository": {

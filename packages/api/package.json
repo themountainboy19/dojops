@@ -1,6 +1,6 @@
 {
   "name": "@odaops/api",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "REST API server and web dashboard for ODA DevOps agent",
   "license": "MIT",
   "repository": {

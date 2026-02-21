@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructure and CI/CD tasks using LLM providers. Structured output enforcement, a task planner, five DevOps tools, a sandboxed execution engine with approval workflows, a multi-agent system, CI debugging, infra diff intelligence, a REST API, a web dashboard, and a rich terminal UI (@clack/prompts) are implemented.
+ODA (Open DevOps Agent) is an enterprise-grade AI DevOps automation system. It generates, validates, and executes infrastructure and CI/CD configurations using LLM providers — with structured output enforcement, 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, and a rich terminal UI (@clack/prompts).
 
 ## Commands
 
@@ -12,7 +12,7 @@ ODA (Open DevOps Agent) is an agentic DevOps system that automates infrastructur
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (354 tests)
+pnpm test               # Vitest across all packages (442 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -50,7 +50,8 @@ pnpm oda -- serve                 # in-repo alternative
 @odaops/api          → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
 @odaops/planner      → TaskGraph decomposition (LLM) + topological executor
 @odaops/executor     → SafeExecutor: sandbox + policy engine + approval workflows + audit log
-@odaops/tools        → DevOps tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible
+@odaops/tools        → 12 DevOps tools: GitHub Actions, Terraform, K8s, Helm, Ansible,
+                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
 @odaops/core         → LLM abstraction: DevOpsAgent + providers + structured output (Zod)
 @odaops/sdk          → BaseTool<T> abstract class with Zod inputSchema validation
 ```
@@ -75,7 +76,7 @@ pnpm oda -- serve                 # in-repo alternative
 - `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 3 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
 - `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring
-- `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (5 specialists: planner, terraform, kubernetes, cicd, security)
+- `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python)
 - `CIDebugger` (`packages/core/src/agents/ci-debugger.ts`) — analyzes CI logs, produces structured `CIDiagnosis` (error type, root cause, fixes, confidence)
 - `InfraDiffAnalyzer` (`packages/core/src/agents/infra-diff.ts`) — analyzes infra diffs, produces `InfraDiffAnalysis` (risk level, cost impact, security impact, recommendations)
 - `BaseTool<TInput>` (`packages/sdk/src/tool.ts`) — abstract class with Zod `inputSchema`, auto `validate()`, abstract `generate()`, optional `execute()`
@@ -103,14 +104,14 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 
 **Implemented (Phase 1 + 2 + 3 + 4 + 5 + 6 + CLI hardening):**
 
-- `@odaops/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 5 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
+- `@odaops/core` — DevOpsAgent + 3 LLM providers (OpenAI, Anthropic, Ollama) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@odaops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`
 - `@odaops/planner` — TaskGraph/TaskNode Zod schemas, `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
-- `@odaops/tools` — 5 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible (each with schemas, generator, detector/tool, tests)
+- `@odaops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, tool class, tests)
 - `@odaops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging, `withTimeout()` for execution limits
 - `@odaops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect`, `agents`, `history` (`list`, `show`, `verify`), `doctor`, `config`, `auth`, `serve`. Execution locking, hash-chained audit logs, plan persistence, rich TUI via `@clack/prompts`
 - `@odaops/api` — REST API (Express + cors) exposing all capabilities via 9 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, vanilla web dashboard (dark theme, 6 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History), `supertest` integration tests
-- Dev tooling — Vitest (354 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (442 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap (from NEXT_STEPS.md)
 
@@ -120,7 +121,7 @@ generator.ts   → LLM call with structured schema → serialization (YAML/HCL)
 **Phase 4 — Intelligence: DONE**
 **Phase 5 — Platform: DONE** (REST API, web dashboard)
 **Phase 6 — CLI TUI Overhaul: DONE** (@clack/prompts: interactive prompts, spinners, styled panels, semantic logs)
-**Phase 7 — Enterprise Readiness:** RBAC, persistent storage, observability, integrations (resume + audit integrity done)
+**Phase 7 — Enterprise Readiness (v2.0.0):** RBAC, persistent storage, observability, enterprise integrations
 
 ## Environment
 
@@ -141,5 +142,3 @@ Defined in root `tsconfig.json`:
 - `@odaops/tools/*` → `packages/tools/src/*`
 - `@odaops/executor/*` → `packages/executor/src/*`
 - `@odaops/api/*` → `packages/api/src/*`
-
-claude --resume add44bef-7436-46cb-9b8f-51ff0d692a7b

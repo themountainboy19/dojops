@@ -14,6 +14,7 @@ Enterprise-grade AI DevOps automation. Generate, validate, and execute infrastru
 
 ```bash
 oda "Create a Terraform config for S3 with versioning"
+oda "Create a Dockerfile for a Node.js Express app"
 oda debug ci "ERROR: tsc failed with exit code 1..."
 oda analyze diff "terraform plan output..."
 ```
@@ -62,8 +63,8 @@ oda "Create a Kubernetes deployment for nginx with 3 replicas"
 
 ## Features
 
-- **Multi-agent routing** — 5 specialist agents (planner, terraform, kubernetes, CI/CD, security) with keyword-based confidence scoring
-- **5 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible — each with schema validation, generation, and optional execution
+- **Multi-agent routing** — 16 specialist agents (planner, terraform, kubernetes, CI/CD, security, Docker, cloud, networking, database, GitOps, compliance, CI debugger, appsec, shell, Python, observability) with keyword-based confidence scoring
+- **12 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd — each with schema validation, generation, and optional execution
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution
 - **Sandboxed execution** — Policy engine controlling write paths, env vars, timeouts, and file size limits
 - **Approval workflows** — Auto-approve, auto-deny, or callback-based approval before destructive operations
@@ -84,8 +85,9 @@ oda "Create a Kubernetes deployment for nginx with 3 replicas"
 @odaops/api          REST API (Express) + web dashboard
 @odaops/planner      TaskGraph decomposition + topological executor
 @odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
-@odaops/tools        GitHub Actions, Terraform, Kubernetes, Helm, Ansible
-@odaops/core         LLM abstraction + multi-agent system + CI debugger + infra diff
+@odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+                     Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
+@odaops/core         LLM abstraction + 16 specialist agents + CI debugger + infra diff
 @odaops/sdk          BaseTool<T> abstract class with Zod validation
 ```
 
@@ -144,6 +146,46 @@ rollback           Reverse an applied plan
 --no-color         Disable color output
 --non-interactive  Disable interactive prompts
 ```
+
+## Tools
+
+| Tool           | Directory         | Detector | Serialization                | Output Files                        |
+| -------------- | ----------------- | -------- | ---------------------------- | ----------------------------------- |
+| GitHub Actions | `github/`         | Yes      | js-yaml                      | `.github/workflows/ci.yml`          |
+| Terraform      | `terraform/`      | Yes      | Custom HCL builder           | `main.tf`, `variables.tf`           |
+| Kubernetes     | `kubernetes/`     | No       | js-yaml                      | K8s manifests                       |
+| Helm           | `helm/`           | No       | js-yaml                      | `Chart.yaml`, `values.yaml`         |
+| Ansible        | `ansible/`        | No       | js-yaml                      | `{name}.yml`                        |
+| Docker Compose | `docker-compose/` | Yes      | js-yaml                      | `docker-compose.yml`                |
+| Dockerfile     | `dockerfile/`     | Yes      | Custom string builder        | `Dockerfile`, `.dockerignore`       |
+| Nginx          | `nginx/`          | No       | Custom string builder        | `nginx.conf`                        |
+| Makefile       | `makefile/`       | Yes      | Custom string builder (tabs) | `Makefile`                          |
+| GitLab CI      | `gitlab-ci/`      | Yes      | js-yaml                      | `.gitlab-ci.yml`                    |
+| Prometheus     | `prometheus/`     | No       | js-yaml                      | `prometheus.yml`, `alert-rules.yml` |
+| Systemd        | `systemd/`        | No       | Custom string builder (INI)  | `{name}.service`                    |
+
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `*-tool.ts` → tests.
+
+## Specialist Agents
+
+| Agent                    | Domain                  | Routing Keywords                                      |
+| ------------------------ | ----------------------- | ----------------------------------------------------- |
+| ops-cortex               | orchestration           | plan, decompose, orchestrate, strategy, roadmap       |
+| terraform-specialist     | infrastructure          | terraform, iac, hcl, provision, resource, module      |
+| kubernetes-specialist    | container-orchestration | kubernetes, k8s, pod, deployment, helm, ingress       |
+| cicd-specialist          | ci-cd                   | ci, cd, pipeline, github actions, jenkins, gitlab ci  |
+| security-auditor         | security                | security, audit, vulnerability, secret, firewall, iam |
+| observability-specialist | observability           | monitoring, logging, alerting, prometheus, grafana    |
+| docker-specialist        | containerization        | docker, dockerfile, container, image, compose         |
+| cloud-architect          | cloud-architecture      | aws, gcp, azure, serverless, lambda, migration        |
+| network-specialist       | networking              | dns, load balancer, vpc, vpn, cdn, nginx              |
+| database-specialist      | data-storage            | database, postgres, mysql, redis, dynamodb            |
+| gitops-specialist        | gitops                  | gitops, argocd, flux, reconciliation, drift           |
+| compliance-auditor       | compliance              | compliance, soc2, hipaa, policy, opa                  |
+| ci-debugger              | ci-debugging            | debug, error, failed, failure, timeout, flaky         |
+| appsec-specialist        | application-security    | owasp, xss, injection, pentest, sast, dast            |
+| shell-specialist         | shell-scripting         | bash, shell, shellcheck, posix, cron                  |
+| python-specialist        | python-scripting        | python, pip, pytest, mypy, poetry                     |
 
 ## API Reference
 
@@ -216,7 +258,7 @@ Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY  >  config token
 ```bash
 pnpm build              # Build all packages
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all tests
+pnpm test               # Run all 442 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check
@@ -233,26 +275,48 @@ pnpm --filter @odaops/tools lint
 packages/
   api/            REST API + web dashboard
   cli/            CLI entry point + TUI
-  core/           LLM providers + agents + CI debugger + infra diff
+  core/           LLM providers + 16 agents + CI debugger + infra diff
   executor/       SafeExecutor + policy engine + approval workflows
   planner/        Task graph decomposition + topological executor
   sdk/            BaseTool abstract class + Zod re-export
-  tools/          GitHub Actions, Terraform, Kubernetes, Helm, Ansible
+  tools/          12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+                  Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 ```
+
+### Test Coverage
+
+| Package            | Tests   |
+| ------------------ | ------- |
+| `@odaops/cli`      | 140     |
+| `@odaops/tools`    | 101     |
+| `@odaops/api`      | 70      |
+| `@odaops/core`     | 62      |
+| `@odaops/executor` | 36      |
+| `@odaops/planner`  | 28      |
+| `@odaops/sdk`      | 5       |
+| **Total**          | **442** |
 
 ## Roadmap
 
 See [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
 
-All 7 planned phases:
+**v1.0.0 (current):**
 
 1. **Core Intelligence** — Structured output, Zod validation, planner engine
-2. **DevOps Tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible
+2. **DevOps Tools** — 12 tools covering CI/CD, IaC, containers, monitoring, and system services
 3. **Execution** — Sandboxed executor, policy engine, approval workflows
-4. **Intelligence** — Multi-agent routing, CI debugging, infra diff analysis
-5. **Platform** — REST API, web dashboard
-6. **CLI TUI Overhaul** — Rich terminal UI with `@clack/prompts`
-7. **Enterprise Readiness** — RBAC, persistent storage, observability, integrations
+4. **Intelligence** — 16 specialist agents, CI debugging, infra diff analysis
+5. **Platform** — REST API with 9 endpoints, web dashboard
+6. **CLI TUI** — Rich terminal UI with `@clack/prompts`
+7. **Enterprise Foundations** — Resume/recovery, hash-chained audit logs, execution locking
+
+**v2.0.0 (planned):**
+
+- RBAC & multi-tenancy
+- Persistent storage backends (SQLite, PostgreSQL)
+- OpenTelemetry observability
+- SSO, webhooks, Slack/Teams integrations
+- Git provider integration (auto-PR)
 
 ## Publishing
 

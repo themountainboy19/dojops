@@ -1,6 +1,6 @@
 {
   "name": "@odaops/planner",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "LLM-powered task graph decomposition and topological executor for ODA",
   "license": "MIT",
   "repository": {

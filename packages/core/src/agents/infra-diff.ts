@@ -6,8 +6,8 @@ export const ResourceChangeSchema = z.object({
   resource: z.string(),
   action: z.enum(["create", "update", "replace", "delete", "no-op"]),
   attribute: z.string().optional(),
-  oldValue: z.string().optional(),
-  newValue: z.string().optional(),
+  oldValue: z.string().nullable().optional(),
+  newValue: z.string().nullable().optional(),
 });
 
 export const InfraDiffAnalysisSchema = z.object({

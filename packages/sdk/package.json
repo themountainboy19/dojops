@@ -1,6 +1,6 @@
 {
   "name": "@odaops/sdk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Base tool abstraction and Zod validation for ODA DevOps agents",
   "license": "MIT",
   "repository": {
