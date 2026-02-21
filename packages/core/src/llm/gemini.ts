@@ -17,14 +17,19 @@ export class GeminiProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : req.system;
 
-    const response = await this.client.models.generateContent({
-      model: this.model,
-      contents: req.prompt,
-      config: {
-        systemInstruction: systemPrompt,
-        ...(req.schema ? { responseMimeType: "application/json" } : {}),
-      },
-    });
+    let response;
+    try {
+      response = await this.client.models.generateContent({
+        model: this.model,
+        contents: req.prompt,
+        config: {
+          systemInstruction: systemPrompt,
+          ...(req.schema ? { responseMimeType: "application/json" } : {}),
+        },
+      });
+    } catch (err: unknown) {
+      throw new Error(extractApiError(err), { cause: err });
+    }
 
     const content = response.text ?? "";
 
@@ -46,4 +51,21 @@ export class GeminiProvider implements LLMProvider {
     }
     return models.sort();
   }
+}
+
+function extractApiError(err: unknown): string {
+  if (err instanceof Error) {
+    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const body = JSON.parse(jsonMatch[0]);
+        const msg = body?.error?.message ?? body?.message;
+        if (typeof msg === "string") return msg;
+      } catch {
+        // fall through
+      }
+    }
+    return err.message;
+  }
+  return String(err);
 }

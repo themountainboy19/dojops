@@ -27,12 +27,17 @@ export class AnthropicProvider implements LLMProvider {
       messages.push({ role: "assistant", content: "{" });
     }
 
-    const message = await this.client.messages.create({
-      model: this.model,
-      max_tokens: req.maxTokens ?? 8192,
-      system,
-      messages,
-    });
+    let message: Anthropic.Message;
+    try {
+      message = await this.client.messages.create({
+        model: this.model,
+        max_tokens: req.maxTokens ?? 8192,
+        system,
+        messages,
+      });
+    } catch (err: unknown) {
+      throw new Error(extractApiError(err), { cause: err });
+    }
 
     let content = message.content[0].type === "text" ? message.content[0].text : "";
 
@@ -62,4 +67,23 @@ export class AnthropicProvider implements LLMProvider {
       .map((m: { id: string }) => m.id);
     return models.sort();
   }
+}
+
+/** Extract a clean error message from Anthropic SDK errors. */
+function extractApiError(err: unknown): string {
+  if (err instanceof Error) {
+    // Anthropic SDK embeds JSON like: "400 {"type":"error","error":{"type":"...","message":"..."}}"
+    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const body = JSON.parse(jsonMatch[0]);
+        const msg = body?.error?.message;
+        if (typeof msg === "string") return msg;
+      } catch {
+        // fall through
+      }
+    }
+    return err.message;
+  }
+  return String(err);
 }

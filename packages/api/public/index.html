@@ -3,158 +3,465 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ODA Dashboard</title>
+    <title>ODA — DevOps Command Center</title>
+    <link rel="icon" type="image/png" href="icons/oda-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="header">
-      <h1><span>ODA</span> Dashboard</h1>
-      <span id="provider-badge" class="badge">loading...</span>
-    </div>
+    <!-- Ambient background layers -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow--1"></div>
+    <div class="bg-glow bg-glow--2"></div>
 
-    <nav class="tabs">
-      <button class="tab active" data-tab="generate">Generate</button>
-      <button class="tab" data-tab="plan">Plan</button>
-      <button class="tab" data-tab="debug-ci">Debug CI</button>
-      <button class="tab" data-tab="diff">Infra Diff</button>
-      <button class="tab" data-tab="agents">Agents</button>
-      <button class="tab" data-tab="history">History</button>
-    </nav>
-
-    <div class="content">
-      <!-- Generate -->
-      <div id="panel-generate" class="panel active">
-        <div class="card">
-          <h3>Agent-Routed Generation</h3>
-          <div class="form-group">
-            <label for="gen-prompt">Prompt</label>
-            <textarea
-              id="gen-prompt"
-              placeholder="e.g. Create a Terraform config for an S3 bucket with versioning..."
-            ></textarea>
+    <div class="app">
+      <!-- Sidebar -->
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar__brand">
+          <div class="logo">
+            <img src="logo/oda-offical-logo.png" alt="ODA" />
           </div>
-          <div class="form-group">
-            <label for="gen-temp">Temperature: <span id="gen-temp-val">0.7</span></label>
-            <input type="range" id="gen-temp" min="0" max="2" step="0.1" value="0.7" />
-          </div>
-          <button class="btn btn--primary" id="gen-submit">Generate</button>
         </div>
-        <div id="gen-spinner" class="spinner">Processing...</div>
-        <div id="gen-result" class="result"></div>
-      </div>
 
-      <!-- Plan -->
-      <div id="panel-plan" class="panel">
-        <div class="card">
-          <h3>Task Decomposition</h3>
-          <div class="form-group">
-            <label for="plan-goal">Goal</label>
-            <textarea
-              id="plan-goal"
-              placeholder="e.g. Set up CI/CD pipeline for a Node.js app with Docker deployment..."
-            ></textarea>
+        <nav class="sidebar__nav">
+          <button class="nav-item active" data-tab="generate">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            <span>Generate</span>
+          </button>
+          <button class="nav-item" data-tab="plan">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 6v6l4 2" />
+            </svg>
+            <span>Plan</span>
+          </button>
+          <button class="nav-item" data-tab="debug-ci">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 20h.01" />
+              <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+              <path d="M5 12.5a10 10 0 0 1 14 0" />
+              <path d="M2 8.82a15 15 0 0 1 20 0" />
+            </svg>
+            <span>Debug CI</span>
+          </button>
+          <button class="nav-item" data-tab="diff">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M16 3h5v5" />
+              <path d="M8 3H3v5" />
+              <path d="M21 3l-7 7" />
+              <path d="M3 3l7 7" />
+              <path d="M16 21h5v-5" />
+              <path d="M8 21H3v-5" />
+              <path d="M21 21l-7-7" />
+              <path d="M3 21l7-7" />
+            </svg>
+            <span>Infra Diff</span>
+          </button>
+          <button class="nav-item" data-tab="agents">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+            <span>Agents</span>
+          </button>
+          <button class="nav-item" data-tab="history">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M3 3v5h5" />
+              <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+              <path d="M12 7v5l4 2" />
+            </svg>
+            <span>History</span>
+          </button>
+        </nav>
+
+        <div class="sidebar__footer">
+          <div class="status-chip" id="provider-badge">
+            <span class="status-dot"></span>
+            <span class="status-text">connecting...</span>
           </div>
-          <div class="checkbox-group">
-            <label>
-              <input type="checkbox" id="plan-execute" />
-              Execute tasks
-            </label>
-            <label>
-              <input type="checkbox" id="plan-approve" />
-              Auto-approve
-            </label>
-          </div>
-          <br />
-          <button class="btn btn--primary" id="plan-submit">Decompose</button>
         </div>
-        <div id="plan-spinner" class="spinner">Decomposing...</div>
-        <div id="plan-result" class="result"></div>
-      </div>
+      </aside>
 
-      <!-- Debug CI -->
-      <div id="panel-debug-ci" class="panel">
-        <div class="card">
-          <h3>CI Log Diagnosis</h3>
-          <div class="form-group">
-            <label for="ci-log">CI Log Output</label>
-            <textarea
-              id="ci-log"
-              placeholder="Paste your CI/CD log output here..."
-              style="min-height: 200px"
-            ></textarea>
-          </div>
-          <button class="btn btn--primary" id="ci-submit">Diagnose</button>
+      <!-- Mobile header -->
+      <header class="topbar">
+        <button class="topbar__toggle" id="menu-toggle" aria-label="Toggle menu">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          >
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <div class="topbar__brand">
+          <img src="logo/oda-offical-logo.png" alt="ODA" class="topbar__logo" />
         </div>
-        <div id="ci-spinner" class="spinner">Analyzing...</div>
-        <div id="ci-result" class="result"></div>
-      </div>
+        <div class="status-chip status-chip--sm" id="provider-badge-mobile">
+          <span class="status-dot"></span>
+          <span class="status-text">...</span>
+        </div>
+      </header>
 
-      <!-- Infra Diff -->
-      <div id="panel-diff" class="panel">
-        <div class="card">
-          <h3>Infrastructure Diff Analysis</h3>
-          <div class="form-group">
-            <label for="diff-content">Diff / Plan Output</label>
-            <textarea
-              id="diff-content"
-              placeholder="Paste terraform plan output, k8s manifest diff, etc..."
-              style="min-height: 200px"
-            ></textarea>
+      <!-- Overlay for mobile menu -->
+      <div class="overlay" id="overlay"></div>
+
+      <!-- Main content -->
+      <main class="main">
+        <!-- Generate -->
+        <section id="panel-generate" class="panel active">
+          <div class="panel__header">
+            <h2 class="panel__title">Generate</h2>
+            <p class="panel__desc">
+              Route your prompt to a specialist agent for DevOps config generation
+            </p>
           </div>
-          <details style="margin-bottom: 16px">
-            <summary style="cursor: pointer; color: var(--text-muted); font-size: 13px">
-              Compare mode (before/after)
-            </summary>
-            <div class="form-group" style="margin-top: 12px">
-              <label for="diff-before">Before</label>
-              <textarea
-                id="diff-before"
-                placeholder="Previous configuration..."
-                style="min-height: 100px"
-              ></textarea>
-            </div>
+          <div class="glass-card fade-in">
             <div class="form-group">
-              <label for="diff-after">After</label>
+              <label for="gen-prompt">Prompt</label>
               <textarea
-                id="diff-after"
-                placeholder="New configuration..."
-                style="min-height: 100px"
+                id="gen-prompt"
+                rows="4"
+                placeholder="Create a Terraform config for an S3 bucket with versioning..."
               ></textarea>
             </div>
-          </details>
-          <button class="btn btn--primary" id="diff-submit">Analyze</button>
-        </div>
-        <div id="diff-spinner" class="spinner">Analyzing...</div>
-        <div id="diff-result" class="result"></div>
-      </div>
+            <div class="form-row">
+              <div class="form-group form-group--inline">
+                <label for="gen-temp">Temperature
+                  <span class="info-tip">
+                    <svg class="info-tip__icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span class="info-tip__popup">
+                      <strong>LLM Temperature</strong><br />
+                      Controls how creative vs deterministic the output is.<br /><br />
+                      <span class="info-tip__row"><span class="info-tip__val">0</span> Focused &amp; deterministic</span>
+                      <span class="info-tip__row"><span class="info-tip__val">0.7</span> Balanced (default)</span>
+                      <span class="info-tip__row"><span class="info-tip__val">2</span> Maximum creativity</span>
+                    </span>
+                  </span>
+                </label>
+                <div class="range-wrap">
+                  <input type="range" id="gen-temp" min="0" max="2" step="0.1" value="0.7" />
+                  <output id="gen-temp-val">0.7</output>
+                </div>
+              </div>
+              <button class="btn btn--primary" id="gen-submit">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                Generate
+              </button>
+            </div>
+          </div>
+          <div id="gen-spinner" class="loader">
+            <img src="icons/oda-icon.png" alt="" class="loader__icon" />
+            <div class="loader__bar"></div>
+            <span>Processing...</span>
+          </div>
+          <div id="gen-result" class="result-area"></div>
+        </section>
 
-      <!-- Agents -->
-      <div id="panel-agents" class="panel">
-        <div class="card">
-          <h3>Specialist Agents</h3>
-          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px">
-            Available agents for prompt routing.
-          </p>
-        </div>
-        <div id="agents-grid" class="agent-grid"></div>
-      </div>
+        <!-- Plan -->
+        <section id="panel-plan" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Plan</h2>
+            <p class="panel__desc">Decompose a goal into a dependency-aware task graph</p>
+          </div>
+          <div class="glass-card fade-in">
+            <div class="form-group">
+              <label for="plan-goal">Goal</label>
+              <textarea
+                id="plan-goal"
+                rows="4"
+                placeholder="Set up CI/CD pipeline for a Node.js app with Docker deployment..."
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <div class="toggle-group">
+                <label class="toggle">
+                  <input type="checkbox" id="plan-execute" />
+                  <span class="toggle__track"></span>
+                  <span class="toggle__label">Execute tasks</span>
+                </label>
+                <label class="toggle">
+                  <input type="checkbox" id="plan-approve" />
+                  <span class="toggle__track"></span>
+                  <span class="toggle__label">Auto-approve</span>
+                </label>
+              </div>
+              <button class="btn btn--primary" id="plan-submit">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 6v6l4 2" />
+                </svg>
+                Decompose
+              </button>
+            </div>
+          </div>
+          <div id="plan-spinner" class="loader">
+            <img src="icons/oda-icon.png" alt="" class="loader__icon" />
+            <div class="loader__bar"></div>
+            <span>Decomposing...</span>
+          </div>
+          <div id="plan-result" class="result-area"></div>
+        </section>
 
-      <!-- History -->
-      <div id="panel-history" class="panel">
-        <div class="history-controls">
-          <select id="history-type">
-            <option value="">All types</option>
-            <option value="generate">Generate</option>
-            <option value="plan">Plan</option>
-            <option value="debug-ci">Debug CI</option>
-            <option value="diff">Diff</option>
-          </select>
-          <button class="btn btn--danger" id="history-clear">Clear</button>
-        </div>
-        <div id="history-table"></div>
-      </div>
+        <!-- Debug CI -->
+        <section id="panel-debug-ci" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Debug CI</h2>
+            <p class="panel__desc">Paste CI/CD logs for AI-powered root cause analysis</p>
+          </div>
+          <div class="glass-card fade-in">
+            <div class="form-group">
+              <label for="ci-log">CI Log Output</label>
+              <textarea
+                id="ci-log"
+                rows="8"
+                placeholder="Paste your CI/CD log output here..."
+              ></textarea>
+            </div>
+            <div class="form-row form-row--end">
+              <button class="btn btn--primary" id="ci-submit">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                Diagnose
+              </button>
+            </div>
+          </div>
+          <div id="ci-spinner" class="loader">
+            <img src="icons/oda-icon.png" alt="" class="loader__icon" />
+            <div class="loader__bar"></div>
+            <span>Analyzing...</span>
+          </div>
+          <div id="ci-result" class="result-area"></div>
+        </section>
+
+        <!-- Infra Diff -->
+        <section id="panel-diff" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Infra Diff</h2>
+            <p class="panel__desc">
+              Analyze infrastructure changes for risk, cost, and security impact
+            </p>
+          </div>
+          <div class="glass-card fade-in">
+            <div class="form-group">
+              <label for="diff-content">Diff / Plan Output</label>
+              <textarea
+                id="diff-content"
+                rows="8"
+                placeholder="Paste terraform plan output, k8s manifest diff, etc..."
+              ></textarea>
+            </div>
+            <details class="compare-toggle">
+              <summary>Compare mode (before / after)</summary>
+              <div class="compare-grid">
+                <div class="form-group">
+                  <label for="diff-before">Before</label>
+                  <textarea
+                    id="diff-before"
+                    rows="4"
+                    placeholder="Previous configuration..."
+                  ></textarea>
+                </div>
+                <div class="form-group">
+                  <label for="diff-after">After</label>
+                  <textarea id="diff-after" rows="4" placeholder="New configuration..."></textarea>
+                </div>
+              </div>
+            </details>
+            <div class="form-row form-row--end">
+              <button class="btn btn--primary" id="diff-submit">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M16 3h5v5" />
+                  <path d="M8 3H3v5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M3 3l7 7" />
+                </svg>
+                Analyze
+              </button>
+            </div>
+          </div>
+          <div id="diff-spinner" class="loader">
+            <img src="icons/oda-icon.png" alt="" class="loader__icon" />
+            <div class="loader__bar"></div>
+            <span>Analyzing...</span>
+          </div>
+          <div id="diff-result" class="result-area"></div>
+        </section>
+
+        <!-- Agents -->
+        <section id="panel-agents" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">Agents</h2>
+            <p class="panel__desc">16 specialist agents for intelligent prompt routing</p>
+          </div>
+          <div id="agents-grid" class="agents-grid"></div>
+        </section>
+
+        <!-- History -->
+        <section id="panel-history" class="panel">
+          <div class="panel__header">
+            <h2 class="panel__title">History</h2>
+            <p class="panel__desc">Execution history and audit trail</p>
+          </div>
+          <div class="history-toolbar glass-card">
+            <div class="select-wrap">
+              <select id="history-type">
+                <option value="">All types</option>
+                <option value="generate">Generate</option>
+                <option value="plan">Plan</option>
+                <option value="debug-ci">Debug CI</option>
+                <option value="diff">Diff</option>
+              </select>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+            <button class="btn btn--ghost btn--danger" id="history-clear">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="3 6 5 6 21 6" />
+                <path
+                  d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                />
+              </svg>
+              Clear
+            </button>
+          </div>
+          <div id="history-table"></div>
+        </section>
+      </main>
     </div>
 
+    <div class="toast-container"></div>
     <script src="app.js"></script>
   </body>
 </html>

@@ -17,14 +17,19 @@ export class OpenAIProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : (req.system ?? "");
 
-    const completion = await this.client.chat.completions.create({
-      model: this.model,
-      messages: [
-        { role: "system", content: systemContent },
-        { role: "user", content: req.prompt },
-      ],
-      ...(req.schema ? { response_format: { type: "json_object" } } : {}),
-    });
+    let completion: OpenAI.Chat.ChatCompletion;
+    try {
+      completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: "system", content: systemContent },
+          { role: "user", content: req.prompt },
+        ],
+        ...(req.schema ? { response_format: { type: "json_object" } } : {}),
+      });
+    } catch (err: unknown) {
+      throw new Error(extractApiError(err), { cause: err });
+    }
 
     const content = completion.choices[0].message.content ?? "";
 
@@ -46,4 +51,21 @@ export class OpenAIProvider implements LLMProvider {
     }
     return models.sort();
   }
+}
+
+function extractApiError(err: unknown): string {
+  if (err instanceof Error) {
+    const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const body = JSON.parse(jsonMatch[0]);
+        const msg = body?.error?.message;
+        if (typeof msg === "string") return msg;
+      } catch {
+        // fall through
+      }
+    }
+    return err.message;
+  }
+  return String(err);
 }

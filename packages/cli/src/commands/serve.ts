@@ -25,7 +25,13 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   if (providerName) process.env.ODA_PROVIDER = providerName;
   if (model) process.env.ODA_MODEL = model;
   if (apiKey) {
-    const envVar = providerName === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+    const envVarMap: Record<string, string> = {
+      openai: "OPENAI_API_KEY",
+      anthropic: "ANTHROPIC_API_KEY",
+      deepseek: "DEEPSEEK_API_KEY",
+      gemini: "GEMINI_API_KEY",
+    };
+    const envVar = envVarMap[providerName] ?? "OPENAI_API_KEY";
     if (!process.env[envVar]) process.env[envVar] = apiKey;
   }
 

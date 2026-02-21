@@ -9,14 +9,13 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
 };
 
 import "dotenv/config";
-import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider } from "@odaops/api";
 import { LLMProvider } from "@odaops/core";
 import { resolveProvider, resolveModel, resolveToken, loadProfileConfig } from "./config";
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
-import { printHelp, printCommandHelp } from "./help";
+import { printHelp, printCommandHelp, printBanner } from "./help";
 import { resolveCommand } from "./commands";
 import { CLIContext } from "./types";
 import { ExitCode } from "./exit-codes";
@@ -125,7 +124,7 @@ async function main() {
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
   if (!isQuiet && !globalOpts.quiet) {
-    p.intro(pc.bgCyan(pc.black(" oda ")));
+    printBanner();
   }
 
   try {

@@ -1,9 +1,38 @@
 import pc from "picocolors";
 
+function printBanner(): void {
+  const c = pc.cyan;
+  const d = pc.dim;
+  const bc = (s: string) => pc.bold(pc.cyan(s));
+
+  console.log();
+  console.log(d("  ╔══════════════════════════════════════════════╗"));
+  console.log(d("  ║") + "                                              " + d("║"));
+  console.log(d("  ║") + bc("       ██████╗  ██████╗   █████╗              ") + d("║"));
+  console.log(d("  ║") + bc("      ██╔═══██╗ ██╔══██╗ ██╔══██╗             ") + d("║"));
+  console.log(d("  ║") + bc("      ██║   ██║ ██║  ██║ ███████║             ") + d("║"));
+  console.log(d("  ║") + bc("      ██║   ██║ ██║  ██║ ██╔══██║             ") + d("║"));
+  console.log(d("  ║") + bc("      ╚██████╔╝ ██████╔╝ ██║  ██║             ") + d("║"));
+  console.log(d("  ║") + bc("       ╚═════╝  ╚═════╝  ╚═╝  ╚═╝             ") + d("║"));
+  console.log(d("  ║") + "                                              " + d("║"));
+  console.log(
+    d("  ║") +
+      "  " +
+      c("▸") +
+      pc.bold(pc.white(" Open DevOps Agent")) +
+      d("  ·  v1.0.0              ") +
+      d("║"),
+  );
+  console.log(d("  ║") + "  " + d("  AI-powered DevOps automation engine       ") + d("║"));
+  console.log(d("  ║") + "                                              " + d("║"));
+  console.log(d("  ╚══════════════════════════════════════════════╝"));
+  console.log();
+}
+
+export { printBanner };
+
 export function printHelp(): void {
-  console.log();
-  console.log(`  ${pc.bold(pc.cyan("oda"))} — AI-powered DevOps automation agent`);
-  console.log();
+  printBanner();
   console.log(pc.bold("USAGE"));
   console.log(`  ${pc.dim("$")} oda [command] [options] <prompt>`);
   console.log();

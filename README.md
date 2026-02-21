@@ -1,12 +1,67 @@
-# ODA — Open DevOps Agent
+<p align="center">
+  <img src=".oda/oda-icon.png" alt="ODA" width="120" />
+</p>
 
-Enterprise-grade AI DevOps automation. Generate, validate, and execute infrastructure and CI/CD configurations safely — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+<h1 align="center">ODA — Open DevOps Agent</h1>
+
+<p align="center">
+  <strong>Enterprise-grade AI DevOps automation.</strong><br />
+  Generate, validate, and execute infrastructure &amp; CI/CD configurations safely — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &nbsp;·&nbsp;
+  <a href="#features">Features</a> &nbsp;·&nbsp;
+  <a href="#web-dashboard">Dashboard</a> &nbsp;·&nbsp;
+  <a href="#cli-reference">CLI Reference</a> &nbsp;·&nbsp;
+  <a href="#api-reference">API Reference</a> &nbsp;·&nbsp;
+  <a href="#architecture">Architecture</a> &nbsp;·&nbsp;
+  <a href="#contributing">Contributing</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
+  <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/tests-456%20passed-22c55e?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
+  <img src="https://img.shields.io/badge/agents-16-8b5cf6?style=flat-square" alt="Agents" />
+  <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
+</p>
+
+---
 
 ## The Problem
 
 1. **Manual IaC is slow** — Writing Terraform, Kubernetes, and CI/CD configs from scratch takes hours. Teams spend more time on boilerplate than architecture.
 2. **AI-generated configs are unsafe** — LLMs produce plausible but unvalidated output. Without schema enforcement and execution controls, AI-generated infrastructure is a liability.
 3. **Teams lack visibility into AI-driven changes** — When AI generates configs, there's no audit trail, no approval gate, and no way to resume partial failures. Compliance teams can't sign off on what they can't verify.
+
+---
+
+## Quick Start
+
+```bash
+# 1. Install globally
+npm i -g @odaops/cli
+
+# 2. Configure your provider (interactive wizard)
+oda config
+
+# 3. Generate your first config
+oda "Create a Kubernetes deployment for nginx with 3 replicas"
+```
+
+Or set environment variables directly:
+
+```bash
+export ODA_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
+export OPENAI_API_KEY=sk-...        # your API key
+oda "Create a Terraform config for S3 with versioning"
+```
+
+---
 
 ## How ODA Works
 
@@ -35,265 +90,342 @@ oda history show <plan-id>            # Inspect per-task results
 
 Plans are persisted, execution is sandboxed, every action is audit-logged with hash-chained integrity, and partial failures can be resumed without re-executing completed tasks.
 
-## Security & Compliance
-
-ODA implements defense-in-depth for AI-driven infrastructure changes:
-
-- **Structured output enforcement** — All LLM responses are constrained to JSON schemas via provider-native modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`)
-- **Zod schema validation** — Every tool input and LLM output is validated against Zod schemas before execution
-- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, and file size limits
-- **Approval workflows** — Configurable approval handlers: auto-approve, auto-deny, or interactive callback with diff preview before any write operation
-- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with audit logging
-- **Hash-chained audit trail** — Every CLI action is logged to an append-only JSONL file with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `oda history verify`
-- **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
-
-## Quick Start
+### Web Dashboard
 
 ```bash
-# 1. Install
-npm i -g @odaops/cli
-
-# 2. Set your API key
-export ODA_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-
-# 3. Generate your first config
-oda "Create a Kubernetes deployment for nginx with 3 replicas"
+oda serve                             # Start at http://localhost:3000
+oda serve --port=8080                 # Custom port
 ```
+
+The dashboard provides a visual interface with dark industrial terminal aesthetic for all ODA capabilities — generate configs, decompose plans, debug CI logs, analyze infra diffs, browse agents, and review execution history.
+
+---
 
 ## Features
 
-- **Multi-agent routing** — 16 specialist agents (planner, terraform, kubernetes, CI/CD, security, Docker, cloud, networking, database, GitOps, compliance, CI debugger, appsec, shell, Python, observability) with keyword-based confidence scoring
-- **12 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd — each with schema validation, generation, and optional execution
-- **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution
-- **Sandboxed execution** — Policy engine controlling write paths, env vars, timeouts, and file size limits
-- **Approval workflows** — Auto-approve, auto-deny, or callback-based approval before destructive operations
-- **Resume on failure** — `oda apply --resume` skips completed tasks and retries failed ones, with per-task result tracking
-- **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, and suggested fixes
-- **Infra diff analysis** — Risk level, cost impact, security implications, and rollback complexity for infrastructure changes
-- **Rich terminal UI** — Interactive arrow-key prompts, spinners for async ops, styled note panels, semantic log levels — powered by `@clack/prompts`
-- **Hash-chained audit logs** — Tamper-evident audit trail with SHA-256 chain integrity verification
-- **REST API** — 9 endpoints exposing all capabilities over HTTP
-- **Web dashboard** — Dark-themed single-page app for visual interaction with all features
-- **Structured output** — Zod schema enforcement on all LLM responses with JSON validation
-- **5 LLM providers** — OpenAI, Anthropic, Ollama (local models), DeepSeek, Google Gemini
-- **Dynamic model selection** — `oda config` fetches available models from the provider API for interactive selection
+### Intelligence
+
+- **16 specialist agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, and observability — with weighted keyword confidence scoring
+- **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
+- **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
+- **5 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini — with dynamic model selection via provider API
+
+### Tools
+
+- **12 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
+- **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
+- **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
+
+### Execution
+
+- **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths
+- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, and file size limits
+- **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
+- **Resume on failure** — `oda apply --resume` skips completed tasks and retries failed ones
+
+### Observability
+
+- **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `oda history verify`
+- **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
+- **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
+
+### Platform
+
+- **REST API** — 9 endpoints exposing all capabilities over HTTP with Zod request validation
+- **Web dashboard** — Single-page app with dark terminal aesthetic, toast notifications, copy-to-clipboard, responsive layout
+- **Configuration profiles** — Named profiles for switching between providers/environments
+
+---
 
 ## Architecture
 
 ```
 @odaops/cli          CLI entry point + rich TUI (@clack/prompts)
-@odaops/api          REST API (Express) + web dashboard
+@odaops/api          REST API (Express) + web dashboard + factory functions
 @odaops/planner      TaskGraph decomposition + topological executor
 @odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
 @odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@odaops/core         LLM abstraction + 16 specialist agents + CI debugger + infra diff
+@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff
 @odaops/sdk          BaseTool<T> abstract class with Zod validation
 ```
 
-Full details in [ARCHITECTURE.md](ARCHITECTURE.md).
+### Package Dependency Flow
+
+```
+cli → api → planner → executor → tools → core → sdk
+```
+
+Full architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
 
 ## CLI Reference
 
 ### Commands
 
-```
-plan               Decompose goal into task graph
-generate           Generate DevOps config (default)
-apply              Execute a saved plan
-validate           Validate plan against schemas
-explain            LLM explains a plan
-debug ci           Diagnose CI/CD log failures
-analyze diff       Analyze infrastructure diff for risk
-inspect            Inspect config, policy, agents, session
-agents             List and inspect specialist agents
-history            View execution history
-history verify     Verify audit log hash chain integrity
-config             Configure provider, model, tokens
-auth               Authenticate with LLM provider
-serve              Start API server + dashboard
-doctor             System health diagnostics
-init               Initialize .oda/ in project
-destroy            Remove generated artifacts from a plan
-rollback           Reverse an applied plan
-```
-
-### Apply Options
-
-```
---dry-run          Preview changes without executing
---resume           Resume a partially-applied plan
---yes              Auto-approve all executions
-```
-
-### Plan Options
-
-```
---execute          Generate + execute with approval workflow
---yes              Auto-approve all executions
-```
+| Command                       | Description                                     |
+| ----------------------------- | ----------------------------------------------- |
+| `oda <prompt>`                | Generate DevOps config (default command)        |
+| `oda plan <prompt>`           | Decompose goal into dependency-aware task graph |
+| `oda plan --execute <prompt>` | Plan + execute with approval workflow           |
+| `oda apply`                   | Execute a saved plan                            |
+| `oda apply --resume`          | Resume a partially-failed plan                  |
+| `oda validate`                | Validate plan against schemas                   |
+| `oda explain`                 | LLM explains a plan in plain language           |
+| `oda debug ci <log>`          | Diagnose CI/CD log failures                     |
+| `oda analyze diff <diff>`     | Analyze infrastructure diff for risk            |
+| `oda inspect <target>`        | Inspect config, policy, agents, session         |
+| `oda agents list`             | List specialist agents                          |
+| `oda agents info <name>`      | Show agent details                              |
+| `oda history list`            | View execution history                          |
+| `oda history show <id>`       | Show plan details and results                   |
+| `oda history verify`          | Verify audit log hash chain integrity           |
+| `oda config`                  | Configure provider, model, tokens (interactive) |
+| `oda auth login`              | Authenticate with LLM provider                  |
+| `oda serve`                   | Start API server + web dashboard                |
+| `oda doctor`                  | System health diagnostics                       |
+| `oda init`                    | Initialize `.oda/` project directory            |
+| `oda destroy <plan-id>`       | Remove generated artifacts from a plan          |
+| `oda rollback <plan-id>`      | Reverse an applied plan                         |
 
 ### Global Options
 
+| Option              | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini` |
+| `--model=NAME`      | LLM model override                                                  |
+| `--profile=NAME`    | Use named config profile                                            |
+| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
+| `--verbose`         | Verbose output                                                      |
+| `--debug`           | Debug-level output                                                  |
+| `--quiet`           | Suppress non-essential output                                       |
+| `--no-color`        | Disable color output                                                |
+| `--non-interactive` | Disable interactive prompts                                         |
+| `--help, -h`        | Show help message                                                   |
+
+### Examples
+
+```bash
+# Generate configs
+oda "Create a Terraform config for S3"
+oda "Write a Kubernetes deployment for nginx"
+oda "Set up monitoring with Prometheus"
+
+# Plan and execute
+oda plan "Set up CI/CD for a Node.js app"
+oda plan --execute --yes "Create CI for Node app"
+oda apply --dry-run
+oda apply --resume --yes
+
+# Diagnose and analyze
+oda debug ci "ERROR: tsc failed with exit code 1..."
+oda analyze diff "terraform plan output..."
+oda explain last
+
+# Administration
+oda doctor
+oda agents list
+oda history list
+oda history verify
+oda serve --port=8080
+oda config profile create staging
 ```
---provider=NAME    LLM provider: openai, anthropic, ollama, deepseek, gemini
---model=NAME       LLM model override
---profile=NAME     Use named config profile
---output=FORMAT    Output: table (default), json, yaml
---verbose          Verbose output
---debug            Debug-level output
---quiet            Suppress non-essential output
---no-color         Disable color output
---non-interactive  Disable interactive prompts
-```
+
+---
+
+## Security & Compliance
+
+ODA implements defense-in-depth for AI-driven infrastructure changes:
+
+| Layer                   | Mechanism                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                             |
+| **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                      |
+| **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits            |
+| **Approval workflows**  | Configurable handlers: auto-approve, auto-deny, or interactive callback with diff preview                           |
+| **Sandboxed execution** | `SandboxedFs` restricts file operations to policy-allowed paths with audit logging                                  |
+| **Audit trail**         | Append-only JSONL with SHA-256 hash chaining (seq + previousHash + hash). Tamper detection via `oda history verify` |
+| **Execution locking**   | PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup                                 |
+
+---
 
 ## Tools
 
-| Tool           | Directory         | Detector | Serialization                | Output Files                        |
-| -------------- | ----------------- | -------- | ---------------------------- | ----------------------------------- |
-| GitHub Actions | `github/`         | Yes      | js-yaml                      | `.github/workflows/ci.yml`          |
-| Terraform      | `terraform/`      | Yes      | Custom HCL builder           | `main.tf`, `variables.tf`           |
-| Kubernetes     | `kubernetes/`     | No       | js-yaml                      | `K8s manifests`                     |
-| Helm           | `helm/`           | No       | js-yaml                      | `Chart.yaml`, `values.yaml`         |
-| Ansible        | `ansible/`        | No       | js-yaml                      | `{name}.yml`                        |
-| Docker Compose | `docker-compose/` | Yes      | js-yaml                      | `docker-compose.yml`                |
-| Dockerfile     | `dockerfile/`     | Yes      | Custom string builder        | `Dockerfile`, `.dockerignore`       |
-| Nginx          | `nginx/`          | No       | Custom string builder        | `nginx.conf`                        |
-| Makefile       | `makefile/`       | Yes      | Custom string builder (tabs) | `Makefile`                          |
-| GitLab CI      | `gitlab-ci/`      | Yes      | js-yaml                      | `.gitlab-ci.yml`                    |
-| Prometheus     | `prometheus/`     | No       | js-yaml                      | `prometheus.yml`, `alert-rules.yml` |
-| Systemd        | `systemd/`        | No       | Custom string builder (INI)  | `{name}.service`                    |
+| Tool           | Serialization      | Output Files                        |
+| -------------- | ------------------ | ----------------------------------- |
+| GitHub Actions | YAML               | `.github/workflows/ci.yml`          |
+| Terraform      | HCL                | `main.tf`, `variables.tf`           |
+| Kubernetes     | YAML               | K8s manifests                       |
+| Helm           | YAML               | `Chart.yaml`, `values.yaml`         |
+| Ansible        | YAML               | `{name}.yml`                        |
+| Docker Compose | YAML               | `docker-compose.yml`                |
+| Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       |
+| Nginx          | Nginx conf         | `nginx.conf`                        |
+| Makefile       | Make syntax (tabs) | `Makefile`                          |
+| GitLab CI      | YAML               | `.gitlab-ci.yml`                    |
+| Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` |
+| Systemd        | INI                | `{name}.service`                    |
 
 All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `*-tool.ts` → tests.
 
+---
+
 ## Specialist Agents
 
-| Agent                    | Domain                  | Routing Keywords                                      |
-| ------------------------ | ----------------------- | ----------------------------------------------------- |
-| ops-cortex               | orchestration           | plan, decompose, orchestrate, strategy, roadmap       |
-| terraform-specialist     | infrastructure          | terraform, iac, hcl, provision, resource, module      |
-| kubernetes-specialist    | container-orchestration | kubernetes, k8s, pod, deployment, helm, ingress       |
-| cicd-specialist          | ci-cd                   | ci, cd, pipeline, github actions, jenkins, gitlab ci  |
-| security-auditor         | security                | security, audit, vulnerability, secret, firewall, iam |
-| observability-specialist | observability           | monitoring, logging, alerting, prometheus, grafana    |
-| docker-specialist        | containerization        | docker, dockerfile, container, image, compose         |
-| cloud-architect          | cloud-architecture      | aws, gcp, azure, serverless, lambda, migration        |
-| network-specialist       | networking              | dns, load balancer, vpc, vpn, cdn, nginx              |
-| database-specialist      | data-storage            | database, postgres, mysql, redis, dynamodb            |
-| gitops-specialist        | gitops                  | gitops, argocd, flux, reconciliation, drift           |
-| compliance-auditor       | compliance              | compliance, soc2, hipaa, policy, opa                  |
-| ci-debugger              | ci-debugging            | debug, error, failed, failure, timeout, flaky         |
-| appsec-specialist        | application-security    | owasp, xss, injection, pentest, sast, dast            |
-| shell-specialist         | shell-scripting         | bash, shell, shellcheck, posix, cron                  |
-| python-specialist        | python-scripting        | python, pip, pytest, mypy, poetry                     |
+| Agent                    | Domain                  | Key Capabilities                                                    |
+| ------------------------ | ----------------------- | ------------------------------------------------------------------- |
+| ops-cortex               | Orchestration           | Task decomposition, cross-domain routing, dependency ordering       |
+| terraform-specialist     | Infrastructure          | HCL, modules, state management, workspaces, cost optimization       |
+| kubernetes-specialist    | Container orchestration | Deployments, Helm, RBAC, autoscaling, service mesh                  |
+| cicd-specialist          | CI/CD                   | GitHub Actions, GitLab CI, Jenkins, build optimization, pipelines   |
+| security-auditor         | Security                | Vulnerability scanning, secret management, IAM, threat modeling     |
+| observability-specialist | Observability           | Prometheus, Grafana, Datadog, tracing, SLOs, alerting               |
+| docker-specialist        | Containerization        | Multi-stage builds, image optimization, registries, BuildKit        |
+| cloud-architect          | Cloud architecture      | AWS/GCP/Azure design, cost optimization, migration strategies       |
+| network-specialist       | Networking              | DNS, load balancers, VPN, CDN, service mesh, firewall rules         |
+| database-specialist      | Data storage            | PostgreSQL, MySQL, Redis, DynamoDB, replication, backup             |
+| gitops-specialist        | GitOps                  | ArgoCD, Flux, drift detection, sealed secrets, progressive delivery |
+| compliance-auditor       | Compliance              | SOC2, HIPAA, PCI-DSS, GDPR, policy-as-code (OPA/Rego)               |
+| ci-debugger              | CI debugging            | Log analysis, root cause diagnosis, flaky test detection            |
+| appsec-specialist        | Application security    | OWASP Top 10, SAST/DAST, code review, pentest methodology           |
+| shell-specialist         | Shell scripting         | Bash/POSIX, ShellCheck, error handling, automation                  |
+| python-specialist        | Python scripting        | Type hints, pytest, poetry, async, CLI tools                        |
+
+---
 
 ## API Reference
 
-| Method   | Path               | Description                    |
-| -------- | ------------------ | ------------------------------ |
-| `GET`    | `/api/health`      | Provider info and tool list    |
-| `POST`   | `/api/generate`    | Agent-routed LLM generation    |
-| `POST`   | `/api/plan`        | Decompose goal into task graph |
-| `POST`   | `/api/debug-ci`    | Diagnose CI log failures       |
-| `POST`   | `/api/diff`        | Analyze infrastructure diff    |
-| `GET`    | `/api/agents`      | List specialist agents         |
-| `GET`    | `/api/history`     | Execution history              |
-| `GET`    | `/api/history/:id` | Single history entry           |
-| `DELETE` | `/api/history`     | Clear history                  |
+### Endpoints
 
-**Examples:**
+| Method   | Path               | Description                      |
+| -------- | ------------------ | -------------------------------- |
+| `GET`    | `/api/health`      | Provider info, tool list, status |
+| `POST`   | `/api/generate`    | Agent-routed LLM generation      |
+| `POST`   | `/api/plan`        | Decompose goal into task graph   |
+| `POST`   | `/api/debug-ci`    | Diagnose CI log failures         |
+| `POST`   | `/api/diff`        | Analyze infrastructure diff      |
+| `GET`    | `/api/agents`      | List specialist agents           |
+| `GET`    | `/api/history`     | Execution history                |
+| `GET`    | `/api/history/:id` | Single history entry             |
+| `DELETE` | `/api/history`     | Clear history                    |
+
+### Examples
 
 ```bash
-# Generate
+# Generate a config
 curl -X POST http://localhost:3000/api/generate \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "Create a Kubernetes deployment for nginx with 3 replicas"}'
+  -d '{"prompt": "Create a Kubernetes deployment for nginx", "temperature": 0.7}'
 
-# Plan
+# Decompose a plan
 curl -X POST http://localhost:3000/api/plan \
   -H "Content-Type: application/json" \
-  -d '{"goal": "Set up CI/CD pipeline for a Node.js app", "execute": false}'
+  -d '{"goal": "Set up CI/CD for a Node.js app", "execute": false}'
 
-# Debug CI
+# Debug CI logs
 curl -X POST http://localhost:3000/api/debug-ci \
   -H "Content-Type: application/json" \
-  -d '{"log": "ERROR: npm ERR! code ERESOLVE\nnpm ERR! ERESOLVE unable to resolve dependency tree"}'
+  -d '{"log": "ERROR: npm ERR! ERESOLVE unable to resolve dependency tree"}'
 
-# Infra diff
+# Analyze infrastructure diff
 curl -X POST http://localhost:3000/api/diff \
   -H "Content-Type: application/json" \
-  -d '{"diff": "# aws_s3_bucket.main will be created\n+ resource \"aws_s3_bucket\" \"main\" {\n+   bucket = \"my-bucket\"\n+ }"}'
+  -d '{"diff": "+ resource \"aws_s3_bucket\" \"main\" { bucket = \"my-bucket\" }"}'
 ```
+
+---
 
 ## Configuration
 
-### Providers
+### Supported Providers
 
-| Provider      | `ODA_PROVIDER` | Required env var      | Default model                |
-| ------------- | -------------- | --------------------- | ---------------------------- |
-| **OpenAI**    | `openai`       | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
-| **Anthropic** | `anthropic`    | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
-| **Ollama**    | `ollama`       | _(none — runs local)_ | `llama3`                     |
-| **DeepSeek**  | `deepseek`     | `DEEPSEEK_API_KEY`    | `deepseek-chat`              |
-| **Gemini**    | `gemini`       | `GEMINI_API_KEY`      | `gemini-2.5-flash`           |
+| Provider  | `ODA_PROVIDER` | Required Env Var    | Default Model                |
+| --------- | -------------- | ------------------- | ---------------------------- |
+| OpenAI    | `openai`       | `OPENAI_API_KEY`    | `gpt-4o-mini`                |
+| Anthropic | `anthropic`    | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
+| Ollama    | `ollama`       | _(none — local)_    | `llama3`                     |
+| DeepSeek  | `deepseek`     | `DEEPSEEK_API_KEY`  | `deepseek-chat`              |
+| Gemini    | `gemini`       | `GEMINI_API_KEY`    | `gemini-2.5-flash`           |
 
-### Models
+### Model Selection
 
-Each provider ships with a sensible default model, but you can choose any model your provider supports. Run `oda config` to interactively fetch available models from the provider's API and pick one, or set it directly with `--model`:
+Each provider ships with a sensible default, but you can choose any model your provider supports:
 
 ```bash
-oda config                          # Interactive: fetches models, shows select list
+oda config                          # Interactive: fetches models, shows picker
 oda config --model=gpt-4o           # Set directly
 oda --model=deepseek-reasoner "..." # One-off override
 ```
 
-| Provider  | Default model                | Other examples                           |
-| --------- | ---------------------------- | ---------------------------------------- |
-| OpenAI    | `gpt-4o-mini`                | `gpt-4o`, `gpt-4-turbo`, `o1-mini`       |
-| Anthropic | `claude-sonnet-4-5-20250929` | `claude-haiku-4-5-20251001`              |
-| Ollama    | `llama3`                     | `mistral`, `codellama`, `deepseek-coder` |
-| DeepSeek  | `deepseek-chat`              | `deepseek-reasoner`                      |
-| Gemini    | `gemini-2.5-flash`           | `gemini-2.5-pro`                         |
-
-Any model string accepted by the provider's API can be used — the table above shows common examples, not an exhaustive list.
-
-### Configuration precedence
+### Configuration Precedence
 
 ```
 Provider:  --provider  >  $ODA_PROVIDER  >  config  >  openai
 Model:     --model     >  $ODA_MODEL     >  config  >  provider default
-Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token
+Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / ...  >  config token
 ```
+
+### Profiles
+
+```bash
+oda config profile create staging     # Save current config as "staging"
+oda config profile use staging        # Switch to staging profile
+oda config profile list               # List all profiles
+oda --profile=staging "Create S3..."  # One-off profile override
+```
+
+---
 
 ## Development
 
+### Prerequisites
+
+- **Node.js** >= 18
+- **pnpm** >= 8
+- **TypeScript** >= 5.4
+
+### Setup
+
 ```bash
-pnpm build              # Build all packages
+git clone https://github.com/oda-devops/oda.git
+cd oda
+pnpm install
+pnpm build
+```
+
+### Commands
+
+```bash
+pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 442 tests
+pnpm test               # Run all 456 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
-pnpm format:check       # Prettier check
+pnpm format:check       # Prettier check (CI)
 
-# Per-package commands
+# Per-package
 pnpm --filter @odaops/core test
 pnpm --filter @odaops/api build
 pnpm --filter @odaops/tools lint
+
+# Run locally (no global install)
+pnpm oda -- "Create a Terraform config for S3"
+pnpm oda -- serve --port=8080
 ```
 
 ### Project Structure
 
 ```
 packages/
-  api/            REST API + web dashboard
-  cli/            CLI entry point + TUI
-  core/           LLM providers + 16 agents + CI debugger + infra diff
-  executor/       SafeExecutor + policy engine + approval workflows
+  cli/            CLI entry point + TUI (@clack/prompts)
+  api/            REST API (Express) + web dashboard
+  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff
   planner/        Task graph decomposition + topological executor
-  sdk/            BaseTool abstract class + Zod re-export
-  tools/          12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
-                  Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
+  executor/       SafeExecutor + policy engine + approval workflows + audit log
+  tools/          12 DevOps tools
+  sdk/            BaseTool<T> abstract class + Zod re-export
 ```
 
 ### Test Coverage
@@ -302,34 +434,14 @@ packages/
 | ------------------ | ------- |
 | `@odaops/cli`      | 140     |
 | `@odaops/tools`    | 101     |
+| `@odaops/core`     | 76      |
 | `@odaops/api`      | 70      |
-| `@odaops/core`     | 62      |
 | `@odaops/executor` | 36      |
 | `@odaops/planner`  | 28      |
 | `@odaops/sdk`      | 5       |
-| **Total**          | **442** |
+| **Total**          | **456** |
 
-## Roadmap
-
-See [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
-
-**v1.0.0 (current):**
-
-1. **Core Intelligence** — Structured output, Zod validation, planner engine
-2. **DevOps Tools** — 12 tools covering CI/CD, IaC, containers, monitoring, and system services
-3. **Execution** — Sandboxed executor, policy engine, approval workflows
-4. **Intelligence** — 16 specialist agents, CI debugging, infra diff analysis
-5. **Platform** — REST API with 9 endpoints, web dashboard
-6. **CLI TUI** — Rich terminal UI with `@clack/prompts`
-7. **Enterprise Foundations** — Resume/recovery, hash-chained audit logs, execution locking
-
-**v2.0.0 (planned):**
-
-- RBAC & multi-tenancy
-- Persistent storage backends (SQLite, PostgreSQL)
-- OpenTelemetry observability
-- SSO, webhooks, Slack/Teams integrations
-- Git provider integration (auto-PR)
+---
 
 ## Publishing
 
@@ -337,15 +449,50 @@ All packages are published under the `@odaops` scope:
 
 ```bash
 npm login
-pnpm publish-packages
+pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Packages are published in dependency order: `sdk` -> `core` -> `executor` -> `planner` -> `tools` -> `api` -> `cli`.
+Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `api` → `cli`
+
+---
+
+## Roadmap
+
+### v1.0.0 (current)
+
+- Core intelligence — Structured output, Zod validation, planner engine
+- 12 DevOps tools — CI/CD, IaC, containers, monitoring, system services
+- Sandboxed execution — Policy engine, approval workflows, resume/recovery
+- Multi-agent system — 16 specialist agents, CI debugging, infra diff analysis
+- Platform — REST API (9 endpoints), web dashboard
+- CLI TUI — Rich terminal UI with `@clack/prompts`
+- Enterprise foundations — Hash-chained audit logs, execution locking, config profiles
+
+### v2.0.0 (planned)
+
+- RBAC & multi-tenancy
+- Persistent storage backends (SQLite, PostgreSQL)
+- OpenTelemetry observability
+- SSO, webhooks, Slack/Teams integrations
+- Git provider integration (auto-PR)
+- Plugin system for custom tools and agents
+
+See [NEXT_STEPS.md](NEXT_STEPS.md) for the full roadmap.
+
+---
 
 ## Contributing
 
-Contributions welcome. See the architecture docs for patterns and conventions.
+Contributions are welcome! Please see the [architecture docs](ARCHITECTURE.md) for patterns and conventions.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Make your changes with tests
+4. Run `pnpm test && pnpm lint` to verify
+5. Submit a pull request
+
+---
 
 ## License
 
-MIT
+[MIT](LICENSE)

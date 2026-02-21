@@ -186,6 +186,16 @@ export function initProject(rootDir: string): string[] {
     created.push(".oda/.gitignore");
   }
 
+  // Copy ODA icon into .oda/
+  const iconTarget = path.join(base, "oda-icon.png");
+  if (!fs.existsSync(iconTarget)) {
+    const iconSource = path.join(__dirname, "..", "assets", "oda-icon.png");
+    if (fs.existsSync(iconSource)) {
+      fs.copyFileSync(iconSource, iconTarget);
+      created.push(".oda/oda-icon.png");
+    }
+  }
+
   return created;
 }
 

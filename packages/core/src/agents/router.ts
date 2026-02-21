@@ -24,9 +24,15 @@ export class AgentRouter {
 
     for (const agent of this.agents) {
       const matchedKeywords = agent.keywords.filter((kw) => lower.includes(kw));
-      const confidence = matchedKeywords.length / agent.keywords.length;
+      if (matchedKeywords.length === 0) continue;
 
-      if (matchedKeywords.length > 0 && (!bestMatch || confidence > bestMatch.confidence)) {
+      // Weighted scoring: each keyword match contributes significant confidence,
+      // with a coverage bonus for hitting a larger fraction of the agent's keywords.
+      // 1 match ≈ 40%, 2 matches ≈ 65%, 3+ matches ≈ 85-100%
+      const matchRatio = matchedKeywords.length / agent.keywords.length;
+      const confidence = Math.min(matchedKeywords.length * 0.3 + matchRatio * 0.1, 1.0);
+
+      if (!bestMatch || confidence > bestMatch.confidence) {
         bestMatch = {
           agent,
           confidence,
