@@ -160,6 +160,7 @@ export function initProject(rootDir: string): string[] {
     path.join(base, "execution-logs"),
     path.join(base, "approvals"),
     path.join(base, "artifacts"),
+    path.join(base, "sessions"),
   ];
 
   const created: string[] = [];
@@ -184,7 +185,10 @@ export function initProject(rootDir: string): string[] {
   // Init .gitignore for .oda/
   const gitignore = path.join(base, ".gitignore");
   if (!fs.existsSync(gitignore)) {
-    fs.writeFileSync(gitignore, "# ODA project state\nsession.json\nexecution-logs/\napprovals/\n");
+    fs.writeFileSync(
+      gitignore,
+      "# ODA project state\nsession.json\nexecution-logs/\napprovals/\nsessions/\n",
+    );
     created.push(".oda/.gitignore");
   }
 
@@ -437,6 +441,50 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
   }
 
   return { valid: errors.length === 0, totalEntries: lines.length, errors };
+}
+
+// ── Scan history ──────────────────────────────────────────────────
+
+function scanHistoryDir(rootDir: string): string {
+  return path.join(odaDir(rootDir), "scan-history");
+}
+
+export function saveScanReport(rootDir: string, report: Record<string, unknown>): void {
+  const dir = scanHistoryDir(rootDir);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const id = report.id as string;
+  const file = path.join(dir, `${id}.json`);
+  fs.writeFileSync(file, JSON.stringify(report, null, 2) + "\n");
+}
+
+export function loadScanReport(rootDir: string, scanId: string): Record<string, unknown> | null {
+  const file = path.join(scanHistoryDir(rootDir), `${scanId}.json`);
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf-8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export function listScanReports(rootDir: string): Array<Record<string, unknown>> {
+  const dir = scanHistoryDir(rootDir);
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    })
+    .filter((r): r is Record<string, unknown> => r !== null)
+    .sort((a, b) => {
+      const ta = new Date(a.timestamp as string).getTime();
+      const tb = new Date(b.timestamp as string).getTime();
+      return tb - ta;
+    });
 }
 
 // ── Repo context ──────────────────────────────────────────────────

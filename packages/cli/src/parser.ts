@@ -80,6 +80,8 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "destroy",
     "rollback",
     "tools",
+    "scan",
+    "chat",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([
@@ -100,6 +102,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "install",
     "remove",
     "clean",
+    "fix",
   ]);
 
   const command: string[] = [];

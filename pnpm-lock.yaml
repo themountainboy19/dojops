@@ -53,9 +53,15 @@ importers:
       '@odaops/planner':
         specifier: workspace:*
         version: link:../planner
+      '@odaops/scanner':
+        specifier: workspace:*
+        version: link:../scanner
       '@odaops/sdk':
         specifier: workspace:*
         version: link:../sdk
+      '@odaops/session':
+        specifier: workspace:*
+        version: link:../session
       '@odaops/tools':
         specifier: workspace:*
         version: link:../tools
@@ -102,6 +108,12 @@ importers:
       '@odaops/planner':
         specifier: workspace:*
         version: link:../planner
+      '@odaops/scanner':
+        specifier: workspace:*
+        version: link:../scanner
+      '@odaops/session':
+        specifier: workspace:*
+        version: link:../session
       '@odaops/tools':
         specifier: workspace:*
         version: link:../tools
@@ -151,8 +163,29 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
 
+  packages/scanner:
+    dependencies:
+      '@odaops/core':
+        specifier: workspace:*
+        version: link:../core
+      '@odaops/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
   packages/sdk:
     dependencies:
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+
+  packages/session:
+    dependencies:
+      '@odaops/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: ^3.23.0
         version: 3.25.76

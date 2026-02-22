@@ -1,6 +1,6 @@
 export interface HistoryEntry {
   id: string;
-  type: "generate" | "plan" | "debug-ci" | "diff";
+  type: "generate" | "plan" | "debug-ci" | "diff" | "scan" | "chat";
   request: unknown;
   response: unknown;
   timestamp: string;

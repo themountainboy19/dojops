@@ -18,15 +18,30 @@ export class OllamaProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : req.system;
 
-    const response = await axios.post(`${this.baseUrl}/api/generate`, {
-      model: this.model,
-      prompt: req.prompt,
-      system,
-      stream: false,
-      ...(req.schema ? { format: "json" } : {}),
-    });
+    let content: string;
 
-    const content: string = response.data.response;
+    if (req.messages?.length) {
+      const chatMessages = [
+        { role: "system", content: system ?? "" },
+        ...req.messages.filter((m) => m.role !== "system"),
+      ];
+      const response = await axios.post(`${this.baseUrl}/api/chat`, {
+        model: this.model,
+        messages: chatMessages,
+        stream: false,
+        ...(req.schema ? { format: "json" } : {}),
+      });
+      content = response.data.message.content;
+    } else {
+      const response = await axios.post(`${this.baseUrl}/api/generate`, {
+        model: this.model,
+        prompt: req.prompt,
+        system,
+        stream: false,
+        ...(req.schema ? { format: "json" } : {}),
+      });
+      content = response.data.response;
+    }
 
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);

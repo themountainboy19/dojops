@@ -51,6 +51,8 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
+  console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
+  console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
   console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.oda/tools/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
@@ -140,6 +142,8 @@ export function printHelp(): void {
   console.log(`  3    Approval required`);
   console.log(`  4    Lock conflict`);
   console.log(`  5    No .oda/ project`);
+  console.log(`  6    Security issues (HIGH findings)`);
+  console.log(`  7    Critical vulnerabilities`);
   console.log();
 }
 
@@ -387,6 +391,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  POST /api/diff         Infrastructure diff analysis`);
       console.log(`  GET  /api/agents       List specialist agents`);
       console.log(`  GET  /api/history      Execution history`);
+      console.log(`  POST /api/scan         Security scan`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda serve`);
       console.log(`  ${pc.dim("$")} oda serve --port=8080`);
@@ -490,6 +495,80 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} oda rollback plan-abc123`);
       console.log(`  ${pc.dim("$")} oda rollback plan-abc123 --dry-run`);
+      console.log();
+      break;
+
+    case "scan":
+      console.log(`\n${pc.bold("oda scan")} — Scan project for security vulnerabilities`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda scan [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--security")}     Run security scanners only (trivy, gitleaks)`);
+      console.log(`  ${pc.cyan("--deps")}         Run dependency audit only (npm, pip)`);
+      console.log(`  ${pc.cyan("--iac")}          Run IaC scanners only (checkov, hadolint)`);
+      console.log(`  ${pc.cyan("--fix")}          Generate and apply LLM-powered remediation`);
+      console.log(
+        `  ${pc.cyan("--yes")}          Auto-approve remediation ${pc.dim("(requires --fix)")}`,
+      );
+      console.log(`\n${pc.bold("SCANNERS")}`);
+      console.log(`  ${pc.cyan("npm audit")}      Node.js dependency vulnerabilities`);
+      console.log(`  ${pc.cyan("pip-audit")}      Python dependency vulnerabilities`);
+      console.log(
+        `  ${pc.cyan("trivy")}          Filesystem vulnerability + secret + misconfig scan`,
+      );
+      console.log(`  ${pc.cyan("gitleaks")}       Secret/credential leak detection`);
+      console.log(`  ${pc.cyan("checkov")}        Infrastructure-as-Code policy checks`);
+      console.log(`  ${pc.cyan("hadolint")}       Dockerfile linting`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Runs security scanners against the project directory. Scanners are`);
+      console.log(`  selected based on project context (detected via ${pc.cyan("oda init")}).`);
+      console.log(`  Missing scanner binaries are gracefully skipped.`);
+      console.log();
+      console.log(`  With ${pc.cyan("--fix")}, sends HIGH/CRITICAL findings to the LLM to`);
+      console.log(`  generate a remediation plan, then applies approved patches.`);
+      console.log(`\n${pc.bold("EXIT CODES")}`);
+      console.log(`  0    No HIGH or CRITICAL findings`);
+      console.log(`  6    HIGH findings detected`);
+      console.log(`  7    CRITICAL findings detected`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda scan`);
+      console.log(`  ${pc.dim("$")} oda scan --deps`);
+      console.log(`  ${pc.dim("$")} oda scan --security`);
+      console.log(`  ${pc.dim("$")} oda scan --iac`);
+      console.log(`  ${pc.dim("$")} oda scan --fix`);
+      console.log(`  ${pc.dim("$")} oda scan --fix --yes`);
+      console.log(`  ${pc.dim("$")} oda scan --output json`);
+      console.log();
+      break;
+
+    case "chat":
+      console.log(`\n${pc.bold("oda chat")} — Interactive AI DevOps session`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda chat`);
+      console.log(`  ${pc.dim("$")} oda chat --session <name>`);
+      console.log(`  ${pc.dim("$")} oda chat --resume`);
+      console.log(`  ${pc.dim("$")} oda chat --agent <name>`);
+      console.log(`  ${pc.dim("$")} oda chat --deterministic`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--session=NAME")}     Resume or create a named session`);
+      console.log(`  ${pc.cyan("--resume")}           Resume the most recent session`);
+      console.log(`  ${pc.cyan("--agent=NAME")}       Pin conversation to a specialist agent`);
+      console.log(`  ${pc.cyan("--deterministic")}    Deterministic mode (no summarization)`);
+      console.log(`\n${pc.bold("SLASH COMMANDS")}`);
+      console.log(`  ${pc.cyan("/exit")}              Save and exit`);
+      console.log(`  ${pc.cyan("/agent <name>")}      Pin to specialist agent (or 'auto')`);
+      console.log(`  ${pc.cyan("/plan <goal>")}       Bridge to oda plan`);
+      console.log(`  ${pc.cyan("/apply")}             Bridge to oda apply`);
+      console.log(`  ${pc.cyan("/scan")}              Bridge to oda scan`);
+      console.log(`  ${pc.cyan("/history")}           Show session message history`);
+      console.log(`  ${pc.cyan("/clear")}             Clear session messages`);
+      console.log(`  ${pc.cyan("/save")}              Save session to disk`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda chat`);
+      console.log(`  ${pc.dim("$")} oda chat --session myproject`);
+      console.log(`  ${pc.dim("$")} oda chat --resume`);
+      console.log(`  ${pc.dim("$")} oda chat --agent terraform`);
+      console.log(`  ${pc.dim("$")} oda chat --deterministic`);
       console.log();
       break;
 

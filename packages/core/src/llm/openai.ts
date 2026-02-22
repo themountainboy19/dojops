@@ -17,14 +17,27 @@ export class OpenAIProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : (req.system ?? "");
 
+    const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = req.messages
+      ?.length
+      ? [
+          { role: "system" as const, content: systemContent },
+          ...req.messages
+            .filter((m) => m.role !== "system")
+            .map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })),
+        ]
+      : [
+          { role: "system" as const, content: systemContent },
+          { role: "user" as const, content: req.prompt },
+        ];
+
     let completion: OpenAI.Chat.ChatCompletion;
     try {
       completion = await this.client.chat.completions.create({
         model: this.model,
-        messages: [
-          { role: "system", content: systemContent },
-          { role: "user", content: req.prompt },
-        ],
+        messages,
         ...(req.schema ? { response_format: { type: "json_object" } } : {}),
       });
     } catch (err: unknown) {

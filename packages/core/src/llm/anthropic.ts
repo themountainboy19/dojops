@@ -21,7 +21,16 @@ export class AnthropicProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : req.system;
 
-    const messages: Anthropic.MessageParam[] = [{ role: "user", content: req.prompt }];
+    const messages: Anthropic.MessageParam[] = req.messages?.length
+      ? [
+          ...req.messages
+            .filter((m) => m.role !== "system")
+            .map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })),
+        ]
+      : [{ role: "user" as const, content: req.prompt }];
 
     if (req.schema) {
       messages.push({ role: "assistant", content: "{" });

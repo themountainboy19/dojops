@@ -1,4 +1,4 @@
-import { LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
+import { ChatMessage, LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
 import { ToolDependency } from "./tool-deps";
 
 export interface SpecialistConfig {
@@ -39,6 +39,18 @@ export class SpecialistAgent {
   async run(request: Omit<LLMRequest, "system">): Promise<LLMResponse> {
     return this.provider.generate({
       ...request,
+      system: this.config.systemPrompt,
+    });
+  }
+
+  async runWithHistory(
+    messages: ChatMessage[],
+    opts?: Omit<LLMRequest, "system" | "prompt" | "messages">,
+  ): Promise<LLMResponse> {
+    return this.provider.generate({
+      ...opts,
+      prompt: "",
+      messages,
       system: this.config.systemPrompt,
     });
   }

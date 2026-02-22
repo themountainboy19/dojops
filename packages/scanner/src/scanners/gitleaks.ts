@@ -1,0 +1,91 @@
+import { execFileSync } from "node:child_process";
+import * as crypto from "node:crypto";
+import { ScannerResult, ScanFinding } from "../types";
+
+interface GitleaksResult {
+  RuleID: string;
+  Description: string;
+  File: string;
+  StartLine: number;
+  EndLine: number;
+  StartColumn?: number;
+  EndColumn?: number;
+  Match?: string;
+  Secret?: string;
+  Entropy?: number;
+}
+
+export async function scanGitleaks(projectPath: string): Promise<ScannerResult> {
+  let rawOutput: string;
+  try {
+    rawOutput = execFileSync(
+      "gitleaks",
+      [
+        "detect",
+        "--source",
+        projectPath,
+        "--report-format",
+        "json",
+        "--report-path",
+        "/dev/stdout",
+        "--no-git",
+      ],
+      {
+        encoding: "utf-8",
+        timeout: 120_000,
+        stdio: "pipe",
+      },
+    );
+  } catch (err: unknown) {
+    if (isENOENT(err)) {
+      return {
+        tool: "gitleaks",
+        findings: [],
+        skipped: true,
+        skipReason: "gitleaks not found",
+      };
+    }
+    // gitleaks exits with code 1 when leaks are found
+    const execErr = err as { stdout?: string; stderr?: string; status?: number };
+    rawOutput = execErr.stdout ?? "";
+    if (!rawOutput) {
+      // Exit code 1 with no stdout means no leaks (or error)
+      if (execErr.status === 1 && !execErr.stderr) {
+        return { tool: "gitleaks", findings: [] };
+      }
+      return {
+        tool: "gitleaks",
+        findings: [],
+        skipped: true,
+        skipReason: `gitleaks failed: ${execErr.stderr ?? "unknown error"}`,
+      };
+    }
+  }
+
+  const findings: ScanFinding[] = [];
+
+  try {
+    const results: GitleaksResult[] = JSON.parse(rawOutput);
+    for (const leak of results) {
+      findings.push({
+        id: `gitleaks-${crypto.randomUUID().slice(0, 8)}`,
+        tool: "gitleaks",
+        severity: "CRITICAL",
+        category: "SECRETS",
+        file: leak.File,
+        line: leak.StartLine,
+        message: `${leak.RuleID}: ${leak.Description}`,
+        recommendation: "Remove secret from source code and rotate the credential immediately",
+        autoFixAvailable: false,
+      });
+    }
+  } catch {
+    // JSON parse failed — could be empty output (no leaks)
+  }
+
+  return { tool: "gitleaks", findings, rawOutput };
+}
+
+function isENOENT(err: unknown): boolean {
+  return (err as NodeJS.ErrnoException).code === "ENOENT";
+}

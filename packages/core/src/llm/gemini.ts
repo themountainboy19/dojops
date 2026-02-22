@@ -17,11 +17,20 @@ export class GeminiProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : req.system;
 
+    const contents = req.messages?.length
+      ? req.messages
+          .filter((m) => m.role !== "system")
+          .map((m) => ({
+            role: m.role === "assistant" ? "model" : "user",
+            parts: [{ text: m.content }],
+          }))
+      : req.prompt;
+
     let response;
     try {
       response = await this.client.models.generateContent({
         model: this.model,
-        contents: req.prompt,
+        contents,
         config: {
           systemInstruction: systemPrompt,
           ...(req.schema ? { responseMimeType: "application/json" } : {}),

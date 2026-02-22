@@ -12,6 +12,8 @@ import {
   createDiffRouter,
   createAgentsRouter,
   createHistoryRouter,
+  createScanRouter,
+  createChatRouter,
 } from "./routes";
 
 export interface AppDependencies {
@@ -50,6 +52,8 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
   app.use("/api/agents", createAgentsRouter(deps.router));
   app.use("/api/history", createHistoryRouter(deps.store));
+  app.use("/api/scan", createScanRouter(deps.store));
+  app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));
 
   // Error handler (must be last)
   app.use(errorHandler);

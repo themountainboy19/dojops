@@ -38,6 +38,8 @@ import {
   toolsRemoveCommand,
   toolsCleanCommand,
 } from "./commands/tools";
+import { scanCommand } from "./commands/scan";
+import { chatCommand } from "./commands/chat";
 import { prependToolsBinToPath } from "./tool-sandbox";
 
 registerCommand("init", initCommand);
@@ -48,6 +50,8 @@ registerCommand("rollback", rollbackCommand);
 registerCommand("explain", explainCommand);
 registerCommand("status", statusCommand);
 registerCommand("doctor", statusCommand); // backward compat alias
+registerCommand("scan", scanCommand);
+registerCommand("chat", chatCommand);
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
 registerSubcommand("inspect", "config", inspectCommand);
@@ -137,7 +141,16 @@ async function main() {
   };
 
   // Non-LLM commands: config, auth, serve, init, doctor — no intro banner
-  const quietCommands = new Set(["config", "auth", "init", "doctor", "status", "tools"]);
+  const quietCommands = new Set([
+    "config",
+    "auth",
+    "init",
+    "doctor",
+    "status",
+    "tools",
+    "scan",
+    "chat",
+  ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
   if (!isQuiet && !globalOpts.quiet) {

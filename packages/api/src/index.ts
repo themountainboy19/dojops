@@ -7,8 +7,19 @@ export {
   PlanRequestSchema,
   DebugCIRequestSchema,
   DiffRequestSchema,
+  ScanRequestSchema,
+  ChatRequestSchema,
+  ChatSessionRequestSchema,
 } from "./schemas";
-export type { GenerateRequest, PlanRequest, DebugCIRequest, DiffRequest } from "./schemas";
+export type {
+  GenerateRequest,
+  PlanRequest,
+  DebugCIRequest,
+  DiffRequest,
+  ScanRequest,
+  ChatRequest,
+  ChatSessionRequest,
+} from "./schemas";
 export {
   createProvider,
   createTools,

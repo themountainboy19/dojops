@@ -16,7 +16,9 @@
       "@odaops/planner/*": ["packages/planner/src/*"],
       "@odaops/tools/*": ["packages/tools/src/*"],
       "@odaops/executor/*": ["packages/executor/src/*"],
-      "@odaops/api/*": ["packages/api/src/*"]
+      "@odaops/api/*": ["packages/api/src/*"],
+      "@odaops/scanner/*": ["packages/scanner/src/*"],
+      "@odaops/session/*": ["packages/session/src/*"]
     }
   }
 }

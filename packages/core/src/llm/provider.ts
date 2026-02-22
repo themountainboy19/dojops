@@ -1,8 +1,14 @@
 import { ZodTypeAny } from "zod";
 
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
 export interface LLMRequest {
   system?: string;
   prompt: string;
+  messages?: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
   schema?: ZodTypeAny;

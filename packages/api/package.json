@@ -42,6 +42,8 @@
     "@odaops/planner": "workspace:*",
     "@odaops/tools": "workspace:*",
     "@odaops/executor": "workspace:*",
+    "@odaops/scanner": "workspace:*",
+    "@odaops/session": "workspace:*",
     "express": "^4.21.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",

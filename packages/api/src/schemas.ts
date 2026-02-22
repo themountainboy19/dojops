@@ -28,3 +28,25 @@ export const DiffRequestSchema = z.object({
 });
 
 export type DiffRequest = z.infer<typeof DiffRequestSchema>;
+
+export const ScanRequestSchema = z.object({
+  target: z.string().optional(),
+  scanType: z.enum(["all", "security", "deps", "iac"]).optional().default("all"),
+});
+
+export type ScanRequest = z.infer<typeof ScanRequestSchema>;
+
+export const ChatRequestSchema = z.object({
+  sessionId: z.string().optional(),
+  message: z.string().min(1, "message is required"),
+  agent: z.string().optional(),
+});
+
+export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+
+export const ChatSessionRequestSchema = z.object({
+  name: z.string().optional(),
+  mode: z.enum(["INTERACTIVE", "DETERMINISTIC"]).optional().default("INTERACTIVE"),
+});
+
+export type ChatSessionRequest = z.infer<typeof ChatSessionRequestSchema>;

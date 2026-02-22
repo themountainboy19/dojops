@@ -46,6 +46,8 @@
     "@odaops/core": "workspace:*",
     "@odaops/executor": "workspace:*",
     "@odaops/planner": "workspace:*",
+    "@odaops/scanner": "workspace:*",
+    "@odaops/session": "workspace:*",
     "@odaops/tools": "workspace:*",
     "dotenv": "^16.0.0",
     "picocolors": "^1.1.1"
