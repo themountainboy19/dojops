@@ -40,6 +40,7 @@ import {
 } from "./commands/tools";
 import { scanCommand } from "./commands/scan";
 import { chatCommand } from "./commands/chat";
+import { checkCommand } from "./commands/check";
 import { prependToolsBinToPath } from "./tool-sandbox";
 
 registerCommand("init", initCommand);
@@ -52,6 +53,7 @@ registerCommand("status", statusCommand);
 registerCommand("doctor", statusCommand); // backward compat alias
 registerCommand("scan", scanCommand);
 registerCommand("chat", chatCommand);
+registerCommand("check", checkCommand);
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
 registerSubcommand("inspect", "config", inspectCommand);
@@ -150,6 +152,7 @@ async function main() {
     "tools",
     "scan",
     "chat",
+    "check",
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 

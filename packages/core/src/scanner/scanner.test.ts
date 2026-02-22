@@ -9,13 +9,16 @@ import {
   detectContainer,
   detectInfra,
   detectMonitoring,
+  detectScripts,
+  detectSecurity,
   detectMetadata,
   deriveRelevantDomains,
+  collectDevopsFiles,
   scanRepo,
   generateDirectoryTree,
   enrichWithLLM,
 } from "./scanner";
-import { RepoContextSchema, LLMInsightsSchema } from "./types";
+import { RepoContextSchema, RepoContextSchemaV2, LLMInsightsSchema } from "./types";
 import type { LLMProvider } from "../llm/provider";
 
 let tmpDir: string;
@@ -237,6 +240,77 @@ describe("detectCI", () => {
     const dir = makeTmpDir();
     expect(detectCI(dir)).toEqual([]);
   });
+
+  // New CI platforms
+  it("detects Azure Pipelines", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "azure-pipelines.yml"), "");
+    const result = detectCI(dir);
+    expect(result).toHaveLength(1);
+    expect(result[0].platform).toBe("azure-pipelines");
+    expect(result[0].configPath).toBe("azure-pipelines.yml");
+  });
+
+  it("detects Azure Pipelines yaml variant", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "azure-pipelines.yaml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("azure-pipelines");
+    expect(result[0].configPath).toBe("azure-pipelines.yaml");
+  });
+
+  it("detects AWS CodeBuild", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "buildspec.yml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("aws-codebuild");
+    expect(result[0].configPath).toBe("buildspec.yml");
+  });
+
+  it("detects Bitbucket Pipelines", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "bitbucket-pipelines.yml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("bitbucket-pipelines");
+  });
+
+  it("detects Drone CI", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".drone.yml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("drone");
+  });
+
+  it("detects Travis CI", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".travis.yml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("travis-ci");
+  });
+
+  it("detects Tekton", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".tekton"));
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("tekton");
+    expect(result[0].configPath).toBe(".tekton/");
+  });
+
+  it("detects Woodpecker CI from file", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".woodpecker.yml"), "");
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("woodpecker");
+    expect(result[0].configPath).toBe(".woodpecker.yml");
+  });
+
+  it("detects Woodpecker CI from directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".woodpecker"));
+    const result = detectCI(dir);
+    expect(result[0].platform).toBe("woodpecker");
+    expect(result[0].configPath).toBe(".woodpecker/");
+  });
 });
 
 // ── detectContainer ──────────────────────────────────────────────────
@@ -374,6 +448,70 @@ describe("detectInfra", () => {
     expect(result.hasKubernetes).toBe(false);
     expect(result.hasHelm).toBe(false);
     expect(result.hasAnsible).toBe(false);
+    expect(result.hasKustomize).toBe(false);
+    expect(result.hasVagrant).toBe(false);
+    expect(result.hasPulumi).toBe(false);
+    expect(result.hasCloudFormation).toBe(false);
+  });
+
+  // New infra detections
+  it("detects Kustomize from kustomization.yaml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "kustomization.yaml"), "");
+    const result = detectInfra(dir);
+    expect(result.hasKustomize).toBe(true);
+  });
+
+  it("detects Kustomize from kustomization.yml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "kustomization.yml"), "");
+    const result = detectInfra(dir);
+    expect(result.hasKustomize).toBe(true);
+  });
+
+  it("detects Vagrant from Vagrantfile", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Vagrantfile"), "");
+    const result = detectInfra(dir);
+    expect(result.hasVagrant).toBe(true);
+  });
+
+  it("detects Pulumi from Pulumi.yaml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Pulumi.yaml"), "");
+    const result = detectInfra(dir);
+    expect(result.hasPulumi).toBe(true);
+  });
+
+  it("detects CloudFormation from cloudformation/ directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, "cloudformation"));
+    const result = detectInfra(dir);
+    expect(result.hasCloudFormation).toBe(true);
+  });
+
+  it("detects CloudFormation from .cfn.yml file", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "stack.cfn.yml"), "");
+    const result = detectInfra(dir);
+    expect(result.hasCloudFormation).toBe(true);
+  });
+
+  it("detects CloudFormation from template.yaml with AWSTemplateFormatVersion", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(
+      path.join(dir, "template.yaml"),
+      "AWSTemplateFormatVersion: '2010-09-09'\nDescription: My stack",
+    );
+    const result = detectInfra(dir);
+    expect(result.hasCloudFormation).toBe(true);
+  });
+
+  it("does NOT detect CloudFormation from template.yaml without AWS content", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "template.yaml"), "key: value\nfoo: bar");
+    const result = detectInfra(dir);
+    expect(result.hasCloudFormation).toBe(false);
   });
 });
 
@@ -404,6 +542,157 @@ describe("detectMonitoring", () => {
     expect(result.hasPrometheus).toBe(false);
     expect(result.hasNginx).toBe(false);
     expect(result.hasSystemd).toBe(false);
+    expect(result.hasHaproxy).toBe(false);
+    expect(result.hasTomcat).toBe(false);
+    expect(result.hasApache).toBe(false);
+    expect(result.hasCaddy).toBe(false);
+    expect(result.hasEnvoy).toBe(false);
+  });
+
+  // New monitoring detections
+  it("detects HAProxy from haproxy.cfg", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "haproxy.cfg"), "");
+    expect(detectMonitoring(dir).hasHaproxy).toBe(true);
+  });
+
+  it("detects Tomcat from server.xml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "server.xml"), "");
+    expect(detectMonitoring(dir).hasTomcat).toBe(true);
+  });
+
+  it("detects Apache from httpd.conf", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "httpd.conf"), "");
+    expect(detectMonitoring(dir).hasApache).toBe(true);
+  });
+
+  it("detects Apache from .htaccess", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".htaccess"), "");
+    expect(detectMonitoring(dir).hasApache).toBe(true);
+  });
+
+  it("detects Caddy from Caddyfile", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Caddyfile"), "");
+    expect(detectMonitoring(dir).hasCaddy).toBe(true);
+  });
+
+  it("detects Envoy from envoy.yaml", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "envoy.yaml"), "");
+    expect(detectMonitoring(dir).hasEnvoy).toBe(true);
+  });
+});
+
+// ── detectScripts ────────────────────────────────────────────────────
+
+describe("detectScripts", () => {
+  it("detects shell scripts at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "deploy.sh"), "#!/bin/bash");
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toContain("deploy.sh");
+  });
+
+  it("detects python scripts at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "build.py"), "");
+    const result = detectScripts(dir);
+    expect(result.pythonScripts).toContain("build.py");
+  });
+
+  it("detects scripts in scripts/ directory", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, "scripts"));
+    fs.writeFileSync(path.join(dir, "scripts", "setup.sh"), "");
+    fs.writeFileSync(path.join(dir, "scripts", "migrate.py"), "");
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toContain("scripts/setup.sh");
+    expect(result.pythonScripts).toContain("scripts/migrate.py");
+  });
+
+  it("detects Justfile", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Justfile"), "");
+    expect(detectScripts(dir).hasJustfile).toBe(true);
+  });
+
+  it("returns empty for empty directory", () => {
+    const dir = makeTmpDir();
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toEqual([]);
+    expect(result.pythonScripts).toEqual([]);
+    expect(result.hasJustfile).toBe(false);
+  });
+});
+
+// ── detectSecurity ───────────────────────────────────────────────────
+
+describe("detectSecurity", () => {
+  it("detects .env.example", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".env.example"), "");
+    expect(detectSecurity(dir).hasEnvExample).toBe(true);
+  });
+
+  it("detects .gitignore", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".gitignore"), "");
+    expect(detectSecurity(dir).hasGitignore).toBe(true);
+  });
+
+  it("detects CODEOWNERS at root", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "CODEOWNERS"), "");
+    expect(detectSecurity(dir).hasCodeowners).toBe(true);
+  });
+
+  it("detects CODEOWNERS in .github/", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".github", "CODEOWNERS"), "");
+    expect(detectSecurity(dir).hasCodeowners).toBe(true);
+  });
+
+  it("detects SECURITY.md", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "SECURITY.md"), "");
+    expect(detectSecurity(dir).hasSecurityPolicy).toBe(true);
+  });
+
+  it("detects Dependabot config", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".github"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".github", "dependabot.yml"), "");
+    expect(detectSecurity(dir).hasDependabot).toBe(true);
+  });
+
+  it("detects Renovate config", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "renovate.json"), "{}");
+    expect(detectSecurity(dir).hasRenovate).toBe(true);
+  });
+
+  it("detects .editorconfig", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, ".editorconfig"), "");
+    expect(detectSecurity(dir).hasEditorConfig).toBe(true);
+  });
+
+  it("returns all false for empty directory", () => {
+    const dir = makeTmpDir();
+    const result = detectSecurity(dir);
+    expect(result.hasEnvExample).toBe(false);
+    expect(result.hasGitignore).toBe(false);
+    expect(result.hasCodeowners).toBe(false);
+    expect(result.hasSecurityPolicy).toBe(false);
+    expect(result.hasDependabot).toBe(false);
+    expect(result.hasRenovate).toBe(false);
+    expect(result.hasSecretScanning).toBe(false);
+    expect(result.hasEditorConfig).toBe(false);
   });
 });
 
@@ -460,19 +749,41 @@ describe("detectMetadata", () => {
 // ── deriveRelevantDomains ────────────────────────────────────────────
 
 describe("deriveRelevantDomains", () => {
+  const emptyInfra: InfraDetection = {
+    hasTerraform: false,
+    tfProviders: [],
+    hasState: false,
+    hasKubernetes: false,
+    hasHelm: false,
+    hasAnsible: false,
+    hasKustomize: false,
+    hasVagrant: false,
+    hasPulumi: false,
+    hasCloudFormation: false,
+  };
+  const emptyMonitoring: MonitoringDetection = {
+    hasPrometheus: false,
+    hasNginx: false,
+    hasSystemd: false,
+    hasHaproxy: false,
+    hasTomcat: false,
+    hasApache: false,
+    hasCaddy: false,
+    hasEnvoy: false,
+  };
+  const emptyContainer: ContainerDetection = { hasDockerfile: false, hasCompose: false };
+
+  // Need to import types for the helper
+  type InfraDetection = import("./types").InfraDetection;
+  type MonitoringDetection = import("./types").MonitoringDetection;
+  type ContainerDetection = import("./types").ContainerDetection;
+
   it("maps CI to ci-cd domain", () => {
     const domains = deriveRelevantDomains(
       [{ platform: "gitlab-ci", configPath: ".gitlab-ci.yml" }],
-      { hasDockerfile: false, hasCompose: false },
-      {
-        hasTerraform: false,
-        tfProviders: [],
-        hasState: false,
-        hasKubernetes: false,
-        hasHelm: false,
-        hasAnsible: false,
-      },
-      { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      emptyContainer,
+      emptyInfra,
+      emptyMonitoring,
     );
     expect(domains).toContain("ci-cd");
   });
@@ -480,16 +791,9 @@ describe("deriveRelevantDomains", () => {
   it("maps GitHub Actions to ci-debugging", () => {
     const domains = deriveRelevantDomains(
       [{ platform: "github-actions", configPath: ".github/workflows/ci.yml" }],
-      { hasDockerfile: false, hasCompose: false },
-      {
-        hasTerraform: false,
-        tfProviders: [],
-        hasState: false,
-        hasKubernetes: false,
-        hasHelm: false,
-        hasAnsible: false,
-      },
-      { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      emptyContainer,
+      emptyInfra,
+      emptyMonitoring,
     );
     expect(domains).toContain("ci-cd");
     expect(domains).toContain("ci-debugging");
@@ -499,15 +803,8 @@ describe("deriveRelevantDomains", () => {
     const domains = deriveRelevantDomains(
       [],
       { hasDockerfile: true, hasCompose: false },
-      {
-        hasTerraform: false,
-        tfProviders: [],
-        hasState: false,
-        hasKubernetes: false,
-        hasHelm: false,
-        hasAnsible: false,
-      },
-      { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      emptyInfra,
+      emptyMonitoring,
     );
     expect(domains).toContain("containerization");
   });
@@ -515,16 +812,9 @@ describe("deriveRelevantDomains", () => {
   it("maps Terraform to infrastructure + cloud-architecture", () => {
     const domains = deriveRelevantDomains(
       [],
-      { hasDockerfile: false, hasCompose: false },
-      {
-        hasTerraform: true,
-        tfProviders: ["aws"],
-        hasState: false,
-        hasKubernetes: false,
-        hasHelm: false,
-        hasAnsible: false,
-      },
-      { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      emptyContainer,
+      { ...emptyInfra, hasTerraform: true, tfProviders: ["aws"] },
+      emptyMonitoring,
     );
     expect(domains).toContain("infrastructure");
     expect(domains).toContain("cloud-architecture");
@@ -533,26 +823,159 @@ describe("deriveRelevantDomains", () => {
   it("deduplicates domains", () => {
     const domains = deriveRelevantDomains(
       [],
-      { hasDockerfile: false, hasCompose: false },
-      {
-        hasTerraform: true,
-        tfProviders: [],
-        hasState: false,
-        hasKubernetes: false,
-        hasHelm: false,
-        hasAnsible: true,
-      },
-      { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      emptyContainer,
+      { ...emptyInfra, hasTerraform: true, hasAnsible: true },
+      emptyMonitoring,
     );
     const infraCount = domains.filter((d) => d === "infrastructure").length;
     expect(infraCount).toBe(1);
+  });
+
+  it("maps Kustomize to container-orchestration", () => {
+    const domains = deriveRelevantDomains(
+      [],
+      emptyContainer,
+      { ...emptyInfra, hasKustomize: true },
+      emptyMonitoring,
+    );
+    expect(domains).toContain("container-orchestration");
+  });
+
+  it("maps Pulumi to infrastructure + cloud-architecture", () => {
+    const domains = deriveRelevantDomains(
+      [],
+      emptyContainer,
+      { ...emptyInfra, hasPulumi: true },
+      emptyMonitoring,
+    );
+    expect(domains).toContain("infrastructure");
+    expect(domains).toContain("cloud-architecture");
+  });
+
+  it("maps CloudFormation to infrastructure + cloud-architecture", () => {
+    const domains = deriveRelevantDomains(
+      [],
+      emptyContainer,
+      { ...emptyInfra, hasCloudFormation: true },
+      emptyMonitoring,
+    );
+    expect(domains).toContain("infrastructure");
+    expect(domains).toContain("cloud-architecture");
+  });
+
+  it("maps HAProxy to networking", () => {
+    const domains = deriveRelevantDomains([], emptyContainer, emptyInfra, {
+      ...emptyMonitoring,
+      hasHaproxy: true,
+    });
+    expect(domains).toContain("networking");
+  });
+
+  it("maps shell scripts to shell-scripting", () => {
+    const domains = deriveRelevantDomains([], emptyContainer, emptyInfra, emptyMonitoring, {
+      shellScripts: ["deploy.sh"],
+      pythonScripts: [],
+      hasJustfile: false,
+    });
+    expect(domains).toContain("shell-scripting");
+  });
+
+  it("maps python scripts to python-scripting", () => {
+    const domains = deriveRelevantDomains([], emptyContainer, emptyInfra, emptyMonitoring, {
+      shellScripts: [],
+      pythonScripts: ["build.py"],
+      hasJustfile: false,
+    });
+    expect(domains).toContain("python-scripting");
+  });
+
+  it("maps security configs to security domain", () => {
+    const domains = deriveRelevantDomains(
+      [],
+      emptyContainer,
+      emptyInfra,
+      emptyMonitoring,
+      undefined,
+      {
+        hasEnvExample: false,
+        hasGitignore: false,
+        hasCodeowners: false,
+        hasSecurityPolicy: true,
+        hasDependabot: false,
+        hasRenovate: false,
+        hasSecretScanning: false,
+        hasEditorConfig: false,
+      },
+    );
+    expect(domains).toContain("security");
+  });
+});
+
+// ── collectDevopsFiles ───────────────────────────────────────────────
+
+describe("collectDevopsFiles", () => {
+  it("collects CI config paths", () => {
+    const dir = makeTmpDir();
+    fs.mkdirSync(path.join(dir, ".github", "workflows"), { recursive: true });
+    fs.writeFileSync(path.join(dir, ".github", "workflows", "ci.yml"), "");
+    const ci = detectCI(dir);
+    const emptyInfra = detectInfra(dir);
+    const emptyMon = detectMonitoring(dir);
+    const emptyScripts = detectScripts(dir);
+    const emptySecurity = detectSecurity(dir);
+    const files = collectDevopsFiles(
+      ci,
+      detectContainer(dir),
+      emptyInfra,
+      emptyMon,
+      emptyScripts,
+      emptySecurity,
+      dir,
+    );
+    expect(files).toContain(".github/workflows/ci.yml");
+  });
+
+  it("collects Dockerfiles and compose files", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Dockerfile"), "FROM node:20");
+    fs.writeFileSync(path.join(dir, "docker-compose.yml"), "");
+    const container = detectContainer(dir);
+    const files = collectDevopsFiles(
+      [],
+      container,
+      detectInfra(dir),
+      detectMonitoring(dir),
+      detectScripts(dir),
+      detectSecurity(dir),
+      dir,
+    );
+    expect(files).toContain("Dockerfile");
+    expect(files).toContain("docker-compose.yml");
+  });
+
+  it("collects terraform files", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), "");
+    fs.writeFileSync(path.join(dir, "vars.tf"), "");
+    const infra = detectInfra(dir);
+    const files = collectDevopsFiles(
+      [],
+      detectContainer(dir),
+      infra,
+      detectMonitoring(dir),
+      detectScripts(dir),
+      detectSecurity(dir),
+      dir,
+    );
+    expect(files).toContain("main.tf");
+    expect(files).toContain("vars.tf");
   });
 });
 
 // ── scanRepo (integration) ───────────────────────────────────────────
 
 describe("scanRepo", () => {
-  it("returns valid RepoContext for a Node.js project", () => {
+  it("returns valid V2 RepoContext for a Node.js project", () => {
     const dir = makeTmpDir();
     fs.writeFileSync(path.join(dir, "package.json"), "{}");
     fs.writeFileSync(path.join(dir, "pnpm-lock.yaml"), "");
@@ -562,11 +985,15 @@ describe("scanRepo", () => {
 
     const ctx = scanRepo(dir);
 
-    // Validate against Zod schema
-    const parsed = RepoContextSchema.safeParse(ctx);
+    // Validate against V2 schema
+    const parsed = RepoContextSchemaV2.safeParse(ctx);
     expect(parsed.success).toBe(true);
 
-    expect(ctx.version).toBe(1);
+    // Also valid via union
+    const unionParsed = RepoContextSchema.safeParse(ctx);
+    expect(unionParsed.success).toBe(true);
+
+    expect(ctx.version).toBe(2);
     expect(ctx.rootPath).toBe(dir);
     expect(ctx.primaryLanguage).toBe("node");
     expect(ctx.packageManager?.name).toBe("pnpm");
@@ -574,20 +1001,25 @@ describe("scanRepo", () => {
     expect(ctx.meta.isGitRepo).toBe(true);
     expect(ctx.meta.hasReadme).toBe(true);
     expect(ctx.relevantDomains).toContain("containerization");
+    expect(ctx.devopsFiles).toContain("Dockerfile");
   });
 
   it("returns valid RepoContext for empty directory", () => {
     const dir = makeTmpDir();
     const ctx = scanRepo(dir);
 
-    const parsed = RepoContextSchema.safeParse(ctx);
+    const parsed = RepoContextSchemaV2.safeParse(ctx);
     expect(parsed.success).toBe(true);
 
+    expect(ctx.version).toBe(2);
     expect(ctx.primaryLanguage).toBeNull();
     expect(ctx.packageManager).toBeNull();
     expect(ctx.languages).toEqual([]);
     expect(ctx.ci).toEqual([]);
     expect(ctx.relevantDomains).toEqual([]);
+    expect(ctx.devopsFiles).toEqual([]);
+    expect(ctx.scripts.shellScripts).toEqual([]);
+    expect(ctx.scripts.pythonScripts).toEqual([]);
   });
 
   it("detects multi-app repo with child dirs", () => {
@@ -601,7 +1033,7 @@ describe("scanRepo", () => {
     fs.writeFileSync(path.join(dir, "docker-compose.yml"), "version: '3'");
 
     const ctx = scanRepo(dir);
-    const parsed = RepoContextSchema.safeParse(ctx);
+    const parsed = RepoContextSchemaV2.safeParse(ctx);
     expect(parsed.success).toBe(true);
 
     expect(ctx.languages.length).toBeGreaterThanOrEqual(2);
@@ -621,6 +1053,34 @@ describe("scanRepo", () => {
     const ctx = scanRepo(dir);
     expect(ctx.infra.hasKubernetes).toBe(false);
     expect(ctx.relevantDomains).not.toContain("container-orchestration");
+  });
+
+  it("includes scripts and security in V2 context", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "deploy.sh"), "#!/bin/bash");
+    fs.writeFileSync(path.join(dir, ".gitignore"), "node_modules");
+    fs.writeFileSync(path.join(dir, ".editorconfig"), "");
+
+    const ctx = scanRepo(dir);
+    expect(ctx.scripts.shellScripts).toContain("deploy.sh");
+    expect(ctx.security.hasGitignore).toBe(true);
+    expect(ctx.security.hasEditorConfig).toBe(true);
+    expect(ctx.devopsFiles).toContain("deploy.sh");
+    expect(ctx.devopsFiles).toContain(".gitignore");
+  });
+
+  it("collects devopsFiles from multiple detection categories", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "Dockerfile"), "FROM node:20");
+    fs.writeFileSync(path.join(dir, "nginx.conf"), "");
+    fs.writeFileSync(path.join(dir, "deploy.sh"), "");
+    fs.writeFileSync(path.join(dir, ".gitignore"), "");
+
+    const ctx = scanRepo(dir);
+    expect(ctx.devopsFiles).toContain("Dockerfile");
+    expect(ctx.devopsFiles).toContain("nginx.conf");
+    expect(ctx.devopsFiles).toContain("deploy.sh");
+    expect(ctx.devopsFiles).toContain(".gitignore");
   });
 });
 
@@ -740,14 +1200,14 @@ describe("enrichWithLLM", () => {
 // ── RepoContextSchema with llmInsights ──────────────────────────────
 
 describe("RepoContextSchema with llmInsights", () => {
-  it("accepts context without llmInsights", () => {
+  it("accepts V2 context without llmInsights", () => {
     const dir = makeTmpDir();
     const ctx = scanRepo(dir);
     const parsed = RepoContextSchema.safeParse(ctx);
     expect(parsed.success).toBe(true);
   });
 
-  it("accepts context with llmInsights", () => {
+  it("accepts V2 context with llmInsights", () => {
     const dir = makeTmpDir();
     const ctx = scanRepo(dir);
     const withInsights = {
@@ -773,7 +1233,7 @@ describe("RepoContextSchema with llmInsights", () => {
         projectDescription: 123, // should be string
       },
     };
-    const parsed = RepoContextSchema.safeParse(withBadInsights);
+    const parsed = RepoContextSchemaV2.safeParse(withBadInsights);
     expect(parsed.success).toBe(false);
   });
 });

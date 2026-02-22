@@ -42,7 +42,7 @@ ODA is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Commo
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 @odaops/scanner      6 security scanners + remediation engine
 @odaops/session      Chat session management + memory + context injection
-@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff
+@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
 @odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
@@ -104,6 +104,12 @@ All responses pass through `parseAndValidate()` — strips markdown fences, `JSO
 
 16 specialist agents with keyword-based routing and confidence scoring. The `AgentRouter` scores prompts against each agent's keyword list and routes to the highest-confidence match. If no agent exceeds the threshold, it falls back to the general-purpose `DevOpsAgent`.
 
+Additionally, three specialized analyzers (not routed via `AgentRouter`) provide structured analysis:
+
+- **`CIDebugger`** — CI log diagnosis producing `CIDiagnosis` (error type, root cause, fixes)
+- **`InfraDiffAnalyzer`** — Infrastructure diff analysis producing `InfraDiffAnalysis` (risk, cost, security)
+- **`DevOpsChecker`** — DevOps config quality analysis producing `CheckReport` (score 0-100, findings, missing files)
+
 See [Specialist Agents](agents.md) for the full agent list.
 
 ### 3. Task Planner (`@odaops/planner`)
@@ -148,7 +154,7 @@ See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 
 ### 10. CLI (`@odaops/cli`)
 
-Full-lifecycle CLI with rich TUI powered by `@clack/prompts`. Interactive prompts, spinners, styled panels, semantic log levels.
+Full-lifecycle CLI with rich TUI powered by `@clack/prompts`. Interactive prompts, spinners, styled panels, semantic log levels. Includes `oda init` (comprehensive repo scanner with 11 CI platforms, IaC, scripts, security detection) and `oda check` (LLM-powered DevOps config quality analysis).
 
 See [CLI Reference](cli-reference.md).
 
@@ -171,7 +177,8 @@ ODA stores project state in the `.oda/` directory:
 
 ```
 .oda/
-  context.json           Project context (detected tools, languages, frameworks)
+  context.json           Project context v2 (languages, 11 CI platforms, IaC, containers,
+                         monitoring/web servers, scripts, security configs, devopsFiles[])
   session.json           Current session state
   plans/                 Saved TaskGraph plans (*.json)
   execution-logs/        Per-execution results (*.json)

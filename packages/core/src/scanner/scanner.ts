@@ -9,6 +9,8 @@ import type {
   ContainerDetection,
   InfraDetection,
   MonitoringDetection,
+  ScriptsDetection,
+  SecurityDetection,
   Metadata,
   RepoContext,
   LLMInsights,
@@ -153,6 +155,49 @@ export function detectCI(root: string): CIDetection[] {
     results.push({ platform: "circleci", configPath: ".circleci/config.yml" });
   }
 
+  // Azure Pipelines
+  for (const f of ["azure-pipelines.yml", "azure-pipelines.yaml"]) {
+    if (fs.existsSync(path.join(root, f))) {
+      results.push({ platform: "azure-pipelines", configPath: f });
+      break;
+    }
+  }
+
+  // AWS CodeBuild
+  for (const f of ["buildspec.yml", "buildspec.yaml"]) {
+    if (fs.existsSync(path.join(root, f))) {
+      results.push({ platform: "aws-codebuild", configPath: f });
+      break;
+    }
+  }
+
+  // Bitbucket Pipelines
+  if (fs.existsSync(path.join(root, "bitbucket-pipelines.yml"))) {
+    results.push({ platform: "bitbucket-pipelines", configPath: "bitbucket-pipelines.yml" });
+  }
+
+  // Drone CI
+  if (fs.existsSync(path.join(root, ".drone.yml"))) {
+    results.push({ platform: "drone", configPath: ".drone.yml" });
+  }
+
+  // Travis CI
+  if (fs.existsSync(path.join(root, ".travis.yml"))) {
+    results.push({ platform: "travis-ci", configPath: ".travis.yml" });
+  }
+
+  // Tekton
+  if (fs.existsSync(path.join(root, ".tekton"))) {
+    results.push({ platform: "tekton", configPath: ".tekton/" });
+  }
+
+  // Woodpecker CI
+  if (fs.existsSync(path.join(root, ".woodpecker.yml"))) {
+    results.push({ platform: "woodpecker", configPath: ".woodpecker.yml" });
+  } else if (fs.existsSync(path.join(root, ".woodpecker"))) {
+    results.push({ platform: "woodpecker", configPath: ".woodpecker/" });
+  }
+
   return results;
 }
 
@@ -272,7 +317,49 @@ export function detectInfra(root: string): InfraDetection {
   // Ansible
   const hasAnsible = ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f)));
 
-  return { hasTerraform, tfProviders, hasState, hasKubernetes, hasHelm, hasAnsible };
+  // Kustomize
+  const hasKustomize =
+    fs.existsSync(path.join(root, "kustomization.yaml")) ||
+    fs.existsSync(path.join(root, "kustomization.yml"));
+
+  // Vagrant
+  const hasVagrant = fs.existsSync(path.join(root, "Vagrantfile"));
+
+  // Pulumi
+  const hasPulumi =
+    fs.existsSync(path.join(root, "Pulumi.yaml")) || fs.existsSync(path.join(root, "Pulumi.yml"));
+
+  // CloudFormation
+  let hasCloudFormation = fs.existsSync(path.join(root, "cloudformation"));
+  if (!hasCloudFormation) {
+    try {
+      const entries = fs.readdirSync(root);
+      hasCloudFormation = entries.some((f) => f.endsWith(".cfn.yml") || f.endsWith(".cfn.yaml"));
+    } catch {
+      // Root unreadable
+    }
+  }
+  if (!hasCloudFormation && fs.existsSync(path.join(root, "template.yaml"))) {
+    try {
+      const content = fs.readFileSync(path.join(root, "template.yaml"), "utf-8");
+      hasCloudFormation = /AWSTemplateFormatVersion/.test(content);
+    } catch {
+      // Unreadable
+    }
+  }
+
+  return {
+    hasTerraform,
+    tfProviders,
+    hasState,
+    hasKubernetes,
+    hasHelm,
+    hasAnsible,
+    hasKustomize,
+    hasVagrant,
+    hasPulumi,
+    hasCloudFormation,
+  };
 }
 
 // ── Monitoring detection ─────────────────────────────────────────────
@@ -292,7 +379,100 @@ export function detectMonitoring(root: string): MonitoringDetection {
     // Root unreadable
   }
 
-  return { hasPrometheus, hasNginx, hasSystemd };
+  const hasHaproxy = fs.existsSync(path.join(root, "haproxy.cfg"));
+
+  const hasTomcat = fs.existsSync(path.join(root, "server.xml"));
+
+  const hasApache =
+    fs.existsSync(path.join(root, "httpd.conf")) ||
+    fs.existsSync(path.join(root, "apache2.conf")) ||
+    fs.existsSync(path.join(root, ".htaccess"));
+
+  const hasCaddy = fs.existsSync(path.join(root, "Caddyfile"));
+
+  const hasEnvoy =
+    fs.existsSync(path.join(root, "envoy.yaml")) || fs.existsSync(path.join(root, "envoy.yml"));
+
+  return {
+    hasPrometheus,
+    hasNginx,
+    hasSystemd,
+    hasHaproxy,
+    hasTomcat,
+    hasApache,
+    hasCaddy,
+    hasEnvoy,
+  };
+}
+
+// ── Scripts detection ────────────────────────────────────────────────
+
+export function detectScripts(root: string): ScriptsDetection {
+  const shellScripts: string[] = [];
+  const pythonScripts: string[] = [];
+
+  // Scan root for .sh and .py files
+  try {
+    const entries = fs.readdirSync(root);
+    for (const entry of entries) {
+      if (entry.endsWith(".sh")) shellScripts.push(entry);
+      if (entry.endsWith(".py")) pythonScripts.push(entry);
+    }
+  } catch {
+    // Root unreadable
+  }
+
+  // Scan scripts/ directory
+  const scriptsDir = path.join(root, "scripts");
+  if (fs.existsSync(scriptsDir)) {
+    try {
+      const entries = fs.readdirSync(scriptsDir);
+      for (const entry of entries) {
+        if (entry.endsWith(".sh")) shellScripts.push(`scripts/${entry}`);
+        if (entry.endsWith(".py")) pythonScripts.push(`scripts/${entry}`);
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+
+  const hasJustfile = fs.existsSync(path.join(root, "Justfile"));
+
+  return { shellScripts, pythonScripts, hasJustfile };
+}
+
+// ── Security detection ───────────────────────────────────────────────
+
+export function detectSecurity(root: string): SecurityDetection {
+  const hasEnvExample = fs.existsSync(path.join(root, ".env.example"));
+  const hasGitignore = fs.existsSync(path.join(root, ".gitignore"));
+
+  const hasCodeowners =
+    fs.existsSync(path.join(root, "CODEOWNERS")) ||
+    fs.existsSync(path.join(root, ".github", "CODEOWNERS"));
+
+  const hasSecurityPolicy =
+    fs.existsSync(path.join(root, "SECURITY.md")) ||
+    fs.existsSync(path.join(root, ".github", "SECURITY.md"));
+
+  const hasDependabot = fs.existsSync(path.join(root, ".github", "dependabot.yml"));
+
+  const hasRenovate = fs.existsSync(path.join(root, "renovate.json"));
+
+  const hasSecretScanning = fs.existsSync(path.join(root, ".github", "secret_scanning.yml"));
+
+  const hasEditorConfig = fs.existsSync(path.join(root, ".editorconfig"));
+
+  return {
+    hasEnvExample,
+    hasGitignore,
+    hasCodeowners,
+    hasSecurityPolicy,
+    hasDependabot,
+    hasRenovate,
+    hasSecretScanning,
+    hasEditorConfig,
+  };
 }
 
 // ── Metadata detection ───────────────────────────────────────────────
@@ -335,6 +515,8 @@ export function deriveRelevantDomains(
   container: ContainerDetection,
   infra: InfraDetection,
   monitoring: MonitoringDetection,
+  scripts?: ScriptsDetection,
+  security?: SecurityDetection,
 ): string[] {
   const domains: string[] = [];
 
@@ -345,12 +527,138 @@ export function deriveRelevantDomains(
   if (infra.hasKubernetes || infra.hasHelm) domains.push("container-orchestration");
   if (infra.hasAnsible) domains.push("infrastructure");
   if (infra.tfProviders.length > 0) domains.push("cloud-architecture");
+  if (infra.hasKustomize) domains.push("container-orchestration");
+  if (infra.hasPulumi || infra.hasCloudFormation) {
+    domains.push("infrastructure");
+    domains.push("cloud-architecture");
+  }
   if (monitoring.hasPrometheus) domains.push("observability");
   if (monitoring.hasNginx) domains.push("networking");
   if (monitoring.hasSystemd) domains.push("shell-scripting");
+  if (monitoring.hasHaproxy || monitoring.hasApache || monitoring.hasCaddy || monitoring.hasEnvoy) {
+    domains.push("networking");
+  }
+
+  if (scripts) {
+    if (scripts.shellScripts.length > 0) domains.push("shell-scripting");
+    if (scripts.pythonScripts.length > 0) domains.push("python-scripting");
+  }
+
+  if (security) {
+    if (security.hasDependabot || security.hasRenovate || security.hasSecurityPolicy) {
+      domains.push("security");
+    }
+  }
 
   // Deduplicate
   return [...new Set(domains)];
+}
+
+// ── Collect DevOps files ─────────────────────────────────────────────
+
+export function collectDevopsFiles(
+  ci: CIDetection[],
+  container: ContainerDetection,
+  infra: InfraDetection,
+  monitoring: MonitoringDetection,
+  scripts: ScriptsDetection,
+  security: SecurityDetection,
+  root: string,
+): string[] {
+  const files = new Set<string>();
+
+  // CI config paths
+  for (const c of ci) files.add(c.configPath);
+
+  // Container
+  if (container.hasDockerfile) {
+    if (fs.existsSync(path.join(root, "Dockerfile"))) files.add("Dockerfile");
+    for (const d of listChildDirs(root)) {
+      if (fs.existsSync(path.join(root, d, "Dockerfile"))) files.add(`${d}/Dockerfile`);
+    }
+  }
+  if (container.composePath) files.add(container.composePath);
+
+  // Terraform
+  if (infra.hasTerraform) {
+    try {
+      const entries = fs.readdirSync(root);
+      for (const f of entries) {
+        if (f.endsWith(".tf")) files.add(f);
+      }
+    } catch {
+      // Unreadable
+    }
+  }
+
+  // Monitoring configs
+  if (monitoring.hasPrometheus) {
+    if (fs.existsSync(path.join(root, "prometheus.yml"))) files.add("prometheus.yml");
+    if (fs.existsSync(path.join(root, "prometheus.yaml"))) files.add("prometheus.yaml");
+  }
+  if (monitoring.hasNginx) files.add("nginx.conf");
+  if (monitoring.hasHaproxy) files.add("haproxy.cfg");
+  if (monitoring.hasTomcat) files.add("server.xml");
+  if (monitoring.hasApache) {
+    if (fs.existsSync(path.join(root, "httpd.conf"))) files.add("httpd.conf");
+    if (fs.existsSync(path.join(root, "apache2.conf"))) files.add("apache2.conf");
+    if (fs.existsSync(path.join(root, ".htaccess"))) files.add(".htaccess");
+  }
+  if (monitoring.hasCaddy) files.add("Caddyfile");
+  if (monitoring.hasEnvoy) {
+    if (fs.existsSync(path.join(root, "envoy.yaml"))) files.add("envoy.yaml");
+    if (fs.existsSync(path.join(root, "envoy.yml"))) files.add("envoy.yml");
+  }
+
+  // Systemd services
+  try {
+    const entries = fs.readdirSync(root);
+    for (const f of entries) {
+      if (f.endsWith(".service")) files.add(f);
+    }
+  } catch {
+    // Unreadable
+  }
+
+  // Scripts
+  for (const s of scripts.shellScripts) files.add(s);
+  for (const s of scripts.pythonScripts) files.add(s);
+  if (scripts.hasJustfile) files.add("Justfile");
+
+  // Security files
+  if (security.hasEnvExample) files.add(".env.example");
+  if (security.hasGitignore) files.add(".gitignore");
+  if (security.hasCodeowners) {
+    if (fs.existsSync(path.join(root, "CODEOWNERS"))) files.add("CODEOWNERS");
+    if (fs.existsSync(path.join(root, ".github", "CODEOWNERS"))) files.add(".github/CODEOWNERS");
+  }
+  if (security.hasSecurityPolicy) {
+    if (fs.existsSync(path.join(root, "SECURITY.md"))) files.add("SECURITY.md");
+    if (fs.existsSync(path.join(root, ".github", "SECURITY.md"))) files.add(".github/SECURITY.md");
+  }
+  if (security.hasDependabot) files.add(".github/dependabot.yml");
+  if (security.hasRenovate) files.add("renovate.json");
+  if (security.hasSecretScanning) files.add(".github/secret_scanning.yml");
+  if (security.hasEditorConfig) files.add(".editorconfig");
+
+  // Infra extras
+  if (infra.hasKustomize) {
+    if (fs.existsSync(path.join(root, "kustomization.yaml"))) files.add("kustomization.yaml");
+    if (fs.existsSync(path.join(root, "kustomization.yml"))) files.add("kustomization.yml");
+  }
+  if (infra.hasVagrant) files.add("Vagrantfile");
+  if (infra.hasPulumi) {
+    if (fs.existsSync(path.join(root, "Pulumi.yaml"))) files.add("Pulumi.yaml");
+    if (fs.existsSync(path.join(root, "Pulumi.yml"))) files.add("Pulumi.yml");
+  }
+  if (infra.hasHelm && fs.existsSync(path.join(root, "Chart.yaml"))) files.add("Chart.yaml");
+  if (infra.hasAnsible) {
+    for (const f of ANSIBLE_INDICATORS) {
+      if (fs.existsSync(path.join(root, f))) files.add(f);
+    }
+  }
+
+  return [...files].sort();
 }
 
 // ── Directory tree generator ─────────────────────────────────────────
@@ -471,8 +779,18 @@ export function scanRepo(root: string): RepoContext {
   const container = detectContainer(root);
   const infra = detectInfra(root);
   const monitoring = detectMonitoring(root);
+  const scripts = detectScripts(root);
+  const security = detectSecurity(root);
   const meta = detectMetadata(root);
-  const relevantDomains = deriveRelevantDomains(ci, container, infra, monitoring);
+  const relevantDomains = deriveRelevantDomains(
+    ci,
+    container,
+    infra,
+    monitoring,
+    scripts,
+    security,
+  );
+  const devopsFiles = collectDevopsFiles(ci, container, infra, monitoring, scripts, security, root);
 
   const primaryLanguage =
     languages.length > 0
@@ -480,7 +798,7 @@ export function scanRepo(root: string): RepoContext {
       : null;
 
   return {
-    version: 1,
+    version: 2,
     scannedAt: new Date().toISOString(),
     rootPath: root,
     languages,
@@ -490,7 +808,10 @@ export function scanRepo(root: string): RepoContext {
     container,
     infra,
     monitoring,
+    scripts,
+    security,
     meta,
     relevantDomains,
+    devopsFiles,
   };
 }

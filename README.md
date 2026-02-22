@@ -82,7 +82,8 @@ ODA routes to the right specialist agent, enforces structured JSON output via Zo
 ### Enterprise Mode — Full Lifecycle
 
 ```bash
-oda init                              # Initialize project state
+oda init                              # Initialize project state + scan repo
+oda check                             # LLM-powered DevOps config quality check
 oda plan "Create CI/CD for Node app"  # Decompose into task graph
 oda validate                          # Validate plan against schemas
 oda apply                             # Execute with approval workflow
@@ -111,6 +112,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **16 specialist agents** — ops-cortex, terraform, kubernetes, CI/CD, security, Docker, cloud architecture, networking, database, GitOps, compliance, CI debugger, appsec, shell scripting, Python, and observability — with weighted keyword confidence scoring
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
 - **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
+- **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
 - **5 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini — with dynamic model selection via provider API
 
 ### Tools
@@ -157,7 +159,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
 @odaops/scanner      6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
 @odaops/session      Chat session management + memory + context injection
-@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff
+@odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
 @odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
 
@@ -194,15 +196,16 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 #### Diagnostics & Analysis
 
-| Command                   | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)    |
-| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security) |
-| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets |
-| `oda scan --security`     | Run security scanners only (trivy, gitleaks)       |
-| `oda scan --deps`         | Run dependency audit only (npm, pip)               |
-| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)          |
-| `oda scan --fix`          | Generate and apply LLM-powered remediation         |
+| Command                   | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `oda check`               | LLM-powered DevOps config quality check (score 0-100) |
+| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
+| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
+| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
+| `oda scan --security`     | Run security scanners only (trivy, gitleaks)          |
+| `oda scan --deps`         | Run dependency audit only (npm, pip)                  |
+| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
+| `oda scan --fix`          | Generate and apply LLM-powered remediation            |
 
 #### Interactive
 
@@ -239,18 +242,18 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### Configuration & Server
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `oda config`                     | Configure provider, model, tokens (interactive)  |
-| `oda config show`                | Display current configuration                    |
-| `oda config profile create NAME` | Save current config as a named profile           |
-| `oda config profile use NAME`    | Switch to a named profile                        |
-| `oda config profile list`        | List all profiles                                |
-| `oda auth login`                 | Authenticate with LLM provider                   |
-| `oda auth status`                | Show saved tokens and default provider           |
-| `oda serve [--port=N]`           | Start API server + web dashboard                 |
-| `oda init`                       | Initialize `.oda/` project directory + repo scan |
-| `oda doctor`                     | System health diagnostics + project metrics      |
+| Command                          | Description                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `oda config`                     | Configure provider, model, tokens (interactive)                                        |
+| `oda config show`                | Display current configuration                                                          |
+| `oda config profile create NAME` | Save current config as a named profile                                                 |
+| `oda config profile use NAME`    | Switch to a named profile                                                              |
+| `oda config profile list`        | List all profiles                                                                      |
+| `oda auth login`                 | Authenticate with LLM provider                                                         |
+| `oda auth status`                | Show saved tokens and default provider                                                 |
+| `oda serve [--port=N]`           | Start API server + web dashboard                                                       |
+| `oda init`                       | Initialize `.oda/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
+| `oda doctor`                     | System health diagnostics + project metrics                                            |
 
 ### Global Options
 
@@ -300,6 +303,10 @@ oda apply --resume --yes
 oda debug ci "ERROR: tsc failed with exit code 1..."
 oda analyze diff "terraform plan output..."
 oda explain last
+
+# DevOps quality check
+oda check
+oda check --output json
 
 # Security scanning
 oda scan
@@ -501,7 +508,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 637 tests
+pnpm test               # Run all 685 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -522,7 +529,7 @@ pnpm oda -- serve --port=8080
 packages/
   cli/            CLI entry point + TUI (@clack/prompts)
   api/            REST API (Express) + web dashboard
-  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff
+  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
   planner/        Task graph decomposition + topological executor
   executor/       SafeExecutor + policy engine + approval workflows + audit log
   tools/          12 DevOps tools
@@ -535,16 +542,16 @@ packages/
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/core`     | 155     |
+| `@odaops/core`     | 208     |
 | `@odaops/cli`      | 144     |
 | `@odaops/tools`    | 111     |
-| `@odaops/api`      | 95      |
+| `@odaops/api`      | 96      |
+| `@odaops/scanner`  | 43      |
 | `@odaops/executor` | 40      |
-| `@odaops/scanner`  | 29      |
 | `@odaops/planner`  | 28      |
 | `@odaops/session`  | 28      |
 | `@odaops/sdk`      | 7       |
-| **Total**          | **637** |
+| **Total**          | **685** |
 
 ---
 

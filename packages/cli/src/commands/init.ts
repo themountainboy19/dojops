@@ -52,17 +52,59 @@ function formatScanSummary(ctx: RepoContext): string[] {
   if (ctx.infra.hasKubernetes) infraParts.push("Kubernetes");
   if (ctx.infra.hasHelm) infraParts.push("Helm");
   if (ctx.infra.hasAnsible) infraParts.push("Ansible");
+  if (ctx.infra.hasKustomize) infraParts.push("Kustomize");
+  if (ctx.infra.hasVagrant) infraParts.push("Vagrant");
+  if (ctx.infra.hasPulumi) infraParts.push("Pulumi");
+  if (ctx.infra.hasCloudFormation) infraParts.push("CloudFormation");
   if (infraParts.length > 0) {
     lines.push(`${pc.cyan("Infra:")}         ${infraParts.join(", ")}`);
   }
 
-  // Monitoring
+  // Monitoring / Web servers
   const monParts: string[] = [];
   if (ctx.monitoring.hasPrometheus) monParts.push("Prometheus");
   if (ctx.monitoring.hasNginx) monParts.push("Nginx");
   if (ctx.monitoring.hasSystemd) monParts.push("Systemd");
+  if (ctx.monitoring.hasHaproxy) monParts.push("HAProxy");
+  if (ctx.monitoring.hasTomcat) monParts.push("Tomcat");
+  if (ctx.monitoring.hasApache) monParts.push("Apache");
+  if (ctx.monitoring.hasCaddy) monParts.push("Caddy");
+  if (ctx.monitoring.hasEnvoy) monParts.push("Envoy");
   if (monParts.length > 0) {
     lines.push(`${pc.cyan("Monitoring:")}    ${monParts.join(", ")}`);
+  }
+
+  // Scripts
+  if (ctx.scripts) {
+    const scriptParts: string[] = [];
+    if (ctx.scripts.shellScripts.length > 0)
+      scriptParts.push(`${ctx.scripts.shellScripts.length} shell`);
+    if (ctx.scripts.pythonScripts.length > 0)
+      scriptParts.push(`${ctx.scripts.pythonScripts.length} python`);
+    if (ctx.scripts.hasJustfile) scriptParts.push("Justfile");
+    if (scriptParts.length > 0) {
+      lines.push(`${pc.cyan("Scripts:")}       ${scriptParts.join(", ")}`);
+    }
+  }
+
+  // Security
+  if (ctx.security) {
+    const secParts: string[] = [];
+    if (ctx.security.hasGitignore) secParts.push(".gitignore");
+    if (ctx.security.hasEnvExample) secParts.push(".env.example");
+    if (ctx.security.hasCodeowners) secParts.push("CODEOWNERS");
+    if (ctx.security.hasSecurityPolicy) secParts.push("SECURITY.md");
+    if (ctx.security.hasDependabot) secParts.push("Dependabot");
+    if (ctx.security.hasRenovate) secParts.push("Renovate");
+    if (ctx.security.hasEditorConfig) secParts.push(".editorconfig");
+    if (secParts.length > 0) {
+      lines.push(`${pc.cyan("Security:")}      ${secParts.join(", ")}`);
+    }
+  }
+
+  // DevOps files count
+  if (ctx.devopsFiles && ctx.devopsFiles.length > 0) {
+    lines.push(`${pc.cyan("DevOps files:")} ${ctx.devopsFiles.length} detected`);
   }
 
   // Metadata

@@ -93,11 +93,37 @@ oda init
 
 This creates a `.oda/` directory in your project root with:
 
-- `context.json` — Project context (detected tools, languages, frameworks)
+- `context.json` — Project context (v2 schema: languages, 11 CI platforms, IaC, containers, monitoring/web servers, scripts, security configs, and a flat list of all detected DevOps file paths)
 - `plans/` — Saved task graph plans
 - `execution-logs/` — Execution history
 - `scan-history/` — Security scan reports
 - `history/audit.jsonl` — Hash-chained audit log
+
+The `init` scanner detects:
+
+- **CI/CD** — GitHub Actions, GitLab CI, Jenkins, CircleCI, Azure Pipelines, AWS CodeBuild, Bitbucket, Drone, Travis CI, Tekton, Woodpecker
+- **Infrastructure** — Terraform, Kubernetes, Helm, Ansible, Kustomize, Vagrant, Pulumi, CloudFormation
+- **Monitoring/Web** — Prometheus, Nginx, Systemd, HAProxy, Tomcat, Apache, Caddy, Envoy
+- **Scripts** — Shell scripts (`.sh`), Python scripts (`.py`), Justfile
+- **Security** — `.gitignore`, `.env.example`, CODEOWNERS, SECURITY.md, Dependabot, Renovate, `.editorconfig`
+
+---
+
+## DevOps Quality Check
+
+After initializing, run an LLM-powered quality check on your detected DevOps files:
+
+```bash
+oda check
+```
+
+This reads the DevOps files listed in `context.json` and sends them to the LLM for analysis. Returns:
+
+- **Maturity score** (0-100) — Minimal, Basic, Good, or Excellent
+- **Findings** — Severity-ranked issues (critical, error, warning, info) with recommendations
+- **Missing files** — Important DevOps files your project should have
+
+Use `--output json` for machine-readable results.
 
 ---
 
@@ -172,7 +198,7 @@ See [Web Dashboard](dashboard.md) for the full guide.
 
 ## Next Steps
 
-- **[CLI Reference](cli-reference.md)** — Full command documentation
+- **[CLI Reference](cli-reference.md)** — Full command documentation (including `oda check`)
 - **[API Reference](api-reference.md)** — REST API for programmatic access
 - **[Architecture](architecture.md)** — System design overview
 - **[Configuration](configuration.md)** — Advanced provider and profile setup

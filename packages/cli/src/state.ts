@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { RepoContextSchema } from "@odaops/core";
+import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@odaops/core";
 import type { RepoContext } from "@odaops/core";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -493,8 +493,49 @@ export function loadContext(rootDir: string): RepoContext | null {
   const file = path.join(odaDir(rootDir), "context.json");
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf-8"));
-    const parsed = RepoContextSchema.safeParse(data);
-    return parsed.success ? parsed.data : null;
+
+    // Try V2 first
+    const v2 = RepoContextSchemaV2.safeParse(data);
+    if (v2.success) return v2.data;
+
+    // Fall back to V1 and migrate
+    const v1 = RepoContextSchemaV1.safeParse(data);
+    if (v1.success) {
+      const migrated: RepoContext = {
+        ...v1.data,
+        version: 2,
+        infra: {
+          ...v1.data.infra,
+          hasKustomize: false,
+          hasVagrant: false,
+          hasPulumi: false,
+          hasCloudFormation: false,
+        },
+        monitoring: {
+          ...v1.data.monitoring,
+          hasHaproxy: false,
+          hasTomcat: false,
+          hasApache: false,
+          hasCaddy: false,
+          hasEnvoy: false,
+        },
+        scripts: { shellScripts: [], pythonScripts: [], hasJustfile: false },
+        security: {
+          hasEnvExample: false,
+          hasGitignore: false,
+          hasCodeowners: false,
+          hasSecurityPolicy: false,
+          hasDependabot: false,
+          hasRenovate: false,
+          hasSecretScanning: false,
+          hasEditorConfig: false,
+        },
+        devopsFiles: [],
+      };
+      return migrated;
+    }
+
+    return null;
   } catch {
     return null;
   }

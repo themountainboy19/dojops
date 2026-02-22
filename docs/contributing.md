@@ -40,7 +40,7 @@ pnpm lint
 packages/
   cli/            CLI entry point + TUI (@clack/prompts)
   api/            REST API (Express) + web dashboard
-  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff
+  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
   planner/        Task graph decomposition + topological executor
   executor/       SafeExecutor + policy engine + approval workflows + audit log
   tools/          12 DevOps tools
@@ -110,16 +110,16 @@ ODA uses Vitest for testing. Current coverage:
 
 | Package            | Tests   |
 | ------------------ | ------- |
-| `@odaops/core`     | 155     |
+| `@odaops/core`     | 208     |
 | `@odaops/cli`      | 144     |
 | `@odaops/tools`    | 111     |
-| `@odaops/api`      | 95      |
+| `@odaops/api`      | 96      |
+| `@odaops/scanner`  | 43      |
 | `@odaops/executor` | 40      |
-| `@odaops/scanner`  | 29      |
 | `@odaops/planner`  | 28      |
 | `@odaops/session`  | 28      |
 | `@odaops/sdk`      | 7       |
-| **Total**          | **637** |
+| **Total**          | **685** |
 
 ### Writing Tests
 

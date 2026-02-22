@@ -137,3 +137,28 @@ Agents are defined in `packages/core/src/agents/specialists.ts`. Each agent spec
 - `toolDependencies` — Optional external tools
 
 All agents include a `NO_FOLLOWUP_INSTRUCTION` suffix ensuring single-shot responses without conversational follow-ups.
+
+---
+
+## Specialized Analyzers
+
+In addition to the 16 routed agents, ODA provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
+
+| Analyzer       | Class               | Input                | Output Schema             | CLI Command        |
+| -------------- | ------------------- | -------------------- | ------------------------- | ------------------ |
+| CI Debugger    | `CIDebugger`        | CI log content       | `CIDiagnosisSchema`       | `oda debug ci`     |
+| Infra Diff     | `InfraDiffAnalyzer` | Diff content         | `InfraDiffAnalysisSchema` | `oda analyze diff` |
+| DevOps Checker | `DevOpsChecker`     | context.json + files | `CheckReportSchema`       | `oda check`        |
+
+### DevOps Checker
+
+The `DevOpsChecker` (`packages/core/src/agents/devops-checker.ts`) analyzes DevOps files detected during `oda init` for quality, security, and best practices. It produces:
+
+- **Maturity score** (0-100) — Minimal (0-25), Basic (26-50), Good (51-75), Excellent (76-100)
+- **Findings** — Severity-ranked issues (`critical`, `error`, `warning`, `info`) categorized as security, quality, best-practice, performance, or reliability
+- **Missing files** — Important DevOps files the project should have but doesn't
+
+```bash
+oda check                  # Display formatted report
+oda check --output json    # Machine-readable JSON output
+```

@@ -31,12 +31,38 @@ export const InfraDetectionSchema = z.object({
   hasKubernetes: z.boolean(),
   hasHelm: z.boolean(),
   hasAnsible: z.boolean(),
+  hasKustomize: z.boolean(),
+  hasVagrant: z.boolean(),
+  hasPulumi: z.boolean(),
+  hasCloudFormation: z.boolean(),
 });
 
 export const MonitoringDetectionSchema = z.object({
   hasPrometheus: z.boolean(),
   hasNginx: z.boolean(),
   hasSystemd: z.boolean(),
+  hasHaproxy: z.boolean(),
+  hasTomcat: z.boolean(),
+  hasApache: z.boolean(),
+  hasCaddy: z.boolean(),
+  hasEnvoy: z.boolean(),
+});
+
+export const ScriptsDetectionSchema = z.object({
+  shellScripts: z.array(z.string()),
+  pythonScripts: z.array(z.string()),
+  hasJustfile: z.boolean(),
+});
+
+export const SecurityDetectionSchema = z.object({
+  hasEnvExample: z.boolean(),
+  hasGitignore: z.boolean(),
+  hasCodeowners: z.boolean(),
+  hasSecurityPolicy: z.boolean(),
+  hasDependabot: z.boolean(),
+  hasRenovate: z.boolean(),
+  hasSecretScanning: z.boolean(),
+  hasEditorConfig: z.boolean(),
 });
 
 export const MetadataSchema = z.object({
@@ -62,10 +88,37 @@ export const LLMInsightsSchema = z.object({
   notes: z.string().optional(),
 });
 
-// ── Main schema ─────────────────────────────────────────────────────
+// ── Main schemas (V1 + V2) ──────────────────────────────────────────
 
-export const RepoContextSchema = z.object({
+export const RepoContextSchemaV1 = z.object({
   version: z.literal(1),
+  scannedAt: z.string(),
+  rootPath: z.string(),
+  languages: z.array(LanguageDetectionSchema),
+  primaryLanguage: z.string().nullable(),
+  packageManager: PackageManagerSchema.nullable(),
+  ci: z.array(CIDetectionSchema),
+  container: ContainerDetectionSchema,
+  infra: InfraDetectionSchema.pick({
+    hasTerraform: true,
+    tfProviders: true,
+    hasState: true,
+    hasKubernetes: true,
+    hasHelm: true,
+    hasAnsible: true,
+  }),
+  monitoring: MonitoringDetectionSchema.pick({
+    hasPrometheus: true,
+    hasNginx: true,
+    hasSystemd: true,
+  }),
+  meta: MetadataSchema,
+  relevantDomains: z.array(z.string()),
+  llmInsights: LLMInsightsSchema.optional(),
+});
+
+export const RepoContextSchemaV2 = z.object({
+  version: z.literal(2),
   scannedAt: z.string(),
   rootPath: z.string(),
   languages: z.array(LanguageDetectionSchema),
@@ -75,10 +128,15 @@ export const RepoContextSchema = z.object({
   container: ContainerDetectionSchema,
   infra: InfraDetectionSchema,
   monitoring: MonitoringDetectionSchema,
+  scripts: ScriptsDetectionSchema,
+  security: SecurityDetectionSchema,
   meta: MetadataSchema,
   relevantDomains: z.array(z.string()),
+  devopsFiles: z.array(z.string()),
   llmInsights: LLMInsightsSchema.optional(),
 });
+
+export const RepoContextSchema = z.union([RepoContextSchemaV1, RepoContextSchemaV2]);
 
 // ── Inferred types ──────────────────────────────────────────────────
 
@@ -88,6 +146,9 @@ export type CIDetection = z.infer<typeof CIDetectionSchema>;
 export type ContainerDetection = z.infer<typeof ContainerDetectionSchema>;
 export type InfraDetection = z.infer<typeof InfraDetectionSchema>;
 export type MonitoringDetection = z.infer<typeof MonitoringDetectionSchema>;
+export type ScriptsDetection = z.infer<typeof ScriptsDetectionSchema>;
+export type SecurityDetection = z.infer<typeof SecurityDetectionSchema>;
 export type Metadata = z.infer<typeof MetadataSchema>;
 export type LLMInsights = z.infer<typeof LLMInsightsSchema>;
-export type RepoContext = z.infer<typeof RepoContextSchema>;
+export type RepoContextV1 = z.infer<typeof RepoContextSchemaV1>;
+export type RepoContext = z.infer<typeof RepoContextSchemaV2>;

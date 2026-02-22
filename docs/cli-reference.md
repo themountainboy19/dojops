@@ -23,15 +23,17 @@ Complete reference for the `oda` command-line interface.
 
 ### Diagnostics & Analysis
 
-| Command                   | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)    |
-| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security) |
-| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets |
-| `oda scan --security`     | Run security scanners only (trivy, gitleaks)       |
-| `oda scan --deps`         | Run dependency audit only (npm, pip)               |
-| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)          |
-| `oda scan --fix`          | Generate and apply LLM-powered remediation         |
+| Command                   | Description                                           |
+| ------------------------- | ----------------------------------------------------- |
+| `oda check`               | LLM-powered DevOps config quality check (score 0-100) |
+| `oda check --output json` | Output check report as JSON                           |
+| `oda debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
+| `oda analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
+| `oda scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
+| `oda scan --security`     | Run security scanners only (trivy, gitleaks)          |
+| `oda scan --deps`         | Run dependency audit only (npm, pip)                  |
+| `oda scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
+| `oda scan --fix`          | Generate and apply LLM-powered remediation            |
 
 ### Interactive
 
@@ -68,18 +70,18 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Configuration & Server
 
-| Command                          | Description                                      |
-| -------------------------------- | ------------------------------------------------ |
-| `oda config`                     | Configure provider, model, tokens (interactive)  |
-| `oda config show`                | Display current configuration                    |
-| `oda config profile create NAME` | Save current config as a named profile           |
-| `oda config profile use NAME`    | Switch to a named profile                        |
-| `oda config profile list`        | List all profiles                                |
-| `oda auth login`                 | Authenticate with LLM provider                   |
-| `oda auth status`                | Show saved tokens and default provider           |
-| `oda serve [--port=N]`           | Start API server + web dashboard                 |
-| `oda init`                       | Initialize `.oda/` project directory + repo scan |
-| `oda doctor`                     | System health diagnostics + project metrics      |
+| Command                          | Description                                                                  |
+| -------------------------------- | ---------------------------------------------------------------------------- |
+| `oda config`                     | Configure provider, model, tokens (interactive)                              |
+| `oda config show`                | Display current configuration                                                |
+| `oda config profile create NAME` | Save current config as a named profile                                       |
+| `oda config profile use NAME`    | Switch to a named profile                                                    |
+| `oda config profile list`        | List all profiles                                                            |
+| `oda auth login`                 | Authenticate with LLM provider                                               |
+| `oda auth status`                | Show saved tokens and default provider                                       |
+| `oda serve [--port=N]`           | Start API server + web dashboard                                             |
+| `oda init`                       | Initialize `.oda/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
+| `oda doctor`                     | System health diagnostics + project metrics                                  |
 
 ---
 
@@ -158,6 +160,16 @@ oda debug ci "npm ERR! ERESOLVE unable to resolve dependency tree"
 # Analyze infrastructure diffs
 oda analyze diff "terraform plan output..."
 oda explain last
+```
+
+### DevOps Quality Check
+
+```bash
+# Analyze detected DevOps files for quality, security, and best practices
+oda check
+
+# Machine-readable output
+oda check --output json
 ```
 
 ### Security Scanning

@@ -52,6 +52,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
+  console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
   console.log(`  ${pc.cyan("tools")}              Manage system tool sandbox (~/.oda/tools/)`);
   console.log(
@@ -604,6 +605,30 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} oda tools remove terraform`);
       console.log(`  ${pc.dim("$")} oda tools clean --yes`);
       console.log(`  ${pc.dim("$")} oda tools list --output json`);
+      console.log();
+      break;
+
+    case "check":
+      console.log(`\n${pc.bold("oda check")} — LLM-powered DevOps configuration quality check`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} oda check`);
+      console.log(`  ${pc.dim("$")} oda check --output json`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Reads DevOps files detected during ${pc.cyan("oda init")} and sends them`);
+      console.log(`  to the LLM for quality, security, and best-practice analysis.`);
+      console.log();
+      console.log(`  Returns a maturity score (0-100), findings by severity, and`);
+      console.log(`  recommendations for missing files.`);
+      console.log(`\n${pc.bold("SCORING")}`);
+      console.log(`  ${pc.red("0-25")}   Minimal — missing critical configs`);
+      console.log(`  ${pc.yellow("26-50")}  Basic — fundamentals present but gaps`);
+      console.log(`  ${pc.cyan("51-75")}  Good — solid setup with room for improvement`);
+      console.log(`  ${pc.green("76-100")} Excellent — production-ready with best practices`);
+      console.log(`\n${pc.bold("PREREQUISITES")}`);
+      console.log(`  Requires ${pc.cyan("oda init")} and a configured LLM provider.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} oda check`);
+      console.log(`  ${pc.dim("$")} oda check --output json`);
       console.log();
       break;
 
