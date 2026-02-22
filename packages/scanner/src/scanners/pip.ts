@@ -3,6 +3,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
+import { discoverProjectDirs } from "../discovery";
+
+const PIP_INDICATORS = ["requirements.txt", "Pipfile", "setup.py", "pyproject.toml"];
 
 interface PipAuditVuln {
   name: string;
@@ -13,12 +16,8 @@ interface PipAuditVuln {
 }
 
 export async function scanPip(projectPath: string): Promise<ScannerResult> {
-  const hasRequirements = fs.existsSync(path.join(projectPath, "requirements.txt"));
-  const hasPipfile = fs.existsSync(path.join(projectPath, "Pipfile"));
-  const hasSetupPy = fs.existsSync(path.join(projectPath, "setup.py"));
-  const hasPyprojectToml = fs.existsSync(path.join(projectPath, "pyproject.toml"));
-
-  if (!hasRequirements && !hasPipfile && !hasSetupPy && !hasPyprojectToml) {
+  const projectDirs = discoverProjectDirs(projectPath, PIP_INDICATORS);
+  if (projectDirs.length === 0) {
     return {
       tool: "pip-audit",
       findings: [],
@@ -27,17 +26,39 @@ export async function scanPip(projectPath: string): Promise<ScannerResult> {
     };
   }
 
+  const allFindings: ScanFinding[] = [];
+  let combinedRawOutput = "";
+
+  for (const dir of projectDirs) {
+    const result = await auditDir(dir, projectPath);
+    if (result.skipped) {
+      if (result.skipReason === "pip-audit not found") {
+        return result;
+      }
+      continue;
+    }
+    allFindings.push(...result.findings);
+    if (result.rawOutput) combinedRawOutput += result.rawOutput + "\n";
+  }
+
+  return { tool: "pip-audit", findings: allFindings, rawOutput: combinedRawOutput || undefined };
+}
+
+async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
+  const subProject = dir === rootPath ? undefined : path.relative(rootPath, dir);
+  const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
+
   let rawOutput: string;
   try {
     const args = ["--format", "json"];
     if (hasRequirements) {
-      args.push("--requirement", path.join(projectPath, "requirements.txt"));
+      args.push("--requirement", path.join(dir, "requirements.txt"));
     }
     rawOutput = execFileSync("pip-audit", args, {
       encoding: "utf-8",
       timeout: 120_000,
       stdio: "pipe",
-      cwd: projectPath,
+      cwd: dir,
     });
   } catch (err: unknown) {
     if (isENOENT(err)) {
@@ -55,7 +76,7 @@ export async function scanPip(projectPath: string): Promise<ScannerResult> {
         tool: "pip-audit",
         findings: [],
         skipped: true,
-        skipReason: `pip-audit failed: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `pip-audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }
@@ -65,12 +86,18 @@ export async function scanPip(projectPath: string): Promise<ScannerResult> {
   try {
     const vulns: PipAuditVuln[] = JSON.parse(rawOutput);
     for (const vuln of vulns) {
+      const prefix = subProject ? `${subProject}: ` : "";
       findings.push({
         id: `pip-${crypto.randomUUID().slice(0, 8)}`,
         tool: "pip-audit",
         severity: "HIGH",
         category: "DEPENDENCY",
-        message: `${vuln.name}@${vuln.version}: ${vuln.id}${vuln.description ? ` — ${vuln.description}` : ""}`,
+        file: subProject
+          ? `${subProject}/${hasRequirements ? "requirements.txt" : "pyproject.toml"}`
+          : hasRequirements
+            ? "requirements.txt"
+            : "pyproject.toml",
+        message: `${prefix}${vuln.name}@${vuln.version}: ${vuln.id}${vuln.description ? ` — ${vuln.description}` : ""}`,
         recommendation:
           vuln.fix_versions && vuln.fix_versions.length > 0
             ? `Update to ${vuln.name}>=${vuln.fix_versions[vuln.fix_versions.length - 1]}`

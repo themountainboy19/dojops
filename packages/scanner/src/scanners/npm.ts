@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
+import { discoverProjectDirs } from "../discovery";
 
 interface NpmVulnerability {
   severity: string;
@@ -15,8 +15,8 @@ interface NpmAuditOutput {
 }
 
 export async function scanNpm(projectPath: string): Promise<ScannerResult> {
-  const lockFile = path.join(projectPath, "package-lock.json");
-  if (!fs.existsSync(lockFile)) {
+  const projectDirs = discoverProjectDirs(projectPath, ["package-lock.json"]);
+  if (projectDirs.length === 0) {
     return {
       tool: "npm-audit",
       findings: [],
@@ -25,13 +25,35 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
     };
   }
 
+  const allFindings: ScanFinding[] = [];
+  let combinedRawOutput = "";
+
+  for (const dir of projectDirs) {
+    const result = await auditDir(dir, projectPath);
+    if (result.skipped) {
+      // If npm itself isn't found, bail out entirely
+      if (result.skipReason === "npm not found") {
+        return result;
+      }
+      continue;
+    }
+    allFindings.push(...result.findings);
+    if (result.rawOutput) combinedRawOutput += result.rawOutput + "\n";
+  }
+
+  return { tool: "npm-audit", findings: allFindings, rawOutput: combinedRawOutput || undefined };
+}
+
+async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
+  const subProject = dir === rootPath ? undefined : path.relative(rootPath, dir);
+
   let rawOutput: string;
   try {
     rawOutput = execFileSync("npm", ["audit", "--json"], {
       encoding: "utf-8",
       timeout: 60_000,
       stdio: "pipe",
-      cwd: projectPath,
+      cwd: dir,
     });
   } catch (err: unknown) {
     if (isENOENT(err)) {
@@ -50,7 +72,7 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
         tool: "npm-audit",
         findings: [],
         skipped: true,
-        skipReason: `npm audit failed: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `npm audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }
@@ -67,12 +89,14 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
           .filter(Boolean)
           .join("; ");
 
+        const prefix = subProject ? `${subProject}: ` : "";
         findings.push({
           id: `npm-${crypto.randomUUID().slice(0, 8)}`,
           tool: "npm-audit",
           severity,
           category: "DEPENDENCY",
-          message: `${name}: ${viaMessages || vuln.severity} vulnerability`,
+          file: subProject ? `${subProject}/package-lock.json` : "package-lock.json",
+          message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
           recommendation: vuln.fixAvailable
             ? typeof vuln.fixAvailable === "object"
               ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`

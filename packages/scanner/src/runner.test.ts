@@ -163,4 +163,42 @@ describe("runScan", () => {
     expect(report.scannersRun).not.toContain("npm-audit");
     expect(report.scannersRun).not.toContain("hadolint");
   });
+
+  it("enables npm-audit in monorepo when languages include node", async () => {
+    const ctx: RepoContext = {
+      version: 1,
+      scannedAt: new Date().toISOString(),
+      rootPath: "/project",
+      languages: [
+        { name: "python", confidence: 0.9, indicator: "requirements.txt" },
+        { name: "node", confidence: 0.81, indicator: "backend/package.json" },
+      ],
+      primaryLanguage: "python",
+      packageManager: { name: "pip" },
+      ci: [],
+      container: { hasDockerfile: false, hasCompose: false },
+      infra: {
+        hasTerraform: false,
+        tfProviders: [],
+        hasState: false,
+        hasKubernetes: false,
+        hasHelm: false,
+        hasAnsible: false,
+      },
+      monitoring: { hasPrometheus: false, hasNginx: false, hasSystemd: false },
+      meta: {
+        isGitRepo: true,
+        isMonorepo: true,
+        hasMakefile: false,
+        hasReadme: true,
+        hasEnvFile: false,
+      },
+      relevantDomains: [],
+    };
+
+    const report = await runScan("/project", "all", ctx);
+    // Monorepo with both Python and Node → both npm-audit and pip-audit should run
+    expect(report.scannersRun).toContain("npm-audit");
+    expect(report.scannersSkipped.some((s) => s.includes("pip-audit"))).toBe(true);
+  });
 });

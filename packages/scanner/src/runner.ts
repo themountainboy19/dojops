@@ -22,13 +22,23 @@ const SCANNERS: ScannerEntry[] = [
     fn: scanNpm,
     categories: ["deps"],
     applicable: (ctx) =>
-      !ctx || ctx.primaryLanguage === "Node.js" || ctx.packageManager?.name === "npm",
+      !ctx ||
+      ctx.primaryLanguage === "Node.js" ||
+      ctx.primaryLanguage === "node" ||
+      ctx.packageManager?.name === "npm" ||
+      ctx.languages?.some((l) => l.name === "node" || l.name === "Node.js") ||
+      false,
   },
   {
     name: "pip-audit",
     fn: scanPip,
     categories: ["deps"],
-    applicable: (ctx) => !ctx || ctx.primaryLanguage === "Python",
+    applicable: (ctx) =>
+      !ctx ||
+      ctx.primaryLanguage === "Python" ||
+      ctx.primaryLanguage === "python" ||
+      ctx.languages?.some((l) => l.name === "python" || l.name === "Python") ||
+      false,
   },
   {
     name: "trivy",

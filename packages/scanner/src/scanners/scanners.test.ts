@@ -7,6 +7,7 @@ vi.mock("node:fs");
 
 const mockExecFileSync = vi.mocked(child_process.execFileSync);
 const mockExistsSync = vi.mocked(fs.existsSync);
+const mockReaddirSync = vi.mocked(fs.readdirSync);
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -90,6 +91,52 @@ describe("scanNpm", () => {
     expect(result.findings).toHaveLength(1);
     expect(result.findings[0].severity).toBe("CRITICAL");
   });
+
+  it("discovers and scans sub-project directories", async () => {
+    const { scanNpm } = await import("./npm");
+
+    // Root has no lock file, but two child dirs do
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      if (s === "/project/package-lock.json") return false;
+      if (s === "/project/backend/package-lock.json") return true;
+      if (s === "/project/frontend/package-lock.json") return true;
+      return false;
+    });
+
+    mockReaddirSync.mockImplementation((dir) => {
+      if (String(dir) === "/project") {
+        return [
+          { name: "backend", isDirectory: () => true },
+          { name: "frontend", isDirectory: () => true },
+          { name: "README.md", isDirectory: () => false },
+        ] as unknown as fs.Dirent[];
+      }
+      // Level 2 child dirs (empty)
+      return [] as unknown as fs.Dirent[];
+    });
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify({
+        vulnerabilities: {
+          lodash: {
+            severity: "high",
+            via: [{ title: "Prototype Pollution" }],
+            fixAvailable: true,
+          },
+        },
+      }),
+    );
+
+    const result = await scanNpm("/project");
+    expect(result.findings).toHaveLength(2);
+    expect(result.findings[0].file).toBe("backend/package-lock.json");
+    expect(result.findings[0].message).toContain("backend:");
+    expect(result.findings[1].file).toBe("frontend/package-lock.json");
+    expect(result.findings[1].message).toContain("frontend:");
+    // npm audit should be called twice (once per sub-project)
+    expect(mockExecFileSync).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ── pip ────────────────────────────────────────────────────────────
@@ -140,6 +187,46 @@ describe("scanPip", () => {
     expect(result.findings[0].severity).toBe("HIGH");
     expect(result.findings[0].category).toBe("DEPENDENCY");
     expect(result.findings[0].autoFixAvailable).toBe(true);
+  });
+
+  it("discovers and scans sub-project directories", async () => {
+    const { scanPip } = await import("./pip");
+
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      if (s === "/project/api/requirements.txt") return true;
+      if (s === "/project/worker/pyproject.toml") return true;
+      if (s === "/project/worker/requirements.txt") return false;
+      return false;
+    });
+
+    mockReaddirSync.mockImplementation((dir) => {
+      if (String(dir) === "/project") {
+        return [
+          { name: "api", isDirectory: () => true },
+          { name: "worker", isDirectory: () => true },
+        ] as unknown as fs.Dirent[];
+      }
+      return [] as unknown as fs.Dirent[];
+    });
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify([
+        {
+          name: "flask",
+          version: "2.0.0",
+          id: "CVE-2024-0002",
+          fix_versions: ["2.3.0"],
+        },
+      ]),
+    );
+
+    const result = await scanPip("/project");
+    expect(result.findings).toHaveLength(2);
+    expect(result.findings[0].file).toBe("api/requirements.txt");
+    expect(result.findings[0].message).toContain("api:");
+    expect(result.findings[1].file).toBe("worker/pyproject.toml");
+    expect(mockExecFileSync).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -353,6 +440,46 @@ describe("scanHadolint", () => {
     expect(result.findings[0].severity).toBe("MEDIUM");
     expect(result.findings[0].category).toBe("SECURITY");
     expect(result.findings[1].severity).toBe("HIGH");
+  });
+
+  it("discovers Dockerfiles in sub-project directories", async () => {
+    const { scanHadolint } = await import("./hadolint");
+
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      if (s === "/project/Dockerfile") return false;
+      if (s === "/project/backend/Dockerfile") return true;
+      if (s === "/project/frontend/Dockerfile") return true;
+      return false;
+    });
+
+    mockReaddirSync.mockImplementation((dir) => {
+      if (String(dir) === "/project") {
+        return [
+          { name: "backend", isDirectory: () => true },
+          { name: "frontend", isDirectory: () => true },
+        ] as unknown as fs.Dirent[];
+      }
+      return [] as unknown as fs.Dirent[];
+    });
+
+    mockExecFileSync.mockReturnValue(
+      JSON.stringify([
+        {
+          line: 1,
+          code: "DL3008",
+          message: "Pin versions",
+          column: 1,
+          file: "/project/backend/Dockerfile",
+          level: "warning",
+        },
+      ]),
+    );
+
+    const result = await scanHadolint("/project");
+    expect(result.findings).toHaveLength(2);
+    expect(result.findings[0].file).toBe("backend/Dockerfile");
+    expect(result.findings[1].file).toBe("frontend/Dockerfile");
   });
 });
 
