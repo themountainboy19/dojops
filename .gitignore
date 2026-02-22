@@ -17,6 +17,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
 
 # Logs
 *.log
@@ -25,6 +27,7 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # IDE
 .vscode/
@@ -39,6 +42,20 @@ Thumbs.db
 
 # Temporary
 tmp/
+temp/
 
-# Claude Code (keep settings.json and skills/, ignore personal/local config)
-.claude/settings.local.json
+# Package artifacts
+*.tgz
+
+# Husky internals (keep hooks, ignore runtime)
+.husky/_/
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# MCP (local server config)
+.mcp.json
+
+# ODA project runtime data (created by `oda init`, user-local)
+.oda/

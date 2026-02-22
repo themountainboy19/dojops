@@ -58,7 +58,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   app.listen(port, () => {
     const noteLines = [
       `${pc.bold("Provider:")}  ${provider.name}`,
-      `${pc.bold("Tools:")}     ${tools.map((t) => t.name).join(", ")}`,
+      `${pc.bold("Agents:")}    ${pc.cyan(String(router.getAgents().length))} specialist agents loaded`,
       `${pc.bold("Metrics:")}   ${projectRoot ? pc.green("enabled") : pc.yellow("disabled (no project root)")}`,
       `${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`,
     ];

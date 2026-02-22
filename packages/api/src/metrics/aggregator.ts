@@ -107,6 +107,7 @@ export class MetricsAggregator {
     valid: boolean;
     errors: number;
     totalEntries: number;
+    latestHash?: string;
   } {
     if (entries.length === 0) return { valid: true, errors: 0, totalEntries: 0 };
 
@@ -131,7 +132,13 @@ export class MetricsAggregator {
       expectedSeq = entry.seq + 1;
     }
 
-    return { valid: errorCount === 0, errors: errorCount, totalEntries: entries.length };
+    const lastEntry = entries[entries.length - 1];
+    return {
+      valid: errorCount === 0,
+      errors: errorCount,
+      totalEntries: entries.length,
+      latestHash: lastEntry?.hash,
+    };
   }
 
   getOverview(): OverviewMetrics {
@@ -247,8 +254,7 @@ export class MetricsAggregator {
 
     const topIssues = Array.from(issueCounts.entries())
       .map(([message, data]) => ({ message, ...data }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
+      .sort((a, b) => b.count - a.count);
 
     // Findings trend: group by date
     const dateMap = new Map<
@@ -278,7 +284,6 @@ export class MetricsAggregator {
         const tb = new Date(b.timestamp).getTime();
         return tb - ta;
       })
-      .slice(0, 20)
       .map((r) => ({
         id: r.id,
         timestamp: r.timestamp,

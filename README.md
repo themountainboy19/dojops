@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".oda/oda-icon.png" alt="ODA" width="120" />
+  <img src="packages/api/public/icons/oda-icon.png" alt="ODA" width="120" />
 </p>
 
 <h1 align="center">ODA — Open DevOps Agent</h1>
@@ -16,6 +16,7 @@
   <a href="#cli-reference">CLI Reference</a> &nbsp;·&nbsp;
   <a href="#api-reference">API Reference</a> &nbsp;·&nbsp;
   <a href="#architecture">Architecture</a> &nbsp;·&nbsp;
+  <a href="docs/">Docs</a> &nbsp;·&nbsp;
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -136,8 +137,8 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Platform
 
-- **REST API** — 13 endpoints exposing all capabilities over HTTP with Zod request validation
-- **Web dashboard** — Single-page app with dark terminal aesthetic, 9 tabs, toast notifications, copy-to-clipboard, responsive layout
+- **REST API** — 19 endpoints exposing all capabilities over HTTP with Zod request validation
+- **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
 - **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.oda/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
 
@@ -152,6 +153,8 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @odaops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
 @odaops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                      Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
+@odaops/scanner      6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
+@odaops/session      Chat session management + memory + context injection
 @odaops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff
 @odaops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
 ```
@@ -160,9 +163,11 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ```
 cli → api → planner → executor → tools → core → sdk
+                   → scanner
+                   → session → core
 ```
 
-Full architecture details in [ARCHITECTURE.md](ARCHITECTURE.md).
+Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -383,21 +388,27 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 
 ### Endpoints
 
-| Method   | Path                    | Description                                          |
-| -------- | ----------------------- | ---------------------------------------------------- |
-| `GET`    | `/api/health`           | Provider info, tool list, metricsEnabled flag        |
-| `POST`   | `/api/generate`         | Agent-routed LLM generation                          |
-| `POST`   | `/api/plan`             | Decompose goal into task graph                       |
-| `POST`   | `/api/debug-ci`         | Diagnose CI log failures                             |
-| `POST`   | `/api/diff`             | Analyze infrastructure diff                          |
-| `GET`    | `/api/agents`           | List specialist agents                               |
-| `GET`    | `/api/history`          | Execution history                                    |
-| `GET`    | `/api/history/:id`      | Single history entry                                 |
-| `DELETE` | `/api/history`          | Clear history                                        |
-| `GET`    | `/api/metrics`          | Full dashboard metrics (overview + security + audit) |
-| `GET`    | `/api/metrics/overview` | Plan/execution/scan aggregates                       |
-| `GET`    | `/api/metrics/security` | Scan findings, severity trends, top issues           |
-| `GET`    | `/api/metrics/audit`    | Audit chain integrity, command distribution          |
+| Method   | Path                     | Description                                          |
+| -------- | ------------------------ | ---------------------------------------------------- |
+| `GET`    | `/api/health`            | Provider info, tool list, metricsEnabled flag        |
+| `POST`   | `/api/generate`          | Agent-routed LLM generation                          |
+| `POST`   | `/api/plan`              | Decompose goal into task graph                       |
+| `POST`   | `/api/debug-ci`          | Diagnose CI log failures                             |
+| `POST`   | `/api/diff`              | Analyze infrastructure diff                          |
+| `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac)         |
+| `POST`   | `/api/chat`              | Send chat message to a session                       |
+| `POST`   | `/api/chat/sessions`     | Create new chat session                              |
+| `GET`    | `/api/chat/sessions`     | List all chat sessions                               |
+| `GET`    | `/api/chat/sessions/:id` | Get chat session by ID                               |
+| `DELETE` | `/api/chat/sessions/:id` | Delete chat session                                  |
+| `GET`    | `/api/agents`            | List specialist agents                               |
+| `GET`    | `/api/history`           | Execution history                                    |
+| `GET`    | `/api/history/:id`       | Single history entry                                 |
+| `DELETE` | `/api/history`           | Clear history                                        |
+| `GET`    | `/api/metrics`           | Full dashboard metrics (overview + security + audit) |
+| `GET`    | `/api/metrics/overview`  | Plan/execution/scan aggregates                       |
+| `GET`    | `/api/metrics/security`  | Scan findings, severity trends, top issues           |
+| `GET`    | `/api/metrics/audit`     | Audit chain integrity, command distribution          |
 
 ### Examples
 
@@ -513,6 +524,8 @@ packages/
   planner/        Task graph decomposition + topological executor
   executor/       SafeExecutor + policy engine + approval workflows + audit log
   tools/          12 DevOps tools
+  scanner/        6 security scanners + LLM-powered remediation
+  session/        Chat session management + memory + context injection
   sdk/            BaseTool<T> abstract class + Zod re-export + verification types
 ```
 
@@ -542,39 +555,13 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `api` → `cli`
-
----
-
-## Roadmap
-
-### v1.0.0 (current)
-
-- Core intelligence — Structured output, Zod validation, planner engine
-- 12 DevOps tools — CI/CD, IaC, containers, monitoring, system services
-- Sandboxed execution — Policy engine, approval workflows, resume/recovery
-- Multi-agent system — 16 specialist agents, CI debugging, infra diff analysis
-- Platform — REST API (13 endpoints), web dashboard (9 tabs)
-- CLI TUI — Rich terminal UI with `@clack/prompts`
-- Enterprise foundations — Hash-chained audit logs, execution locking, config profiles
-- Observability dashboard — Overview, Security, and Audit metrics tabs with auto-refresh
-
-### v2.0.0 (planned)
-
-- RBAC & multi-tenancy
-- Persistent storage backends (SQLite, PostgreSQL)
-- OpenTelemetry observability
-- SSO, webhooks, Slack/Teams integrations
-- Git provider integration (auto-PR)
-- Plugin system for custom tools and agents
-
-See [ROADMAP.md](ROADMAP.md) for the full roadmap.
+Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `scanner` → `session` → `api` → `cli`
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please see the [architecture docs](ARCHITECTURE.md) for patterns and conventions.
+Contributions are welcome! Please see the [contributing guide](docs/contributing.md) for development setup, coding standards, and how to add new tools and agents. See [docs/architecture.md](docs/architecture.md) for system design patterns.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)

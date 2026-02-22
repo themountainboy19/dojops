@@ -105,7 +105,7 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 *-tool.ts      → BaseTool subclass: generate() returns data, verify() validates, execute() writes to disk
 ```
 
-**Design principles** (from ARCHITECTURE.md): No blind execution. Structured JSON outputs. Schema validation before tool execution. Idempotent operations.
+**Design principles** (from docs/architecture.md): No blind execution. Structured JSON outputs. Schema validation before tool execution. Idempotent operations.
 
 ## Current Status
 
@@ -120,7 +120,7 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@odaops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.oda/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Dev tooling — Vitest (637 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
-## Roadmap (from NEXT_STEPS.md)
+## Roadmap
 
 **Phase 1 — Core Intelligence: DONE**
 **Phase 2 — More tools: DONE**

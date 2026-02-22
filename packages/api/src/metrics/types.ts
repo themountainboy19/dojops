@@ -55,7 +55,7 @@ export interface AuditEntry {
 
 export interface AuditMetrics {
   totalEntries: number;
-  chainIntegrity: { valid: boolean; errors: number; totalEntries: number };
+  chainIntegrity: { valid: boolean; errors: number; totalEntries: number; latestHash?: string };
   byStatus: { success: number; failure: number; cancelled: number };
   byCommand: Array<{ command: string; count: number }>;
   timeline: Array<{
