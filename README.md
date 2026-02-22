@@ -24,7 +24,7 @@
   <img src="https://img.shields.io/badge/version-1.0.0-00e5ff?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <a href="https://github.com/MHChlagou/oda/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/MHChlagou/oda/ci.yml?style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://github.com/MHChlagou/oda/actions/workflows/ci.yml"><img src="https://github.com/MHChlagou/oda/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/coverage-badge.json&style=flat-square" alt="Coverage" />
   <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/MHChlagou/oda/badges/security-badge.json&style=flat-square" alt="Security" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
