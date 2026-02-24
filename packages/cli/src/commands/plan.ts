@@ -36,7 +36,8 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   // Load repo context for context-aware file placement
   const projectRoot = findProjectRoot();
-  const tools = createToolRegistry(provider, projectRoot ?? undefined).getAll();
+  const registry = createToolRegistry(provider, projectRoot ?? undefined);
+  const tools = registry.getAll();
   const repoContext = projectRoot ? loadContext(projectRoot) : null;
 
   const s = p.spinner();
@@ -45,6 +46,19 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     repoContext: repoContext ?? undefined,
   });
   s.stop("Tasks decomposed.");
+
+  // Enrich tasks with plugin metadata
+  for (const task of graph.tasks) {
+    const meta = registry.getToolMetadata(task.tool);
+    if (meta) {
+      task.toolType = meta.toolType;
+      if (meta.toolType === "plugin") {
+        task.pluginVersion = meta.pluginVersion;
+        task.pluginHash = meta.pluginHash;
+        task.pluginSource = meta.pluginSource as "global" | "project" | undefined;
+      }
+    }
+  }
 
   // Display task graph
   const taskLines = graph.tasks.map((task) => {
@@ -72,9 +86,17 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       description: t.description,
       dependsOn: t.dependsOn,
       input: t.input as Record<string, unknown> | undefined,
+      toolType: t.toolType,
+      pluginVersion: t.pluginVersion,
+      pluginHash: t.pluginHash,
+      pluginSource: t.pluginSource,
     })),
     files: [],
     approvalStatus: "PENDING",
+    executionContext: {
+      provider: provider.name,
+      model: ctx.globalOpts.model,
+    },
   };
   savePlan(root, savedPlan);
 
@@ -129,7 +151,20 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       const tool = toolMap.get(taskNode.tool);
       if (!tool?.execute) continue;
 
-      const execResult = await safeExecutor.executeTask(taskResult.taskId, tool, taskNode.input);
+      // Build plugin metadata for audit enrichment
+      const taskDef = savedPlan.tasks.find((t) => t.id === taskResult.taskId);
+      const metadata: Record<string, unknown> = {};
+      if (taskDef?.toolType) metadata.toolType = taskDef.toolType;
+      if (taskDef?.pluginVersion) metadata.pluginVersion = taskDef.pluginVersion;
+      if (taskDef?.pluginHash) metadata.pluginHash = taskDef.pluginHash;
+      if (taskDef?.pluginSource) metadata.pluginSource = taskDef.pluginSource;
+
+      const execResult = await safeExecutor.executeTask(
+        taskResult.taskId,
+        tool,
+        taskNode.input,
+        Object.keys(metadata).length > 0 ? metadata : undefined,
+      );
 
       const approval =
         execResult.approval === "approved"

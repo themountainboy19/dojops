@@ -51,6 +51,31 @@ export class ToolRegistry {
     return [...this.plugins];
   }
 
+  /** Extract plugin metadata for a tool by name. */
+  getToolMetadata(name: string):
+    | {
+        toolType: "built-in" | "plugin";
+        pluginVersion?: string;
+        pluginHash?: string;
+        pluginSource?: string;
+      }
+    | undefined {
+    const tool = this.toolMap.get(name);
+    if (!tool) return undefined;
+
+    const plugin = this.plugins.find((p) => p.name === name);
+    if (plugin) {
+      return {
+        toolType: "plugin",
+        pluginVersion: plugin.source.pluginVersion,
+        pluginHash: plugin.source.pluginHash,
+        pluginSource: plugin.source.location,
+      };
+    }
+
+    return { toolType: "built-in" };
+  }
+
   /** Total count of unique tools. */
   get size(): number {
     return this.toolMap.size;

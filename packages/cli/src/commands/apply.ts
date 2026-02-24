@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry } from "@dojops/tool-registry";
+import { createToolRegistry, PluginTool } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
@@ -129,7 +129,52 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const startTime = Date.now();
   try {
     const provider = ctx.getProvider();
-    const tools = createToolRegistry(provider, root).getAll();
+    const registry = createToolRegistry(provider, root);
+    const tools = registry.getAll();
+
+    // Validate plugin integrity on resume
+    if (resume) {
+      const pluginMismatches: string[] = [];
+      for (const task of plan.tasks) {
+        if (task.toolType !== "plugin") continue;
+
+        const currentTool = tools.find((t) => t.name === task.tool);
+        if (!currentTool) {
+          pluginMismatches.push(
+            `Plugin "${task.tool}" no longer available (was v${task.pluginVersion})`,
+          );
+          continue;
+        }
+
+        if (currentTool instanceof PluginTool && task.pluginHash) {
+          const currentHash = currentTool.source.pluginHash;
+          if (currentHash !== task.pluginHash) {
+            pluginMismatches.push(
+              `Plugin "${task.tool}" changed: plan used v${task.pluginVersion} (${task.pluginHash?.slice(0, 8)}), ` +
+                `current is v${currentTool.source.pluginVersion} (${currentHash?.slice(0, 8)})`,
+            );
+          }
+        }
+      }
+
+      if (pluginMismatches.length > 0) {
+        p.log.warn(pc.bold("Plugin integrity warnings:"));
+        for (const msg of pluginMismatches) {
+          p.log.warn(`  ${pc.yellow("!")} ${msg}`);
+        }
+
+        if (!autoApprove) {
+          const proceed = await p.confirm({
+            message: "Plugins have changed since this plan was created. Continue anyway?",
+          });
+          if (p.isCancel(proceed) || !proceed) {
+            p.cancel("Aborted due to plugin integrity mismatch.");
+            releaseLock(root);
+            process.exit(ExitCode.VALIDATION_ERROR);
+          }
+        }
+      }
+    }
 
     const safeExecutor = new SafeExecutor({
       policy: {
@@ -210,7 +255,20 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         continue;
       }
 
-      const execResult = await safeExecutor.executeTask(taskResult.taskId, tool, taskNode.input);
+      // Build plugin metadata for audit enrichment
+      const taskDef = plan.tasks.find((t) => t.id === taskResult.taskId);
+      const metadata: Record<string, unknown> = {};
+      if (taskDef?.toolType) metadata.toolType = taskDef.toolType;
+      if (taskDef?.pluginVersion) metadata.pluginVersion = taskDef.pluginVersion;
+      if (taskDef?.pluginHash) metadata.pluginHash = taskDef.pluginHash;
+      if (taskDef?.pluginSource) metadata.pluginSource = taskDef.pluginSource;
+
+      const execResult = await safeExecutor.executeTask(
+        taskResult.taskId,
+        tool,
+        taskNode.input,
+        Object.keys(metadata).length > 0 ? metadata : undefined,
+      );
       const taskFiles = execResult.auditLog?.filesWritten ?? [];
       allFilesCreated.push(...taskFiles);
 

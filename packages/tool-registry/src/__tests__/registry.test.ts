@@ -14,10 +14,18 @@ function createMockTool(name: string, description = "desc"): DevOpsTool {
   };
 }
 
-function createMockPluginTool(name: string): PluginTool {
+function createMockPluginTool(
+  name: string,
+  sourceOverrides?: Partial<{ location: string; pluginVersion: string; pluginHash: string }>,
+): PluginTool {
   const tool = createMockTool(name) as unknown as PluginTool;
   Object.defineProperty(tool, "source", {
-    value: { type: "plugin", location: "project" },
+    value: {
+      type: "plugin",
+      location: sourceOverrides?.location ?? "project",
+      pluginVersion: sourceOverrides?.pluginVersion,
+      pluginHash: sourceOverrides?.pluginHash,
+    },
   });
   return tool;
 }
@@ -112,5 +120,54 @@ describe("ToolRegistry", () => {
 
     const names = registry.getAll().map((t) => t.name);
     expect(names).toEqual(["alpha", "beta", "gamma"]);
+  });
+
+  describe("getToolMetadata", () => {
+    it("returns built-in for a built-in tool", () => {
+      const registry = new ToolRegistry([createMockTool("terraform")], []);
+      const meta = registry.getToolMetadata("terraform");
+
+      expect(meta).toEqual({ toolType: "built-in" });
+    });
+
+    it("returns plugin metadata for a plugin tool", () => {
+      const plugin = createMockPluginTool("my-plugin", {
+        location: "project",
+        pluginVersion: "1.2.0",
+        pluginHash: "abc123def456",
+      });
+      const registry = new ToolRegistry([], [plugin]);
+      const meta = registry.getToolMetadata("my-plugin");
+
+      expect(meta).toEqual({
+        toolType: "plugin",
+        pluginVersion: "1.2.0",
+        pluginHash: "abc123def456",
+        pluginSource: "project",
+      });
+    });
+
+    it("returns undefined for nonexistent tool", () => {
+      const registry = new ToolRegistry([createMockTool("tool-a")], []);
+      expect(registry.getToolMetadata("nonexistent")).toBeUndefined();
+    });
+
+    it("returns plugin metadata when plugin overrides built-in", () => {
+      const builtIn = [createMockTool("shared")];
+      const plugin = createMockPluginTool("shared", {
+        location: "global",
+        pluginVersion: "2.0.0",
+        pluginHash: "hash999",
+      });
+      const registry = new ToolRegistry(builtIn, [plugin]);
+      const meta = registry.getToolMetadata("shared");
+
+      expect(meta).toEqual({
+        toolType: "plugin",
+        pluginVersion: "2.0.0",
+        pluginHash: "hash999",
+        pluginSource: "global",
+      });
+    });
   });
 });

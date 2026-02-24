@@ -25,6 +25,10 @@ export interface PlanState {
     description: string;
     dependsOn: string[];
     input?: Record<string, unknown>;
+    toolType?: "built-in" | "plugin";
+    pluginVersion?: string;
+    pluginHash?: string;
+    pluginSource?: "global" | "project";
   }>;
   results?: Array<{
     taskId: string;
@@ -37,6 +41,10 @@ export interface PlanState {
   }>;
   files: string[];
   approvalStatus: "PENDING" | "APPROVED" | "DENIED" | "APPLIED" | "PARTIAL";
+  executionContext?: {
+    provider: string;
+    model?: string;
+  };
 }
 
 export interface ExecutionRecord {
