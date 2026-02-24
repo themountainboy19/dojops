@@ -132,6 +132,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
+- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and plugin system prompts match the plan's execution context for bit-for-bit reproducibility
 
 ### Observability
 
@@ -185,18 +186,19 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 #### Generation & Planning
 
-| Command                          | Description                                     |
-| -------------------------------- | ----------------------------------------------- |
-| `dojops <prompt>`                | Generate DevOps config (default command)        |
-| `dojops generate <prompt>`       | Explicit generation (same as default)           |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow           |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                            |
-| `dojops apply --verify`          | Execute with external config verification       |
-| `dojops apply --resume`          | Resume a partially-failed plan                  |
-| `dojops apply --dry-run`         | Preview changes without writing files           |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                   |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language           |
+| Command                          | Description                                      |
+| -------------------------------- | ------------------------------------------------ |
+| `dojops <prompt>`                | Generate DevOps config (default command)         |
+| `dojops generate <prompt>`       | Explicit generation (same as default)            |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph  |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow            |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                             |
+| `dojops apply --verify`          | Execute with external config verification        |
+| `dojops apply --resume`          | Resume a partially-failed plan                   |
+| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match |
+| `dojops apply --dry-run`         | Preview changes without writing files            |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                    |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language            |
 
 #### Diagnostics & Analysis
 
@@ -311,6 +313,7 @@ dojops plan --execute --yes "Create CI for Node app"
 dojops apply --verify
 dojops apply --dry-run
 dojops apply --resume --yes
+dojops apply --replay                    # Deterministic replay (temp=0, validate env)
 
 # Diagnose and analyze
 dojops debug ci "ERROR: tsc failed with exit code 1..."
@@ -528,7 +531,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 834 tests
+pnpm test               # Run all 863 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -563,17 +566,17 @@ packages/
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 218     |
-| `@dojops/cli`           | 137     |
+| `@dojops/core`          | 225     |
+| `@dojops/cli`           | 148     |
 | `@dojops/tools`         | 121     |
-| `@dojops/tool-registry` | 109     |
+| `@dojops/tool-registry` | 120     |
 | `@dojops/api`           | 96      |
 | `@dojops/scanner`       | 43      |
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 14      |
-| **Total**               | **834** |
+| **Total**               | **863** |
 
 ---
 

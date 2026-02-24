@@ -205,6 +205,10 @@ dojops apply --dry-run
 
 # Resume failed tasks
 dojops apply --resume
+
+# Deterministic replay: force temp=0, validate provider/model/prompt match
+dojops apply --replay
+dojops apply --replay --yes     # force despite environment mismatches
 ```
 
 ### Programmatic

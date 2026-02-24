@@ -6,5 +6,6 @@ export * from "./llm/anthropic";
 export * from "./llm/deepseek";
 export * from "./llm/gemini";
 export * from "./llm/json-validator";
+export * from "./llm/deterministic-provider";
 export * from "./agents";
 export * from "./scanner";

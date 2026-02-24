@@ -157,6 +157,7 @@ dojops apply                 # Execute with interactive approval prompts
 dojops apply --dry-run       # Preview changes without writing files
 dojops apply --verify        # Run external validation (terraform validate, hadolint, etc.)
 dojops apply --yes           # Auto-approve all operations
+dojops apply --replay        # Deterministic replay: temp=0, validate environment match
 ```
 
 ---

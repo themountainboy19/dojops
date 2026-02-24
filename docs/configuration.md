@@ -72,6 +72,7 @@ Values are resolved in order (first match wins):
 Provider:     --provider flag     >  $DOJOPS_PROVIDER     >  config file  >  "openai" (default)
 Model:        --model flag        >  $DOJOPS_MODEL        >  config file  >  provider default
 Temperature:  --temperature flag  >  $DOJOPS_TEMPERATURE  >  config file  >  undefined (provider default)
+              Note: `apply --replay` forces temperature=0 regardless of other settings
 Token:        $OPENAI_API_KEY (etc.)  >  config file token
 ```
 

@@ -106,7 +106,7 @@ interface LLMProvider {
 }
 ```
 
-All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 5 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set).
+All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 5 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`).
 
 ### 2. Multi-Agent System (`@dojops/core`)
 

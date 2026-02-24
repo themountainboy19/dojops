@@ -111,17 +111,17 @@ DojOps uses Vitest for testing. Current coverage:
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 208     |
-| `@dojops/cli`           | 137     |
+| `@dojops/core`          | 225     |
+| `@dojops/cli`           | 148     |
 | `@dojops/tools`         | 121     |
+| `@dojops/tool-registry` | 120     |
 | `@dojops/api`           | 96      |
-| `@dojops/tool-registry` | 91      |
 | `@dojops/scanner`       | 43      |
 | `@dojops/executor`      | 40      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 14      |
-| **Total**               | **806** |
+| **Total**               | **863** |
 
 ### Writing Tests
 

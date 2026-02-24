@@ -200,6 +200,20 @@ This ensures plugins cannot execute shell commands unless they explicitly declar
 
 File paths in `files[].path` and `detector.path` are validated at schema level — any segment containing `..` is rejected. This prevents plugins from writing to or detecting files outside the project directory (e.g., `../../etc/passwd`).
 
+### Plugin Hash Integrity
+
+Each plugin has a SHA-256 hash computed from its `plugin.yaml` content. This hash is pinned into plans at creation time and validated on `--resume` and `--replay` to detect plugin modifications between plan creation and execution. See [Plugin Specification v1](PLUGIN_SPEC_v1.md) for the full security model.
+
+### Replay Validation
+
+`dojops apply --replay` enforces deterministic reproducibility by:
+
+1. Forcing `temperature: 0` via a `DeterministicProvider` wrapper
+2. Validating `provider` and `model` match the plan's execution context
+3. Validating `systemPromptHash` for plugin tasks to detect prompt drift
+
+If any check fails, replay is aborted unless `--yes` forces continuation.
+
 ---
 
 ## Best Practices

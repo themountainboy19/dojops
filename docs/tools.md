@@ -430,6 +430,10 @@ Plugins are sandboxed with three security controls:
 - **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
 - **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
 
+### Plugin Specification
+
+The v1 plugin contract is documented and frozen in [Plugin Specification v1](PLUGIN_SPEC_v1.md). This spec covers manifest schema, discovery paths, input/output schemas, verification command whitelist, security constraints, and the compatibility promise.
+
 ### Plugin Audit Trail
 
 Plugin executions include additional audit metadata:

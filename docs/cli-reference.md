@@ -8,18 +8,19 @@ Complete reference for the `dojops` command-line interface.
 
 ### Generation & Planning
 
-| Command                          | Description                                     |
-| -------------------------------- | ----------------------------------------------- |
-| `dojops <prompt>`                | Generate DevOps config (default command)        |
-| `dojops generate <prompt>`       | Explicit generation (same as default)           |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow           |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                            |
-| `dojops apply --verify`          | Execute with external config verification       |
-| `dojops apply --resume`          | Resume a partially-failed plan                  |
-| `dojops apply --dry-run`         | Preview changes without writing files           |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                   |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language           |
+| Command                          | Description                                      |
+| -------------------------------- | ------------------------------------------------ |
+| `dojops <prompt>`                | Generate DevOps config (default command)         |
+| `dojops generate <prompt>`       | Explicit generation (same as default)            |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph  |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow            |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                             |
+| `dojops apply --verify`          | Execute with external config verification        |
+| `dojops apply --resume`          | Resume a partially-failed plan                   |
+| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match |
+| `dojops apply --dry-run`         | Preview changes without writing files            |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                    |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language            |
 
 ### Diagnostics & Analysis
 
@@ -157,6 +158,8 @@ dojops apply
 dojops apply --dry-run          # preview only
 dojops apply --verify           # with external validation
 dojops apply --resume --yes     # resume failed tasks, auto-approve
+dojops apply --replay           # deterministic: temp=0, validate env match
+dojops apply --replay --yes     # force replay despite mismatches
 ```
 
 ### Diagnostics

@@ -90,6 +90,9 @@ export function printHelp(): void {
     `  ${pc.cyan("--verify")}               Validate generated configs with external tools`,
   );
   console.log(`  ${pc.cyan("--install-packages")}     Run package install after apply`);
+  console.log(
+    `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
+  );
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
@@ -204,6 +207,9 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("--verify")}            Validate generated configs (terraform, hadolint, kubectl)`,
       );
       console.log(`  ${pc.cyan("--install-packages")}  Run package install after successful apply`);
+      console.log(
+        `  ${pc.cyan("--replay")}            Deterministic replay: force temp=0, validate environment match`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Executes a previously saved plan. If no plan ID is given, uses the`);
       console.log(`  current session plan or the most recent one.`);
@@ -213,12 +219,19 @@ export function printCommandHelp(command: string): void {
       console.log();
       console.log(`  With --install-packages, runs the detected package manager's install`);
       console.log(`  command (e.g. pnpm install, npm install) after a successful apply.`);
+      console.log();
+      console.log(`  With --replay, forces temperature=0 and validates that the current`);
+      console.log(`  provider, model, and plugin system prompts match those stored in the`);
+      console.log(`  plan. This enforces bit-for-bit reproducibility. Use --yes to force`);
+      console.log(`  replay even if mismatches are detected.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops apply`);
       console.log(`  ${pc.dim("$")} dojops apply --dry-run`);
       console.log(`  ${pc.dim("$")} dojops apply --resume --yes`);
       console.log(`  ${pc.dim("$")} dojops apply --verify`);
       console.log(`  ${pc.dim("$")} dojops apply --install-packages`);
+      console.log(`  ${pc.dim("$")} dojops apply --replay`);
+      console.log(`  ${pc.dim("$")} dojops apply --replay --yes`);
       console.log(`  ${pc.dim("$")} dojops apply plan-abc123`);
       console.log();
       break;

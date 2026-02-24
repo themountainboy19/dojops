@@ -33,13 +33,14 @@ Welcome to the **DojOps — AI DevOps Automation Engine** documentation. DojOps 
 
 ### Components
 
-| Document                                  | Description                                                                                             |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [Specialist Agents](agents.md)            | All 16 agents — routing, domains, keywords, confidence scoring                                          |
-| [DevOps Tools](tools.md)                  | All 12 built-in tools + plugin system — schemas, detectors, verifiers, auto-detection, plugin manifests |
-| [Security Scanning](security-scanning.md) | 6 scanners, scan types, remediation, dashboard integration                                              |
-| [Execution Engine](execution-engine.md)   | SafeExecutor, policies, approval workflows, sandboxed fs, audit trail                                   |
-| [Task Planner](planner.md)                | Goal decomposition, task graphs, topological execution, resume                                          |
+| Document                                     | Description                                                                                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [Specialist Agents](agents.md)               | All 16 agents — routing, domains, keywords, confidence scoring                                          |
+| [DevOps Tools](tools.md)                     | All 12 built-in tools + plugin system — schemas, detectors, verifiers, auto-detection, plugin manifests |
+| [Plugin Specification v1](PLUGIN_SPEC_v1.md) | Frozen v1 plugin contract — manifest schema, discovery, security, compatibility promise                 |
+| [Security Scanning](security-scanning.md)    | 6 scanners, scan types, remediation, dashboard integration                                              |
+| [Execution Engine](execution-engine.md)      | SafeExecutor, policies, approval workflows, sandboxed fs, audit trail                                   |
+| [Task Planner](planner.md)                   | Goal decomposition, task graphs, topological execution, resume                                          |
 
 ### Operations
 

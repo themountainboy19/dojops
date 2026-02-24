@@ -1,8 +1,9 @@
 import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import { DeterministicProvider } from "@dojops/core";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry, PluginTool } from "@dojops/tool-registry";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
@@ -24,6 +25,7 @@ import {
 } from "../state";
 import { ExitCode } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
+import { validateReplayIntegrity, checkPluginIntegrity } from "./replay-validator";
 
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
@@ -35,6 +37,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const dryRun = hasFlag(args, "--dry-run");
   const resume = hasFlag(args, "--resume");
+  const replay = hasFlag(args, "--replay");
   const installPackages = hasFlag(args, "--install-packages");
   const verify = hasFlag(args, "--verify");
   const planId = args.find((a) => !a.startsWith("-"));
@@ -128,36 +131,43 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
 
   const startTime = Date.now();
   try {
-    const provider = ctx.getProvider();
+    let provider = ctx.getProvider();
+    if (replay) {
+      provider = new DeterministicProvider(provider);
+    }
     const registry = createToolRegistry(provider, root);
     const tools = registry.getAll();
 
+    // Replay validation: provider/model/systemPromptHash match
+    if (replay) {
+      const result = validateReplayIntegrity(plan, provider.name, ctx.globalOpts.model, registry);
+      if (!result.valid) {
+        p.log.warn(pc.bold("Replay integrity check failed:"));
+        for (const m of result.mismatches) {
+          const taskLabel = m.taskId ? ` [task ${m.taskId}]` : "";
+          p.log.warn(
+            `  ${pc.yellow("!")} ${m.field}${taskLabel}: expected "${m.expected}", got "${m.actual}"`,
+          );
+        }
+        if (!autoApprove) {
+          p.cancel("Replay aborted due to environment mismatch. Use --yes to force.");
+          releaseLock(root);
+          process.exit(ExitCode.VALIDATION_ERROR);
+        }
+        p.log.warn("Continuing despite replay mismatches (--yes).");
+      } else {
+        p.log.success("Replay validation passed.");
+      }
+    }
+
     // Validate plugin integrity on resume
     if (resume) {
-      const pluginMismatches: string[] = [];
-      for (const task of plan.tasks) {
-        if (task.toolType !== "plugin") continue;
+      const { mismatches: pluginMismatches, hasMismatches } = checkPluginIntegrity(
+        plan.tasks,
+        tools,
+      );
 
-        const currentTool = tools.find((t) => t.name === task.tool);
-        if (!currentTool) {
-          pluginMismatches.push(
-            `Plugin "${task.tool}" no longer available (was v${task.pluginVersion})`,
-          );
-          continue;
-        }
-
-        if (currentTool instanceof PluginTool && task.pluginHash) {
-          const currentHash = currentTool.source.pluginHash;
-          if (currentHash !== task.pluginHash) {
-            pluginMismatches.push(
-              `Plugin "${task.tool}" changed: plan used v${task.pluginVersion} (${task.pluginHash?.slice(0, 8)}), ` +
-                `current is v${currentTool.source.pluginVersion} (${currentHash?.slice(0, 8)})`,
-            );
-          }
-        }
-      }
-
-      if (pluginMismatches.length > 0) {
+      if (hasMismatches) {
         p.log.warn(pc.bold("Plugin integrity warnings:"));
         for (const msg of pluginMismatches) {
           p.log.warn(`  ${pc.yellow("!")} ${msg}`);
@@ -337,7 +347,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: process.env.USER ?? "unknown",
-      command: `apply ${plan.id}`,
+      command: `apply${replay ? " --replay" : ""} ${plan.id}`,
       action: "apply",
       planId: plan.id,
       status: planResult.success ? "success" : "failure",
