@@ -38,20 +38,21 @@ pnpm lint
 
 ```
 packages/
-  cli/            CLI entry point + TUI (@clack/prompts)
-  api/            REST API (Express) + web dashboard
-  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
-  planner/        Task graph decomposition + topological executor
-  executor/       SafeExecutor + policy engine + approval workflows + audit log
-  tools/          12 DevOps tools
-  scanner/        6 security scanners + remediation engine
-  session/        Chat session management + memory + context injection
-  sdk/            BaseTool<T> abstract class + Zod re-export + verification types
+  cli/              CLI entry point + TUI (@clack/prompts)
+  api/              REST API (Express) + web dashboard
+  tool-registry/    Tool registry + plugin system (built-in + plugin discovery)
+  core/             LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
+  planner/          Task graph decomposition + topological executor
+  executor/         SafeExecutor + policy engine + approval workflows + audit log
+  tools/            12 built-in DevOps tools
+  scanner/          6 security scanners + remediation engine
+  session/          Chat session management + memory + context injection
+  sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
 
 Package scope: `@dojops/*`
 
-Dependency flow: `cli -> api -> planner -> executor -> tools -> core -> sdk`
+Dependency flow: `cli -> api -> tool-registry -> tools -> core -> sdk`
 
 ---
 
@@ -108,18 +109,19 @@ Key conventions:
 
 DojOps uses Vitest for testing. Current coverage:
 
-| Package            | Tests   |
-| ------------------ | ------- |
-| `@dojops/core`     | 208     |
-| `@dojops/cli`      | 137     |
-| `@dojops/tools`    | 111     |
-| `@dojops/api`      | 96      |
-| `@dojops/scanner`  | 43      |
-| `@dojops/executor` | 40      |
-| `@dojops/planner`  | 28      |
-| `@dojops/session`  | 28      |
-| `@dojops/sdk`      | 7       |
-| **Total**          | **698** |
+| Package                 | Tests   |
+| ----------------------- | ------- |
+| `@dojops/core`          | 208     |
+| `@dojops/cli`           | 137     |
+| `@dojops/tools`         | 121     |
+| `@dojops/api`           | 96      |
+| `@dojops/tool-registry` | 91      |
+| `@dojops/scanner`       | 43      |
+| `@dojops/executor`      | 40      |
+| `@dojops/planner`       | 28      |
+| `@dojops/session`       | 28      |
+| `@dojops/sdk`           | 14      |
+| **Total**               | **806** |
 
 ### Writing Tests
 
@@ -146,6 +148,12 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
    export const MyToolInputSchema = z.object({
      name: z.string(),
      // tool-specific fields
+     existingContent: z
+       .string()
+       .optional()
+       .describe(
+         "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+       ),
    });
 
    export const MyToolOutputSchema = z.object({
@@ -161,11 +169,19 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
    ```typescript
    import { parseAndValidate } from "@dojops/core";
 
-   export async function generateMyTool(input: MyToolInput, provider: LLMProvider) {
-     const response = await provider.generate({
-       prompt: buildPrompt(input),
-       schema: MyToolOutputSchema,
-     });
+   export async function generateMyTool(
+     input: MyToolInput,
+     provider: LLMProvider,
+     existingContent?: string,
+   ) {
+     const isUpdate = !!existingContent;
+     const system = isUpdate
+       ? "Update the existing config. Preserve existing structure and settings."
+       : "Generate a new config from scratch.";
+     const prompt = isUpdate
+       ? `${buildPrompt(input)}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+       : buildPrompt(input);
+     const response = await provider.generate({ system, prompt, schema: MyToolOutputSchema });
      return parseAndValidate(response.content, MyToolOutputSchema);
    }
    ```
@@ -173,18 +189,22 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 4. **Create tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool } from "@dojops/sdk";
+   import { BaseTool, readExistingConfig, backupFile } from "@dojops/sdk";
 
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
      inputSchema = MyToolInputSchema;
 
      async generate(input: MyToolInput) {
-       return generateMyTool(input, this.provider);
+       const existingContent = input.existingContent ?? readExistingConfig(outputPath);
+       const isUpdate = !!existingContent;
+       const result = await generateMyTool(input, this.provider, existingContent);
+       return { success: true, data: { ...result, isUpdate } };
      }
 
      async execute(input: MyToolInput) {
        const result = await this.generate(input);
+       if (result.data.isUpdate) backupFile(outputPath);
        // Write files to disk
      }
    }
@@ -196,7 +216,41 @@ All tools follow the `BaseTool<T>` pattern. See [DevOps Tools](tools.md) for the
 
 7. **Export:** Add to `packages/tools/src/index.ts`
 
-8. **Write tests:** `my-tool.test.ts` with mocked LLM provider
+8. **Write tests:** `my-tool.test.ts` with mocked LLM provider — include tests for auto-detection of existing files, update mode prompts, and `.bak` backup creation
+
+---
+
+## Creating a Plugin Tool
+
+For tools that don't need to be built into the core, use the plugin system instead. Plugins are declarative — no TypeScript code required.
+
+### Step-by-Step
+
+1. **Scaffold** a plugin:
+
+   ```bash
+   dojops tools plugins init my-tool
+   ```
+
+   This creates `.dojops/plugins/my-tool/` with template `plugin.yaml` and `input.schema.json`.
+
+2. **Edit** `plugin.yaml` — set the name, description, system prompt, output files, and serializer.
+
+3. **Edit** `input.schema.json` — define the JSON Schema for your tool's input parameters.
+
+4. **Validate** the plugin:
+
+   ```bash
+   dojops tools plugins validate .dojops/plugins/my-tool/
+   ```
+
+5. **Test** by generating a config:
+
+   ```bash
+   dojops "Generate my-tool config for production"
+   ```
+
+Plugins are automatically discovered and available to the Planner, Executor, and API. See [DevOps Tools — Plugin System](tools.md#plugin-system) for the full manifest format.
 
 ---
 

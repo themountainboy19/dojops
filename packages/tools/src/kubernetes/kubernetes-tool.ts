@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, VerificationResult } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  VerificationResult,
+  readExistingConfig,
+  backupFile,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { KubernetesInputSchema, KubernetesInput } from "./schemas";
 import { generateKubernetesManifest, manifestToYaml } from "./generator";
@@ -16,6 +22,11 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
   }
 
   async generate(input: KubernetesInput): Promise<ToolOutput> {
+    const existingContent =
+      input.existingContent ??
+      readExistingConfig(path.join(input.outputPath, `${input.appName}.yaml`));
+    const isUpdate = !!existingContent;
+
     try {
       const manifest = await generateKubernetesManifest(
         input.appName,
@@ -24,6 +35,7 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
         input.replicas,
         input.namespace,
         this.provider,
+        existingContent ?? undefined,
       );
 
       const yamlContent = manifestToYaml(manifest, input.appName, input.namespace);
@@ -33,6 +45,7 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
         data: {
           manifest,
           yaml: yamlContent,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -53,9 +66,15 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { yaml: string };
+    const data = result.data as { yaml: string; isUpdate: boolean };
+    const filePath = path.join(input.outputPath, `${input.appName}.yaml`);
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(path.join(input.outputPath, `${input.appName}.yaml`), data.yaml, "utf-8");
+    fs.writeFileSync(filePath, data.yaml, "utf-8");
 
     return result;
   }

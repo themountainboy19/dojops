@@ -4,6 +4,12 @@ export const GitLabCIInputSchema = z.object({
   projectPath: z.string().describe("Root directory of the project to generate GitLab CI for"),
   defaultBranch: z.string().default("main"),
   nodeVersion: z.string().default("20"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type GitLabCIInput = z.infer<typeof GitLabCIInputSchema>;

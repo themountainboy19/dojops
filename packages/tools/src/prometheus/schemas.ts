@@ -5,6 +5,12 @@ export const PrometheusInputSchema = z.object({
   scrapeInterval: z.string().default("15s"),
   alertRules: z.string().optional().describe("Description of alert rules to generate"),
   outputPath: z.string().describe("Directory to write Prometheus config files to"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type PrometheusInput = z.infer<typeof PrometheusInputSchema>;

@@ -33,6 +33,28 @@ describe("generateTerraformConfig", () => {
   });
 });
 
+describe("generateTerraformConfig with existingContent", () => {
+  it("includes existing content in prompt when provided", async () => {
+    const provider = mockProvider();
+    const existing = 'resource "aws_vpc" "main" { cidr_block = "10.0.0.0/16" }';
+    await generateTerraformConfig("aws", "Add S3 bucket", "local", provider, existing);
+
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).toContain("--- EXISTING CONFIGURATION ---");
+    expect(call.prompt).toContain(existing);
+    expect(call.system).toContain("Update");
+  });
+
+  it("uses generate prompt when no existingContent", async () => {
+    const provider = mockProvider();
+    await generateTerraformConfig("aws", "S3 bucket", "local", provider);
+
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain("--- EXISTING CONFIGURATION ---");
+    expect(call.system).toContain("Generate");
+  });
+});
+
 describe("configToHcl", () => {
   it("generates valid HCL structure", () => {
     const hcl = configToHcl(mockConfig);

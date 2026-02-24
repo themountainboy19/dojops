@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { AnsibleInputSchema, AnsibleInput } from "./schemas";
 import { generateAnsiblePlaybook, playbookToYaml } from "./generator";
@@ -15,8 +15,17 @@ export class AnsibleTool extends BaseTool<AnsibleInput> {
   }
 
   async generate(input: AnsibleInput): Promise<ToolOutput> {
+    const existingContent =
+      input.existingContent ??
+      readExistingConfig(path.join(input.outputPath, `${input.playbookName}.yml`));
+    const isUpdate = !!existingContent;
+
     try {
-      const playbook = await generateAnsiblePlaybook(input, this.provider);
+      const playbook = await generateAnsiblePlaybook(
+        input,
+        this.provider,
+        existingContent ?? undefined,
+      );
       const yamlContent = playbookToYaml(playbook, input);
 
       return {
@@ -24,6 +33,7 @@ export class AnsibleTool extends BaseTool<AnsibleInput> {
         data: {
           playbook,
           yaml: yamlContent,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -38,9 +48,15 @@ export class AnsibleTool extends BaseTool<AnsibleInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { yaml: string };
+    const data = result.data as { yaml: string; isUpdate: boolean };
+    const filePath = path.join(input.outputPath, `${input.playbookName}.yml`);
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(path.join(input.outputPath, `${input.playbookName}.yml`), data.yaml, "utf-8");
+    fs.writeFileSync(filePath, data.yaml, "utf-8");
 
     return result;
   }

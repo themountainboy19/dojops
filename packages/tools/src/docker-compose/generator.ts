@@ -8,16 +8,32 @@ export async function generateComposeConfig(
   services: string,
   networkMode: string,
   provider: LLMProvider,
+  existingContent?: string,
 ): Promise<ComposeConfig> {
-  const response = await provider.generate({
-    system: `You are a Docker Compose expert. Generate a docker-compose.yml configuration.
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Docker Compose expert. Update the existing docker-compose.yml configuration.
+Preserve existing services and settings. Only add/modify what is requested.
 Project type: ${detection.projectType}.
 Network mode: ${networkMode}.
 ${detection.hasDockerfile ? "The project already has a Dockerfile — use build context instead of image for the main service." : ""}
-Respond with valid JSON matching the required structure.`,
-    prompt: `Generate a Docker Compose configuration for: ${services}
+Respond with valid JSON matching the required structure.`
+    : `You are a Docker Compose expert. Generate a docker-compose.yml configuration.
+Project type: ${detection.projectType}.
+Network mode: ${networkMode}.
+${detection.hasDockerfile ? "The project already has a Dockerfile — use build context instead of image for the main service." : ""}
+Respond with valid JSON matching the required structure.`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} a Docker Compose configuration for: ${services}
 Include appropriate ports, environment variables, volumes, and depends_on relationships.
-Use restart policy "unless-stopped" for production services.`,
+Use restart policy "unless-stopped" for production services.`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await provider.generate({
+    system,
+    prompt,
     schema: ComposeConfigSchema,
   });
 

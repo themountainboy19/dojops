@@ -99,4 +99,39 @@ describe("TerraformTool", () => {
     const content = fs.readFileSync(mainTf, "utf-8");
     expect(content).toContain("aws_s3_bucket");
   });
+
+  it("auto-detects existing main.tf", async () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), 'resource "aws_vpc" "main" {}', "utf-8");
+
+    const provider = createMockProvider();
+    const tool = new TerraformTool(provider);
+    const result = await tool.generate({
+      projectPath: dir,
+      provider: "aws",
+      resources: "Add S3 bucket",
+      backendType: "local",
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.data as Record<string, unknown>).isUpdate).toBe(true);
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).toContain("aws_vpc");
+  });
+
+  it("creates backup on execute when updating", async () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), "old content", "utf-8");
+
+    const tool = new TerraformTool(createMockProvider());
+    await tool.execute({
+      projectPath: dir,
+      provider: "aws",
+      resources: "S3 bucket",
+      backendType: "local",
+    });
+
+    expect(fs.existsSync(path.join(dir, "main.tf.bak"))).toBe(true);
+    expect(fs.readFileSync(path.join(dir, "main.tf.bak"), "utf-8")).toBe("old content");
+  });
 });

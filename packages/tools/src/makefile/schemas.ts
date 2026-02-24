@@ -3,6 +3,12 @@ import { z } from "zod";
 export const MakefileInputSchema = z.object({
   projectPath: z.string().describe("Root directory of the project to generate a Makefile for"),
   targets: z.string().optional().describe("Description of make targets to include"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type MakefileInput = z.infer<typeof MakefileInputSchema>;

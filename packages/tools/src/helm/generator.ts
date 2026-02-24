@@ -5,9 +5,12 @@ import { HelmChartResponse, HelmChartResponseSchema, HelmInput } from "./schemas
 export async function generateHelmValues(
   input: HelmInput,
   llm: LLMProvider,
+  existingContent?: string,
 ): Promise<HelmChartResponse> {
-  const response = await llm.generate({
-    system: `You are a Helm chart expert. Generate Helm chart values as structured JSON.
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Helm chart expert. Update the existing Helm chart values as structured JSON.
+Preserve existing values and settings. Only add/modify what is requested.
 
 You MUST respond with a JSON object matching this exact structure:
 {
@@ -26,8 +29,36 @@ IMPORTANT:
 - "image" must have "repository", "tag", and "pullPolicy"
 - "service" must have "type" and "port"
 - "env" is an array of { "name", "value" } objects
-- Respond with valid JSON only, no markdown`,
-    prompt: `Generate Helm values for chart "${input.chartName}" using image "${input.image}" on port ${input.port}.`,
+- Respond with valid JSON only, no markdown`
+    : `You are a Helm chart expert. Generate Helm chart values as structured JSON.
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "values": {
+    "replicaCount": 1,
+    "image": { "repository": "nginx", "tag": "latest", "pullPolicy": "IfNotPresent" },
+    "service": { "type": "ClusterIP", "port": 80 },
+    "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } },
+    "env": [{ "name": "NODE_ENV", "value": "production" }]
+  },
+  "notes": "Optional notes about the chart"
+}
+
+IMPORTANT:
+- The top-level object must have a "values" key containing all Helm values
+- "image" must have "repository", "tag", and "pullPolicy"
+- "service" must have "type" and "port"
+- "env" is an array of { "name", "value" } objects
+- Respond with valid JSON only, no markdown`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} Helm values for chart "${input.chartName}" using image "${input.image}" on port ${input.port}.`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await llm.generate({
+    system,
+    prompt,
     schema: HelmChartResponseSchema,
   });
 

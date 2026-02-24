@@ -9,14 +9,10 @@ import {
   CIDebugger,
   InfraDiffAnalyzer,
 } from "@dojops/core";
-import {
-  GitHubActionsTool,
-  TerraformTool,
-  KubernetesTool,
-  HelmTool,
-  AnsibleTool,
-} from "@dojops/tools";
 import { DevOpsTool } from "@dojops/sdk";
+import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
+
+export { createToolRegistry, ToolRegistry };
 
 export interface ProviderOptions {
   provider?: string;
@@ -65,14 +61,15 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   }
 }
 
-export function createTools(provider: LLMProvider): DevOpsTool[] {
-  return [
-    new GitHubActionsTool(provider),
-    new TerraformTool(provider),
-    new KubernetesTool(provider),
-    new HelmTool(provider),
-    new AnsibleTool(provider),
-  ];
+/**
+ * Creates all DevOps tools. Uses tool-registry to instantiate all 12 built-in tools
+ * plus any discovered plugin tools.
+ *
+ * @param provider - LLM provider for tool generation
+ * @param projectPath - Optional project path for plugin discovery
+ */
+export function createTools(provider: LLMProvider, projectPath?: string): DevOpsTool[] {
+  return createToolRegistry(provider, projectPath).getAll();
 }
 
 export function createRouter(provider: LLMProvider): AgentRouter {

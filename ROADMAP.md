@@ -6,7 +6,7 @@ This document tracks DojOps's development from initial scaffold to production-gr
 
 # v1.0.0 — Shipped
 
-All seven phases are complete. DojOps v1.0.0 ships with 12 DevOps tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
+All eight phases are complete. DojOps v1.0.0 ships with 12 built-in DevOps tools, a plugin system for custom tools, 16 specialist agents, sandboxed execution, approval workflows, hash-chained audit trails, a REST API with web dashboard, observability metrics, and a rich terminal UI.
 
 ---
 
@@ -40,6 +40,17 @@ All seven phases are complete. DojOps v1.0.0 ships with 12 DevOps tools, 16 spec
 | Systemd        | No       | Custom string builder (INI)  |
 
 All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `*-tool.ts` → tests.
+
+### Update Existing Config Capability
+
+All 12 tools support updating existing configurations:
+
+- **Auto-detection** — Tools read existing config files from known paths before generation
+- **LLM prompt switching** — Generators switch between "generate new" and "update existing, preserve current config" system prompts
+- **`existingContent` input field** — Callers can explicitly pass existing content; auto-detection is the fallback
+- **Backup before overwrite** — `execute()` creates `.bak` files before updating existing configs
+- **`isUpdate` output flag** — CLI shows "Would update:" (yellow) vs "Would write:" (green) in plan output
+- **Shared utilities** — `readExistingConfig()` and `backupFile()` in `@dojops/sdk` (50KB size limit, best-effort backup)
 
 ---
 
@@ -94,9 +105,25 @@ All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (opti
 
 ---
 
+## Phase 8 — Plugin System & Tool Registry (DONE)
+
+- **`@dojops/tool-registry` package** — Unified registry combining built-in + plugin tools with `getAll()` / `get(name)` interface
+- **Plugin discovery** — Automatic scanning of `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project); project overrides global
+- **Declarative plugin manifests** — `plugin.yaml` + `input.schema.json` — no TypeScript code needed to create custom tools
+- **JSON Schema to Zod conversion** — Plugin input schemas converted to Zod at runtime for full compatibility with Planner and Executor
+- **PluginTool adapter** — Converts manifests into `DevOpsTool`-compatible objects with generate (LLM), execute (file write), verify (external command)
+- **Plugin policy engine** — `.dojops/policy.yaml` with `allowedPlugins` / `blockedPlugins` lists; blocked takes precedence
+- **Serializers** — YAML, JSON, raw (with HCL/INI/TOML placeholders)
+- **Audit enrichment** — `toolType`, `pluginSource`, `pluginVersion`, `pluginHash` fields on audit entries
+- **CLI plugin commands** — `dojops tools plugins list/validate/init` for plugin management
+- **Bug fix** — `createTools()` now returns all 12 built-in tools (was 5)
+- **91 new tests** — manifest validation, JSON-to-Zod, serializers, plugin loader, plugin tool, registry, policy
+
+---
+
 # v2.0.0 — Planned
 
-## Phase 8 — Enterprise Readiness
+## Phase 9 — Enterprise Readiness
 
 ### RBAC & Multi-Tenancy
 

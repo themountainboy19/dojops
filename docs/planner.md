@@ -34,7 +34,7 @@ Per-task results with $ref:<taskId> input wiring
 
 The `decompose()` function sends the user's goal to the LLM with a structured Zod schema:
 
-1. **Prompt construction** — The goal is wrapped in a system prompt that instructs the LLM to break it into tool-specific tasks with dependency ordering
+1. **Prompt construction** — The goal is wrapped in a system prompt that instructs the LLM to break it into tool-specific tasks with dependency ordering. The context includes a note that tools automatically detect and read existing config files, so the planner only needs to set the correct `projectPath`/`outputPath`
 2. **Structured output** — The response is validated against the `TaskGraphSchema`
 3. **Schema validation** — Each task node's `tool` field must match a known tool name, and `deps` must reference valid task IDs
 

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { HelmInputSchema, HelmInput } from "./schemas";
 import {
@@ -22,8 +22,17 @@ export class HelmTool extends BaseTool<HelmInput> {
   }
 
   async generate(input: HelmInput): Promise<ToolOutput> {
+    const existingContent =
+      input.existingContent ??
+      readExistingConfig(path.join(input.outputPath, input.chartName, "values.yaml"));
+    const isUpdate = !!existingContent;
+
     try {
-      const chartResponse = await generateHelmValues(input, this.provider);
+      const chartResponse = await generateHelmValues(
+        input,
+        this.provider,
+        existingContent ?? undefined,
+      );
       const chartYaml = generateChartYaml(input);
       const valuesYaml = valuesToYaml(chartResponse.values);
       const deploymentTpl = generateDeploymentTemplate(input.chartName);
@@ -41,6 +50,7 @@ export class HelmTool extends BaseTool<HelmInput> {
             helpers: helpersTpl,
           },
           notes: chartResponse.notes,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -59,10 +69,16 @@ export class HelmTool extends BaseTool<HelmInput> {
       chartYaml: string;
       valuesYaml: string;
       templates: { deployment: string; service: string; helpers: string };
+      isUpdate: boolean;
     };
 
     const chartDir = path.join(input.outputPath, input.chartName);
     const templatesDir = path.join(chartDir, "templates");
+
+    if (data.isUpdate) {
+      backupFile(path.join(chartDir, "values.yaml"));
+    }
+
     fs.mkdirSync(templatesDir, { recursive: true });
 
     fs.writeFileSync(path.join(chartDir, "Chart.yaml"), data.chartYaml, "utf-8");

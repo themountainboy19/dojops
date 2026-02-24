@@ -23,10 +23,12 @@ export type {
 export {
   createProvider,
   createTools,
+  createToolRegistry,
   createRouter,
   createDebugger,
   createDiffAnalyzer,
 } from "./factory";
 export type { ProviderOptions } from "./factory";
+export type { ToolRegistry } from "./factory";
 export { MetricsAggregator } from "./metrics";
 export type { OverviewMetrics, SecurityMetrics, AuditMetrics, DashboardMetrics } from "./metrics";

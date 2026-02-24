@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, VerificationResult } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  VerificationResult,
+  readExistingConfig,
+  backupFile,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { DockerfileInputSchema, DockerfileInput } from "./schemas";
 import { detectDockerContext } from "./detector";
@@ -26,8 +32,19 @@ export class DockerfileTool extends BaseTool<DockerfileInput> {
       };
     }
 
+    const existingContent =
+      input.existingContent ??
+      readExistingConfig(path.join(input.outputPath, "Dockerfile")) ??
+      readExistingConfig(path.join(input.projectPath, "Dockerfile"));
+    const isUpdate = !!existingContent;
+
     try {
-      const config = await generateDockerfileConfig(detection, input.baseImage, this.provider);
+      const config = await generateDockerfileConfig(
+        detection,
+        input.baseImage,
+        this.provider,
+        existingContent ?? undefined,
+      );
 
       const dockerfile = dockerfileToString(config);
       const dockerignore =
@@ -42,6 +59,7 @@ export class DockerfileTool extends BaseTool<DockerfileInput> {
           config,
           dockerfile,
           dockerignore,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -62,9 +80,19 @@ export class DockerfileTool extends BaseTool<DockerfileInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { dockerfile: string; dockerignore: string | null };
+    const data = result.data as {
+      dockerfile: string;
+      dockerignore: string | null;
+      isUpdate: boolean;
+    };
+    const filePath = path.join(input.outputPath, "Dockerfile");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(path.join(input.outputPath, "Dockerfile"), data.dockerfile, "utf-8");
+    fs.writeFileSync(filePath, data.dockerfile, "utf-8");
 
     if (data.dockerignore) {
       fs.writeFileSync(path.join(input.outputPath, ".dockerignore"), data.dockerignore, "utf-8");

@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, VerificationResult } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  VerificationResult,
+  readExistingConfig,
+  backupFile,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { TerraformInputSchema, TerraformInput } from "./schemas";
 import { detectTerraformProject } from "./detector";
@@ -19,12 +25,17 @@ export class TerraformTool extends BaseTool<TerraformInput> {
   async generate(input: TerraformInput): Promise<ToolOutput> {
     const detection = detectTerraformProject(input.projectPath);
 
+    const existingContent =
+      input.existingContent ?? readExistingConfig(path.join(input.projectPath, "main.tf"));
+    const isUpdate = !!existingContent;
+
     try {
       const config = await generateTerraformConfig(
         input.provider,
         input.resources,
         input.backendType,
         this.provider,
+        existingContent ?? undefined,
       );
 
       const hcl = configToHcl(config);
@@ -35,6 +46,7 @@ export class TerraformTool extends BaseTool<TerraformInput> {
           existingProject: detection.exists,
           config,
           hcl,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -55,9 +67,15 @@ export class TerraformTool extends BaseTool<TerraformInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { hcl: string };
+    const data = result.data as { hcl: string; isUpdate: boolean };
+    const filePath = path.join(input.projectPath, "main.tf");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(input.projectPath, { recursive: true });
-    fs.writeFileSync(path.join(input.projectPath, "main.tf"), data.hcl, "utf-8");
+    fs.writeFileSync(filePath, data.hcl, "utf-8");
 
     return result;
   }

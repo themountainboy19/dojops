@@ -9,9 +9,12 @@ export async function generateKubernetesManifest(
   replicas: number,
   namespace: string,
   llm: LLMProvider,
+  existingContent?: string,
 ): Promise<KubernetesManifest> {
-  const response = await llm.generate({
-    system: `You are a Kubernetes expert. Generate Kubernetes deployment and service configuration as structured JSON.
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Kubernetes expert. Update the existing Kubernetes deployment and service configuration as structured JSON.
+Preserve existing structure and settings. Only add/modify what is requested.
 
 You MUST respond with a JSON object matching this exact structure:
 {
@@ -38,8 +41,44 @@ IMPORTANT:
 - Do NOT use standard Kubernetes manifest format (no apiVersion, kind, metadata)
 - "deployment" and "service" are top-level keys with the structure shown above
 - "containers" and "ports" must be ARRAYS
-- Respond with valid JSON only, no markdown`,
-    prompt: `Generate Kubernetes deployment and service config for app "${appName}" using image "${image}" on port ${port} with ${replicas} replicas in namespace "${namespace}".`,
+- Respond with valid JSON only, no markdown`
+    : `You are a Kubernetes expert. Generate Kubernetes deployment and service configuration as structured JSON.
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "deployment": {
+    "replicas": ${replicas},
+    "containers": [
+      {
+        "name": "${appName}",
+        "image": "${image}",
+        "ports": [{ "containerPort": ${port}, "protocol": "TCP" }],
+        "env": [],
+        "resources": { "requests": { "cpu": "100m", "memory": "128Mi" }, "limits": { "cpu": "500m", "memory": "256Mi" } }
+      }
+    ],
+    "labels": {}
+  },
+  "service": {
+    "type": "ClusterIP",
+    "ports": [{ "port": ${port}, "targetPort": ${port}, "protocol": "TCP" }]
+  }
+}
+
+IMPORTANT:
+- Do NOT use standard Kubernetes manifest format (no apiVersion, kind, metadata)
+- "deployment" and "service" are top-level keys with the structure shown above
+- "containers" and "ports" must be ARRAYS
+- Respond with valid JSON only, no markdown`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} Kubernetes deployment and service config for app "${appName}" using image "${image}" on port ${port} with ${replicas} replicas in namespace "${namespace}".`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await llm.generate({
+    system,
+    prompt,
     schema: KubernetesManifestSchema,
   });
 

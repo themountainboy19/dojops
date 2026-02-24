@@ -22,6 +22,9 @@ verify() ------ Optional external tool validation (terraform validate, hadolint,
 approve() ----- Approval workflow (auto-approve, auto-deny, or interactive callback)
   |              Shows diff preview before write operations
   v
+backup() ------ Creates .bak copy of existing files before overwriting (when updating)
+  |
+  v
 execute() ----- SandboxedFs writes files within policy-allowed paths
   |
   v
@@ -83,6 +86,17 @@ Three implementations:
 | `CallbackApprovalHandler` | Calls a user-provided function | Interactive CLI prompts with diff preview |
 
 The `ApprovalContext` includes the tool name, file paths, and a preview of changes so users can make informed decisions.
+
+---
+
+## Backup on Update
+
+When a tool updates an existing config file (detected via `isUpdate` flag in the generate result), `execute()` creates a `.bak` backup before writing:
+
+- Uses `backupFile()` from `@dojops/sdk`
+- Example: `main.tf` → `main.tf.bak`, `ci.yml` → `ci.yml.bak`
+- Backups are only created when updating, not when creating new files
+- Best-effort — backup failures don't block execution
 
 ---
 

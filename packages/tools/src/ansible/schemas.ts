@@ -7,6 +7,12 @@ export const AnsibleInputSchema = z.object({
   outputPath: z.string().describe("Directory to write the Ansible playbook to (e.g. './ansible')"),
   hosts: z.string().default("all"),
   becomeRoot: z.boolean().default(true),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type AnsibleInput = z.infer<typeof AnsibleInputSchema>;

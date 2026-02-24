@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createTools } from "@dojops/api";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
@@ -129,7 +129,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const startTime = Date.now();
   try {
     const provider = ctx.getProvider();
-    const tools = createTools(provider);
+    const tools = createToolRegistry(provider, root).getAll();
 
     const safeExecutor = new SafeExecutor({
       policy: {

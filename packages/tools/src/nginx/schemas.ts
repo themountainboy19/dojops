@@ -13,6 +13,12 @@ export const NginxInputSchema = z.object({
     .describe("Upstream server groups"),
   sslEnabled: z.boolean().default(false),
   outputPath: z.string().describe("Directory to write the nginx config to"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type NginxInput = z.infer<typeof NginxInputSchema>;

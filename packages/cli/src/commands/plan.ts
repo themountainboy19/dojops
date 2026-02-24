@@ -2,7 +2,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, PlannerExecutor } from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createTools } from "@dojops/api";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
@@ -33,10 +33,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   const provider = ctx.getProvider();
-  const tools = createTools(provider);
 
   // Load repo context for context-aware file placement
   const projectRoot = findProjectRoot();
+  const tools = createToolRegistry(provider, projectRoot ?? undefined).getAll();
   const repoContext = projectRoot ? loadContext(projectRoot) : null;
 
   const s = p.spinner();
@@ -202,29 +202,30 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
         const basePath = input?.projectPath ?? input?.outputPath ?? ".";
         const outputLines: string[] = [];
 
-        outputLines.push(pc.bold(`[${r.taskId}] ${task?.tool ?? "unknown"}`));
+        const isUpdate = !!(data as Record<string, unknown>).isUpdate;
+        const writeLabel = isUpdate ? pc.yellow("Would update:") : pc.green("Would write:");
+
+        outputLines.push(
+          pc.bold(
+            `[${r.taskId}] ${task?.tool ?? "unknown"}${isUpdate ? pc.yellow(" (update)") : ""}`,
+          ),
+        );
 
         if (data.hcl) {
-          outputLines.push(`  ${pc.green("Would write:")} ${pc.underline(`${basePath}/main.tf`)}`);
+          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/main.tf`)}`);
           outputLines.push(formatOutput(data.hcl as string));
         }
         if (data.yaml) {
           const fileName = getOutputFileName(task?.tool ?? "");
-          outputLines.push(
-            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/${fileName}`)}`,
-          );
+          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/${fileName}`)}`);
           outputLines.push(formatOutput(data.yaml as string));
         }
         if (data.chartYaml) {
-          outputLines.push(
-            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/Chart.yaml`)}`,
-          );
+          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/Chart.yaml`)}`);
           outputLines.push(formatOutput(data.chartYaml as string));
         }
         if (data.valuesYaml) {
-          outputLines.push(
-            `  ${pc.green("Would write:")} ${pc.underline(`${basePath}/values.yaml`)}`,
-          );
+          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/values.yaml`)}`);
           outputLines.push(formatOutput(data.valuesYaml as string));
         }
 

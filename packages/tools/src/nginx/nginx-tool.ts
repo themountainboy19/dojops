@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { NginxInputSchema, NginxInput } from "./schemas";
 import { generateNginxConfig, nginxConfigToString } from "./generator";
@@ -15,8 +15,12 @@ export class NginxTool extends BaseTool<NginxInput> {
   }
 
   async generate(input: NginxInput): Promise<ToolOutput> {
+    const existingContent =
+      input.existingContent ?? readExistingConfig(path.join(input.outputPath, "nginx.conf"));
+    const isUpdate = !!existingContent;
+
     try {
-      const config = await generateNginxConfig(input, this.provider);
+      const config = await generateNginxConfig(input, this.provider, existingContent ?? undefined);
       const nginxConf = nginxConfigToString(config);
 
       return {
@@ -24,6 +28,7 @@ export class NginxTool extends BaseTool<NginxInput> {
         data: {
           config,
           nginxConf,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -38,9 +43,15 @@ export class NginxTool extends BaseTool<NginxInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { nginxConf: string };
+    const data = result.data as { nginxConf: string; isUpdate: boolean };
+    const filePath = path.join(input.outputPath, "nginx.conf");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(path.join(input.outputPath, "nginx.conf"), data.nginxConf, "utf-8");
+    fs.writeFileSync(filePath, data.nginxConf, "utf-8");
 
     return result;
   }

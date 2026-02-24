@@ -7,6 +7,12 @@ export const HelmInputSchema = z.object({
   outputPath: z.string().describe("Directory to write the Helm chart to (e.g. './charts/my-app')"),
   image: z.string(),
   port: z.number().int().positive(),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type HelmInput = z.infer<typeof HelmInputSchema>;

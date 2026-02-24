@@ -6,15 +6,28 @@ export async function generateMakefileConfig(
   detection: MakefileDetectionResult,
   targets: string | undefined,
   provider: LLMProvider,
+  existingContent?: string,
 ): Promise<MakefileConfig> {
-  const response = await provider.generate({
-    system: `You are a build automation expert. Generate a Makefile configuration as structured JSON for a ${detection.projectType} project.
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a build automation expert. Update the existing Makefile configuration as structured JSON for a ${detection.projectType} project.
+Preserve existing targets and settings. Only add/modify what is requested.
+Respond with valid JSON matching the required structure.`
+    : `You are a build automation expert. Generate a Makefile configuration as structured JSON for a ${detection.projectType} project.
 Include common targets like build, test, lint, clean, and install.
-Respond with valid JSON matching the required structure.`,
-    prompt: `Generate a Makefile for a ${detection.projectType} project.
+Respond with valid JSON matching the required structure.`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} a Makefile for a ${detection.projectType} project.
 ${targets ? `Requested targets: ${targets}` : "Include standard build, test, lint, clean targets."}
 Each target should have a name, dependencies, commands, and optionally a description.
-Mark all non-file targets as phony.`,
+Mark all non-file targets as phony.`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await provider.generate({
+    system,
+    prompt,
     schema: MakefileConfigSchema,
   });
 

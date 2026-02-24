@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { MakefileInputSchema, MakefileInput } from "./schemas";
 import { detectMakefileContext } from "./detector";
@@ -25,8 +25,17 @@ export class MakefileTool extends BaseTool<MakefileInput> {
       };
     }
 
+    const existingContent =
+      input.existingContent ?? readExistingConfig(path.join(input.projectPath, "Makefile"));
+    const isUpdate = !!existingContent;
+
     try {
-      const config = await generateMakefileConfig(detection, input.targets, this.provider);
+      const config = await generateMakefileConfig(
+        detection,
+        input.targets,
+        this.provider,
+        existingContent ?? undefined,
+      );
 
       const makefileContent = makefileToString(config);
 
@@ -36,6 +45,7 @@ export class MakefileTool extends BaseTool<MakefileInput> {
           detection,
           config,
           makefile: makefileContent,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -50,8 +60,14 @@ export class MakefileTool extends BaseTool<MakefileInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { makefile: string };
-    fs.writeFileSync(path.join(input.projectPath, "Makefile"), data.makefile, "utf-8");
+    const data = result.data as { makefile: string; isUpdate: boolean };
+    const filePath = path.join(input.projectPath, "Makefile");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
+    fs.writeFileSync(filePath, data.makefile, "utf-8");
 
     return result;
   }

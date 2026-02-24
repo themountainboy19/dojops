@@ -7,6 +7,12 @@ export const KubernetesInputSchema = z.object({
   replicas: z.number().int().positive().default(1),
   namespace: z.string().default("default"),
   outputPath: z.string().describe("Directory to write Kubernetes manifests to (e.g. './k8s')"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type KubernetesInput = z.infer<typeof KubernetesInputSchema>;

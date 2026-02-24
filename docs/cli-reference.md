@@ -48,15 +48,18 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Agents & Tools
 
-| Command                       | Description                                   |
-| ----------------------------- | --------------------------------------------- |
-| `dojops agents list`          | List all 16 specialist agents                 |
-| `dojops agents info <name>`   | Show agent details and tool dependencies      |
-| `dojops tools list`           | List system tools with install status         |
-| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/) |
-| `dojops tools remove <name>`  | Remove a sandboxed tool                       |
-| `dojops tools clean`          | Remove all sandbox tools                      |
-| `dojops inspect <target>`     | Inspect config or session state               |
+| Command                                | Description                                   |
+| -------------------------------------- | --------------------------------------------- |
+| `dojops agents list`                   | List all 16 specialist agents                 |
+| `dojops agents info <name>`            | Show agent details and tool dependencies      |
+| `dojops tools list`                    | List system tools with install status         |
+| `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
+| `dojops tools remove <name>`           | Remove a sandboxed tool                       |
+| `dojops tools clean`                   | Remove all sandbox tools                      |
+| `dojops tools plugins list`            | List discovered plugins (global + project)    |
+| `dojops tools plugins validate <path>` | Validate a plugin manifest                    |
+| `dojops tools plugins init <name>`     | Scaffold a new plugin with template files     |
+| `dojops inspect <target>`              | Inspect config or session state               |
 
 ### History & Audit
 
@@ -128,6 +131,11 @@ dojops "Create a Terraform config for S3 with versioning"
 dojops "Write a Kubernetes deployment for nginx with 3 replicas"
 dojops "Set up monitoring with Prometheus and alerting rules"
 dojops "Create a multi-stage Dockerfile for a Go application"
+
+# Update existing configs (auto-detects existing files, creates .bak backup)
+dojops "Add caching to the GitHub Actions workflow"
+dojops "Add a Redis service to docker-compose"
+dojops "Add an S3 bucket to the existing Terraform config"
 
 # Override provider/model for a single command
 dojops --provider=anthropic "Create a Helm chart for Redis"
@@ -213,6 +221,19 @@ dojops tools install hadolint
 
 # Cleanup
 dojops tools clean
+```
+
+### Plugin Management
+
+```bash
+# List discovered plugins (global + project)
+dojops tools plugins list
+
+# Scaffold a new plugin
+dojops tools plugins init my-tool
+
+# Validate a plugin manifest
+dojops tools plugins validate .dojops/plugins/my-tool/
 ```
 
 ### Administration

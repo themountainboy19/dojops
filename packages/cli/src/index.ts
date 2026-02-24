@@ -37,6 +37,7 @@ import {
   toolsInstallCommand,
   toolsRemoveCommand,
   toolsCleanCommand,
+  toolsPluginsCommand,
 } from "./commands/tools";
 import { scanCommand } from "./commands/scan";
 import { chatCommand } from "./commands/chat";
@@ -68,6 +69,7 @@ registerSubcommand("tools", "list", toolsListCommand);
 registerSubcommand("tools", "install", toolsInstallCommand);
 registerSubcommand("tools", "remove", toolsRemoveCommand);
 registerSubcommand("tools", "clean", toolsCleanCommand);
+registerSubcommand("tools", "plugins", toolsPluginsCommand);
 
 // ── Main ───────────────────────────────────────────────────────────
 

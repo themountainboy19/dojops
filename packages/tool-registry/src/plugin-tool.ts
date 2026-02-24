@@ -1,0 +1,204 @@
+import * as fs from "fs";
+import * as path from "path";
+import { execSync } from "child_process";
+import { ZodTypeAny } from "zod";
+import {
+  DevOpsTool,
+  ToolOutput,
+  VerificationResult,
+  VerificationIssue,
+  readExistingConfig,
+  backupFile,
+} from "@dojops/sdk";
+import { LLMProvider } from "@dojops/core";
+import { PluginManifest, PluginSource } from "./types";
+import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
+import { serialize } from "./serializers";
+
+/**
+ * Adapts a declarative PluginManifest into a DevOpsTool-compatible object.
+ * This is the core bridge that makes plugins behave identically to built-in tools.
+ */
+export class PluginTool implements DevOpsTool<Record<string, unknown>> {
+  name: string;
+  description: string;
+  inputSchema: ZodTypeAny;
+  source: PluginSource;
+
+  private manifest: PluginManifest;
+  private provider: LLMProvider;
+  private pluginDir: string;
+  private outputZodSchema?: ZodTypeAny;
+
+  constructor(
+    manifest: PluginManifest,
+    provider: LLMProvider,
+    pluginDir: string,
+    source: PluginSource,
+    inputSchemaRaw: Record<string, unknown>,
+    outputSchemaRaw?: Record<string, unknown>,
+  ) {
+    this.manifest = manifest;
+    this.provider = provider;
+    this.pluginDir = pluginDir;
+    this.source = source;
+    this.name = manifest.name;
+    this.description = manifest.description;
+    this.inputSchema = jsonSchemaToZod(inputSchemaRaw as JSONSchemaObject);
+
+    if (outputSchemaRaw) {
+      this.outputZodSchema = jsonSchemaToZod(outputSchemaRaw as JSONSchemaObject);
+    }
+  }
+
+  validate(input: unknown): { valid: boolean; error?: string } {
+    const result = this.inputSchema.safeParse(input);
+    if (result.success) {
+      return { valid: true };
+    }
+    return { valid: false, error: result.error.message };
+  }
+
+  async generate(input: Record<string, unknown>): Promise<ToolOutput> {
+    try {
+      let existingContent: string | undefined;
+
+      // If updateMode is enabled and detector path exists, read existing content
+      if (this.manifest.generator.updateMode && this.manifest.detector?.path) {
+        const detectorPath = this.resolveFilePath(this.manifest.detector.path, input);
+        const content = readExistingConfig(detectorPath);
+        if (content) {
+          existingContent = content;
+        }
+      }
+
+      // Also check if existingContent was provided in input
+      if (input.existingContent && typeof input.existingContent === "string") {
+        existingContent = input.existingContent;
+      }
+
+      const isUpdate = !!existingContent;
+
+      // Build the LLM prompt
+      let systemPrompt = this.manifest.generator.systemPrompt;
+      if (isUpdate && existingContent) {
+        systemPrompt += `\n\nYou are UPDATING an existing configuration. Here is the current content:\n\`\`\`\n${existingContent}\n\`\`\`\n\nPreserve existing settings and make minimal, targeted changes.`;
+      }
+
+      const userPrompt = this.buildUserPrompt(input);
+
+      const response = await this.provider.generate({
+        system: systemPrompt,
+        prompt: userPrompt,
+        schema: this.outputZodSchema,
+      });
+
+      let data: unknown;
+      if (response.parsed) {
+        data = response.parsed;
+      } else {
+        try {
+          data = JSON.parse(response.content);
+        } catch {
+          data = response.content;
+        }
+      }
+
+      return {
+        success: true,
+        data: { generated: data, isUpdate },
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  async execute(input: Record<string, unknown>): Promise<ToolOutput> {
+    const result = await this.generate(input);
+    if (!result.success || !result.data) return result;
+
+    const data = result.data as { generated: unknown; isUpdate: boolean };
+
+    try {
+      for (const file of this.manifest.files) {
+        const filePath = this.resolveFilePath(file.path, input);
+        const dir = path.dirname(filePath);
+
+        if (data.isUpdate) {
+          backupFile(filePath);
+        }
+
+        fs.mkdirSync(dir, { recursive: true });
+
+        const content = serialize(data.generated, file.serializer);
+        fs.writeFileSync(filePath, content, "utf-8");
+      }
+
+      return result;
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async verify(data: unknown): Promise<VerificationResult> {
+    if (!this.manifest.verification?.command) {
+      return { passed: true, tool: this.name, issues: [] };
+    }
+
+    try {
+      execSync(this.manifest.verification.command, {
+        cwd: this.pluginDir,
+        encoding: "utf-8",
+        timeout: 30_000,
+        stdio: "pipe",
+      });
+
+      return { passed: true, tool: this.name, issues: [] };
+    } catch (err) {
+      const output =
+        err && typeof err === "object" && "stderr" in err
+          ? String((err as { stderr: unknown }).stderr)
+          : String(err);
+
+      const issues: VerificationIssue[] = [
+        {
+          severity: "error",
+          message: `Verification command failed: ${output.slice(0, 500)}`,
+        },
+      ];
+
+      return {
+        passed: false,
+        tool: this.name,
+        issues,
+        rawOutput: output,
+      };
+    }
+  }
+
+  private buildUserPrompt(input: Record<string, unknown>): string {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(input)) {
+      if (key === "existingContent") continue;
+      parts.push(`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
+    }
+    return parts.join("\n");
+  }
+
+  private resolveFilePath(templatePath: string, input: Record<string, unknown>): string {
+    let resolved = templatePath;
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === "string") {
+        resolved = resolved.replace(`{${key}}`, value);
+      }
+    }
+    return resolved;
+  }
+}

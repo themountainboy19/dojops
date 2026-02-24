@@ -6,9 +6,12 @@ export async function generateTerraformConfig(
   resources: string,
   backendType: string,
   llm: LLMProvider,
+  existingContent?: string,
 ): Promise<TerraformConfig> {
-  const response = await llm.generate({
-    system: `You are a Terraform expert. Generate Terraform configuration as structured JSON.
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Terraform expert. Update the existing Terraform configuration as structured JSON.
+Preserve existing resources and settings. Only add/modify what is requested.
 Use the ${provider} provider. Backend type: ${backendType}.
 
 You MUST respond with a JSON object matching this exact structure:
@@ -30,8 +33,39 @@ IMPORTANT:
 - "provider" must be an object with "name" (string), optional "region", and "config" (object)
 - "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
 - Each resource must have "type", "name", and "config" fields
-- Respond with valid JSON only, no markdown`,
-    prompt: `Generate Terraform configuration for: ${resources}`,
+- Respond with valid JSON only, no markdown`
+    : `You are a Terraform expert. Generate Terraform configuration as structured JSON.
+Use the ${provider} provider. Backend type: ${backendType}.
+
+You MUST respond with a JSON object matching this exact structure:
+{
+  "provider": { "name": "${provider}", "region": "us-east-1", "config": {} },
+  "backend": { "type": "${backendType}", "config": {} },
+  "variables": [
+    { "name": "var_name", "type": "string", "description": "desc", "default": "value" }
+  ],
+  "resources": [
+    { "type": "aws_instance", "name": "web", "config": { "ami": "ami-xxx", "instance_type": "t2.micro" } }
+  ],
+  "outputs": [
+    { "name": "output_name", "value": "aws_instance.web.public_ip", "description": "desc" }
+  ]
+}
+
+IMPORTANT:
+- "provider" must be an object with "name" (string), optional "region", and "config" (object)
+- "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
+- Each resource must have "type", "name", and "config" fields
+- Respond with valid JSON only, no markdown`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} Terraform configuration for: ${resources}`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await llm.generate({
+    system,
+    prompt,
     schema: TerraformConfigSchema,
   });
 

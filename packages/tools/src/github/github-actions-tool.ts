@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { GitHubActionsInputSchema, GitHubActionsInput } from "./schemas";
 import { detectProjectType } from "./detector";
@@ -25,12 +25,18 @@ export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
       };
     }
 
+    const existingContent =
+      input.existingContent ??
+      readExistingConfig(path.join(input.projectPath, ".github", "workflows", "ci.yml"));
+    const isUpdate = !!existingContent;
+
     try {
       const workflow = await generateWorkflow(
         projectType,
         input.defaultBranch,
         input.nodeVersion,
         this.provider,
+        existingContent ?? undefined,
       );
 
       const yamlContent = workflowToYaml(workflow);
@@ -41,6 +47,7 @@ export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
           projectType,
           workflow,
           yaml: yamlContent,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -55,10 +62,16 @@ export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { yaml: string };
+    const data = result.data as { yaml: string; isUpdate: boolean };
     const workflowDir = path.join(input.projectPath, ".github", "workflows");
+    const filePath = path.join(workflowDir, "ci.yml");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
     fs.mkdirSync(workflowDir, { recursive: true });
-    fs.writeFileSync(path.join(workflowDir, "ci.yml"), data.yaml, "utf-8");
+    fs.writeFileSync(filePath, data.yaml, "utf-8");
 
     return result;
   }

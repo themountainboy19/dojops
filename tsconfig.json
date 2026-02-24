@@ -18,7 +18,8 @@
       "@dojops/executor/*": ["packages/executor/src/*"],
       "@dojops/api/*": ["packages/api/src/*"],
       "@dojops/scanner/*": ["packages/scanner/src/*"],
-      "@dojops/session/*": ["packages/session/src/*"]
+      "@dojops/session/*": ["packages/session/src/*"],
+      "@dojops/tool-registry/*": ["packages/tool-registry/src/*"]
     }
   }
 }

@@ -1,6 +1,6 @@
 # DevOps Tools
 
-DojOps includes 12 DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class.
+DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class. Additionally, a **plugin system** lets you extend DojOps with custom tools via declarative `plugin.yaml` manifests.
 
 ---
 
@@ -29,11 +29,12 @@ Every tool follows the same file structure:
 
 ```
 tool-name/
-  schemas.ts      Zod input/output schemas
+  schemas.ts      Zod input/output schemas (includes optional existingContent field)
   detector.ts     (optional) Filesystem detection of project context
   generator.ts    LLM call with structured schema -> serialization (YAML/HCL/custom)
+                  Accepts optional existingContent param to switch between "generate new" and "update existing" prompts
   verifier.ts     (optional) External tool validation
-  *-tool.ts       BaseTool subclass: generate(), verify(), execute()
+  *-tool.ts       BaseTool subclass: generate() auto-detects existing files, verify() validates, execute() backs up + writes
   index.ts        Barrel exports
   *.test.ts       Vitest tests
 ```
@@ -63,7 +64,7 @@ abstract class BaseTool<TInput> {
 
 Each tool defines Zod schemas for its input and output:
 
-- **Input schema** — Validates user/planner input before generation
+- **Input schema** — Validates user/planner input before generation. All input schemas include an optional `existingContent` field for passing existing config content to update/enhance
 - **Output schema** — Validates LLM response structure before serialization
 
 ### Detector (`detector.ts`)
@@ -81,6 +82,12 @@ Optional filesystem detector that identifies project context:
 
 Calls the LLM with a structured Zod schema, parses the response, and serializes to the target format (YAML, HCL, Dockerfile syntax, INI, etc.).
 
+All generators accept an optional `existingContent?: string` parameter. When provided:
+
+- The **system prompt** switches from "Generate a new config" to "Update the existing config. Preserve existing structure and settings."
+- The **user prompt** appends the existing content in a delimited block (`--- EXISTING CONFIGURATION ---`)
+- This enables tools to enhance existing configs rather than replacing them from scratch
+
 ### Verifier (`verifier.ts`)
 
 Optional external tool validation. Three tools implement verification:
@@ -92,6 +99,41 @@ Optional external tool validation. Three tools implement verification:
 | Kubernetes | `kubectl`       | `kubectl --dry-run=client` |
 
 Verification is opt-in via `--verify` and gracefully skips if the external binary is not installed.
+
+### Existing Config Auto-Detection
+
+All 12 tools auto-detect existing config files and switch to update mode when found. Each tool knows its output file path and reads existing content automatically:
+
+| Tool           | Auto-Detect Path                                                       |
+| -------------- | ---------------------------------------------------------------------- |
+| GitHub Actions | `{projectPath}/.github/workflows/ci.yml`                               |
+| Terraform      | `{projectPath}/main.tf`                                                |
+| Kubernetes     | `{outputPath}/{appName}.yaml`                                          |
+| Helm           | `{outputPath}/{chartName}/values.yaml`                                 |
+| Ansible        | `{outputPath}/{playbookName}.yml`                                      |
+| Docker Compose | `{projectPath}/docker-compose.yml` (+ `.yaml`, `compose.yml` variants) |
+| Dockerfile     | `{outputPath}/Dockerfile` then `{projectPath}/Dockerfile`              |
+| Nginx          | `{outputPath}/nginx.conf`                                              |
+| Makefile       | `{projectPath}/Makefile`                                               |
+| GitLab CI      | `{projectPath}/.gitlab-ci.yml`                                         |
+| Prometheus     | `{outputPath}/prometheus.yml`                                          |
+| Systemd        | `{outputPath}/{serviceName}.service`                                   |
+
+**Behavior:**
+
+1. If `existingContent` is explicitly passed in the input, it takes priority over auto-detection
+2. Otherwise, the tool reads the file at the auto-detect path using `readExistingConfig()` (from `@dojops/sdk`)
+3. Files larger than 50KB are skipped (returns `null`)
+4. The `generate()` output includes `isUpdate: boolean` so callers (CLI, planner) can distinguish create vs update
+
+### Backup Before Overwrite
+
+When `execute()` writes to a file that already exists, it creates a `.bak` backup first using `backupFile()` from `@dojops/sdk`. For example:
+
+- `main.tf` → `main.tf.bak`
+- `.github/workflows/ci.yml` → `.github/workflows/ci.yml.bak`
+
+Backups are only created when updating existing files, not when creating new ones.
 
 **VerificationResult:**
 
@@ -219,7 +261,13 @@ To add a new tool to DojOps:
    ```typescript
    import { z } from "@dojops/sdk";
    export const MyToolInputSchema = z.object({
-     /* ... */
+     /* tool-specific fields */
+     existingContent: z
+       .string()
+       .optional()
+       .describe(
+         "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+       ),
    });
    export const MyToolOutputSchema = z.object({
      /* ... */
@@ -229,11 +277,15 @@ To add a new tool to DojOps:
 3. **Implement the generator** (`generator.ts`):
 
    ```typescript
-   export async function generateMyTool(input, provider) {
-     const response = await provider.generate({
-       prompt: buildPrompt(input),
-       schema: MyToolOutputSchema,
-     });
+   export async function generateMyTool(input, provider, existingContent?: string) {
+     const isUpdate = !!existingContent;
+     const system = isUpdate
+       ? "Update the existing config. Preserve existing structure and settings."
+       : "Generate a new config from scratch.";
+     const prompt = isUpdate
+       ? `${buildPrompt(input)}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+       : buildPrompt(input);
+     const response = await provider.generate({ system, prompt, schema: MyToolOutputSchema });
      return parseAndValidate(response.content, MyToolOutputSchema);
    }
    ```
@@ -241,15 +293,20 @@ To add a new tool to DojOps:
 4. **Create the tool class** (`my-tool.ts`):
 
    ```typescript
-   import { BaseTool } from "@dojops/sdk";
+   import { BaseTool, readExistingConfig, backupFile } from "@dojops/sdk";
    export class MyTool extends BaseTool<MyToolInput> {
      name = "my-tool";
      inputSchema = MyToolInputSchema;
      async generate(input) {
-       /* ... */
+       const existingContent = input.existingContent ?? readExistingConfig(outputPath);
+       const isUpdate = !!existingContent;
+       const result = await generateMyTool(input, this.provider, existingContent);
+       return { success: true, data: { ...result, isUpdate } };
      }
      async execute(input) {
-       /* ... */
+       const result = await this.generate(input);
+       if (result.data.isUpdate) backupFile(outputPath);
+       // Write files to disk
      }
    }
    ```
@@ -258,4 +315,129 @@ To add a new tool to DojOps:
 
 6. **Export from index** (`index.ts`) and add to the tools barrel export in `packages/tools/src/index.ts`.
 
-7. **Write tests** (`my-tool.test.ts`).
+7. **Write tests** (`my-tool.test.ts`) — include tests for auto-detection, update mode prompts, and backup creation.
+
+---
+
+## Plugin System
+
+DojOps supports custom tools via the `@dojops/tool-registry` plugin system. Plugin tools are discovered automatically and behave exactly like built-in tools — they go through the same Planner, Executor, verification, and audit pipeline.
+
+### Plugin Discovery
+
+Plugins are discovered from two locations:
+
+1. **Global:** `~/.dojops/plugins/<name>/plugin.yaml`
+2. **Project:** `.dojops/plugins/<name>/plugin.yaml` (overrides global if same name)
+
+Plugin discovery happens automatically on every command — no manual registration needed.
+
+### Plugin Manifest (`plugin.yaml`)
+
+Each plugin is a directory containing a `plugin.yaml` manifest and a JSON Schema file:
+
+```yaml
+spec: 1
+name: my-tool
+version: 1.0.0
+type: tool
+description: "Generates configuration for My Tool"
+inputSchema: input.schema.json
+
+generator:
+  strategy: llm
+  systemPrompt: |
+    You are a My Tool configuration expert.
+    Generate valid My Tool configuration based on the user's requirements.
+  updateMode: true
+  existingDelimiter: "--- EXISTING CONFIGURATION ---"
+
+files:
+  - path: my-tool.yml
+    serializer: yaml
+
+verification:
+  command: my-tool validate --config my-tool.yml
+
+detector:
+  path: my-tool.yml
+
+tags:
+  - configuration
+  - my-tool
+
+permissions:
+  filesystem: project
+  network: none
+  child_process: required
+```
+
+### Input Schema (`input.schema.json`)
+
+A JSON Schema file defining the plugin's input parameters:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string", "description": "Application name" },
+    "environment": {
+      "type": "string",
+      "enum": ["development", "staging", "production"],
+      "default": "development"
+    }
+  },
+  "required": ["name"]
+}
+```
+
+JSON Schema inputs are converted to Zod schemas at runtime, ensuring full compatibility with the Planner's `zodSchemaToText()` and the Executor's validation pipeline.
+
+### Plugin CLI Commands
+
+```bash
+# List all discovered plugins (global + project)
+dojops tools plugins list
+
+# Validate a plugin manifest
+dojops tools plugins validate .dojops/plugins/my-tool/
+
+# Scaffold a new plugin with template files
+dojops tools plugins init my-tool
+```
+
+### Plugin Policy
+
+Control which plugins are allowed via `.dojops/policy.yaml`:
+
+```yaml
+# Only allow specific plugins
+allowedPlugins:
+  - my-tool
+  - another-tool
+
+# Block specific plugins (takes precedence over allowedPlugins)
+blockedPlugins:
+  - untrusted-tool
+```
+
+### Plugin Audit Trail
+
+Plugin executions include additional audit metadata:
+
+- `toolType: "plugin"` — distinguishes from built-in tools
+- `pluginSource: "global" | "project"` — where the plugin was discovered
+- `pluginVersion` — version from the manifest
+- `pluginHash` — SHA-256 hash of plugin directory for integrity verification
+
+### Supported Serializers
+
+| Serializer | Description                        |
+| ---------- | ---------------------------------- |
+| `yaml`     | YAML via js-yaml                   |
+| `json`     | JSON via JSON.stringify (indented) |
+| `raw`      | Passthrough string                 |
+| `hcl`      | Falls back to raw (v1)             |
+| `ini`      | Falls back to raw (v1)             |
+| `toml`     | Falls back to raw (v1)             |

@@ -1,10 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput } from "@dojops/sdk";
+import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { DockerComposeInputSchema, DockerComposeInput } from "./schemas";
 import { detectComposeContext } from "./detector";
 import { generateComposeConfig, composeToYaml } from "./generator";
+
+const COMPOSE_FILES = ["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"];
 
 export class DockerComposeTool extends BaseTool<DockerComposeInput> {
   name = "docker-compose";
@@ -18,12 +20,22 @@ export class DockerComposeTool extends BaseTool<DockerComposeInput> {
   async generate(input: DockerComposeInput): Promise<ToolOutput> {
     const detection = detectComposeContext(input.projectPath);
 
+    let existingContent = input.existingContent ?? null;
+    if (!existingContent) {
+      for (const f of COMPOSE_FILES) {
+        existingContent = readExistingConfig(path.join(input.projectPath, f));
+        if (existingContent) break;
+      }
+    }
+    const isUpdate = !!existingContent;
+
     try {
       const config = await generateComposeConfig(
         detection,
         input.services,
         input.networkMode,
         this.provider,
+        existingContent ?? undefined,
       );
 
       const yamlContent = composeToYaml(config);
@@ -34,6 +46,7 @@ export class DockerComposeTool extends BaseTool<DockerComposeInput> {
           detection,
           config,
           yaml: yamlContent,
+          isUpdate,
         },
       };
     } catch (err) {
@@ -48,8 +61,14 @@ export class DockerComposeTool extends BaseTool<DockerComposeInput> {
     const result = await this.generate(input);
     if (!result.success || !result.data) return result;
 
-    const data = result.data as { yaml: string };
-    fs.writeFileSync(path.join(input.projectPath, "docker-compose.yml"), data.yaml, "utf-8");
+    const data = result.data as { yaml: string; isUpdate: boolean };
+    const filePath = path.join(input.projectPath, "docker-compose.yml");
+
+    if (data.isUpdate) {
+      backupFile(filePath);
+    }
+
+    fs.writeFileSync(filePath, data.yaml, "utf-8");
 
     return result;
   }

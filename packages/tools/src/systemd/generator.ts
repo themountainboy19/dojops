@@ -4,16 +4,29 @@ import { SystemdConfig, SystemdConfigSchema, SystemdInput } from "./schemas";
 export async function generateSystemdConfig(
   input: SystemdInput,
   provider: LLMProvider,
+  existingContent?: string,
 ): Promise<SystemdConfig> {
-  const response = await provider.generate({
-    system: `You are a Linux systemd expert. Generate a systemd service unit configuration as structured JSON.
-Respond with valid JSON matching the required structure.`,
-    prompt: `Generate a systemd service unit for: ${input.serviceName}
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Linux systemd expert. Update the existing systemd service unit configuration as structured JSON.
+Preserve existing settings. Only add/modify what is requested.
+Respond with valid JSON matching the required structure.`
+    : `You are a Linux systemd expert. Generate a systemd service unit configuration as structured JSON.
+Respond with valid JSON matching the required structure.`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} a systemd service unit for: ${input.serviceName}
 ExecStart: ${input.execStart}
 User: ${input.user}
 ${input.description ? `Description: ${input.description}` : ""}
 ${input.workingDirectory ? `WorkingDirectory: ${input.workingDirectory}` : ""}
-Configure appropriate restart behavior, logging to journal, and standard dependencies.`,
+Configure appropriate restart behavior, logging to journal, and standard dependencies.`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await provider.generate({
+    system,
+    prompt,
     schema: SystemdConfigSchema,
   });
 

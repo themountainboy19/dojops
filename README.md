@@ -117,7 +117,9 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Tools
 
-- **12 DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
+- **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
+- **Plugin system** — Extend DojOps with custom tools via declarative `plugin.yaml` manifests + JSON Schema. Drop a plugin into `~/.dojops/plugins/` or `.dojops/plugins/` and it's automatically available to all commands. Scaffold new plugins with `dojops tools plugins init <name>`
+- **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input and LLM output is validated against Zod schemas before execution
 - **Deep verification** — Optional `--verify` runs generated configs through external validators (terraform validate, hadolint, kubectl dry-run) before writing files
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
@@ -151,24 +153,26 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ## Architecture
 
 ```
-@dojops/cli          CLI entry point + rich TUI (@clack/prompts)
-@dojops/api          REST API (Express) + web dashboard + factory functions
-@dojops/planner      TaskGraph decomposition + topological executor
-@dojops/executor     SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/tools        12 DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
-                     Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner      6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
-@dojops/session      Chat session management + memory + context injection
-@dojops/core         LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
-@dojops/sdk          BaseTool<T> abstract class with Zod validation + optional verify()
+@dojops/cli            CLI entry point + rich TUI (@clack/prompts)
+@dojops/api            REST API (Express) + web dashboard + factory functions
+@dojops/tool-registry  Tool registry + plugin system (discovers built-in + plugin tools)
+@dojops/planner        TaskGraph decomposition + topological executor
+@dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
+@dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+                       Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
+@dojops/scanner        6 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint) + remediation
+@dojops/session        Chat session management + memory + context injection
+@dojops/core           LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
 ### Package Dependency Flow
 
 ```
-cli → api → planner → executor → tools → core → sdk
-                   → scanner
-                   → session → core
+cli → api → tool-registry → tools → core → sdk
+          → planner → executor
+          → scanner
+          → session → core
 ```
 
 Full architecture details in [docs/architecture.md](docs/architecture.md).
@@ -220,15 +224,18 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 #### Agents & Tools
 
-| Command                       | Description                                   |
-| ----------------------------- | --------------------------------------------- |
-| `dojops agents list`          | List all 16 specialist agents                 |
-| `dojops agents info <name>`   | Show agent details and tool dependencies      |
-| `dojops tools list`           | List system tools with install status         |
-| `dojops tools install <name>` | Download tool into sandbox (~/.dojops/tools/) |
-| `dojops tools remove <name>`  | Remove a sandboxed tool                       |
-| `dojops tools clean`          | Remove all sandbox tools                      |
-| `dojops inspect <target>`     | Inspect config or session state               |
+| Command                                | Description                                   |
+| -------------------------------------- | --------------------------------------------- |
+| `dojops agents list`                   | List all 16 specialist agents                 |
+| `dojops agents info <name>`            | Show agent details and tool dependencies      |
+| `dojops tools list`                    | List system tools with install status         |
+| `dojops tools install <name>`          | Download tool into sandbox (~/.dojops/tools/) |
+| `dojops tools remove <name>`           | Remove a sandboxed tool                       |
+| `dojops tools clean`                   | Remove all sandbox tools                      |
+| `dojops tools plugins list`            | List discovered plugins (global + project)    |
+| `dojops tools plugins validate <path>` | Validate a plugin manifest                    |
+| `dojops tools plugins init <name>`     | Scaffold a new plugin with template files     |
+| `dojops inspect <target>`              | Inspect config or session state               |
 
 #### History & Audit
 
@@ -292,6 +299,11 @@ dojops "Create a Terraform config for S3"
 dojops "Write a Kubernetes deployment for nginx"
 dojops "Set up monitoring with Prometheus"
 
+# Update existing configs (auto-detects existing files, creates .bak backup)
+dojops "Add caching to the GitHub Actions workflow"
+dojops "Add a Redis service to docker-compose"
+dojops "Add S3 bucket to the existing Terraform config"
+
 # Plan and execute
 dojops plan "Set up CI/CD for a Node.js app"
 dojops plan --execute --yes "Create CI for Node app"
@@ -320,6 +332,11 @@ dojops chat --session myproject --agent terraform
 # Tool management
 dojops tools install terraform
 dojops tools install kubectl
+
+# Plugin management
+dojops tools plugins list
+dojops tools plugins init my-tool
+dojops tools plugins validate .dojops/plugins/my-tool/
 
 # Administration
 dojops doctor
@@ -366,7 +383,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | —                    |
 | Systemd        | INI                | `{name}.service`                    | —                    |
 
-All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests.
+All tools follow the `BaseTool<T>` pattern: `schemas.ts` → `detector.ts` (optional) → `generator.ts` → `verifier.ts` (optional) → `*-tool.ts` → tests. Tools auto-detect and update existing config files with `.bak` backup.
 
 ---
 
@@ -508,7 +525,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 698 tests
+pnpm test               # Run all 806 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -527,31 +544,33 @@ pnpm dojops -- serve --port=8080
 
 ```
 packages/
-  cli/            CLI entry point + TUI (@clack/prompts)
-  api/            REST API (Express) + web dashboard
-  core/           LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
-  planner/        Task graph decomposition + topological executor
-  executor/       SafeExecutor + policy engine + approval workflows + audit log
-  tools/          12 DevOps tools
-  scanner/        6 security scanners + LLM-powered remediation
-  session/        Chat session management + memory + context injection
-  sdk/            BaseTool<T> abstract class + Zod re-export + verification types
+  cli/              CLI entry point + TUI (@clack/prompts)
+  api/              REST API (Express) + web dashboard
+  tool-registry/    Tool registry + plugin system (built-in + plugin discovery)
+  core/             LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
+  planner/          Task graph decomposition + topological executor
+  executor/         SafeExecutor + policy engine + approval workflows + audit log
+  tools/            12 built-in DevOps tools
+  scanner/          6 security scanners + LLM-powered remediation
+  session/          Chat session management + memory + context injection
+  sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
 
 ### Test Coverage
 
-| Package            | Tests   |
-| ------------------ | ------- |
-| `@dojops/core`     | 208     |
-| `@dojops/cli`      | 137     |
-| `@dojops/tools`    | 111     |
-| `@dojops/api`      | 96      |
-| `@dojops/scanner`  | 43      |
-| `@dojops/executor` | 40      |
-| `@dojops/planner`  | 28      |
-| `@dojops/session`  | 28      |
-| `@dojops/sdk`      | 7       |
-| **Total**          | **698** |
+| Package                 | Tests   |
+| ----------------------- | ------- |
+| `@dojops/core`          | 208     |
+| `@dojops/cli`           | 137     |
+| `@dojops/tools`         | 121     |
+| `@dojops/api`           | 96      |
+| `@dojops/tool-registry` | 91      |
+| `@dojops/scanner`       | 43      |
+| `@dojops/executor`      | 40      |
+| `@dojops/planner`       | 28      |
+| `@dojops/session`       | 28      |
+| `@dojops/sdk`           | 14      |
+| **Total**               | **806** |
 
 ---
 
@@ -564,7 +583,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `scanner` → `session` → `api` → `cli`
+Publish order: `sdk` → `core` → `executor` → `planner` → `tools` → `tool-registry` → `scanner` → `session` → `api` → `cli`
 
 ---
 

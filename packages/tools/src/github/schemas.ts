@@ -26,6 +26,12 @@ export const GitHubActionsInputSchema = z.object({
     ),
   nodeVersion: z.string().default("20"),
   defaultBranch: z.string().default("main"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type GitHubActionsInput = z.infer<typeof GitHubActionsInputSchema>;

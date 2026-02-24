@@ -9,6 +9,12 @@ export const TerraformInputSchema = z.object({
   provider: TerraformProviderEnum,
   resources: z.string().describe("Description of infrastructure resources to provision"),
   backendType: z.enum(["local", "s3", "gcs", "azurerm"]).default("local"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type TerraformInput = z.infer<typeof TerraformInputSchema>;

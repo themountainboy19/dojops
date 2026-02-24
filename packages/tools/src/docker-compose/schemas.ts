@@ -6,6 +6,12 @@ export const DockerComposeInputSchema = z.object({
     .string()
     .describe("Description of services to include (e.g. 'web app with postgres and redis')"),
   networkMode: z.enum(["bridge", "host", "none"]).default("bridge"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type DockerComposeInput = z.infer<typeof DockerComposeInputSchema>;

@@ -85,17 +85,24 @@ describe("factory", () => {
   });
 
   describe("createTools", () => {
-    it("creates 5 tools", () => {
+    it("creates all 12 built-in tools", () => {
       process.env.DOJOPS_PROVIDER = "ollama";
       const provider = createProvider();
       const tools = createTools(provider);
-      expect(tools).toHaveLength(5);
+      expect(tools).toHaveLength(12);
       const names = tools.map((t) => t.name);
       expect(names).toContain("github-actions");
       expect(names).toContain("terraform");
       expect(names).toContain("kubernetes");
       expect(names).toContain("helm");
       expect(names).toContain("ansible");
+      expect(names).toContain("docker-compose");
+      expect(names).toContain("dockerfile");
+      expect(names).toContain("nginx");
+      expect(names).toContain("makefile");
+      expect(names).toContain("gitlab-ci");
+      expect(names).toContain("prometheus");
+      expect(names).toContain("systemd");
     });
   });
 

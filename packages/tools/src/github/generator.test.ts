@@ -48,6 +48,29 @@ describe("generateWorkflow", () => {
   });
 });
 
+describe("generateWorkflow with existingContent", () => {
+  it("includes existing content in prompt when provided", async () => {
+    const provider = mockProvider();
+    const existing = "name: OldCI\non: push";
+    await generateWorkflow({ type: "node" }, "main", "20", provider, existing);
+
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).toContain("--- EXISTING CONFIGURATION ---");
+    expect(call.prompt).toContain(existing);
+    expect(call.system).toContain("Update");
+    expect(call.system).toContain("Preserve");
+  });
+
+  it("does not include existing content block when not provided", async () => {
+    const provider = mockProvider();
+    await generateWorkflow({ type: "node" }, "main", "20", provider);
+
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.prompt).not.toContain("--- EXISTING CONFIGURATION ---");
+    expect(call.system).toContain("Generate");
+  });
+});
+
 describe("workflowToYaml", () => {
   it("serializes workflow to YAML string", () => {
     const yaml = workflowToYaml(mockWorkflow);

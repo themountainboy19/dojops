@@ -47,6 +47,9 @@ function buildContextSection(ctx: RepoContext): string {
   parts.push(
     `\nIMPORTANT: Set projectPath to "." (project root) unless the project structure suggests a subdirectory. For existing CI platforms, use matching config paths (e.g. if GitHub Actions already exist at .github/workflows/, place new workflows there).`,
   );
+  parts.push(
+    `\nTools automatically detect and read existing config files. For update/enhance tasks, just set the correct projectPath/outputPath — the tool handles existing file reading and preserves current configuration.`,
+  );
 
   return parts.join("\n");
 }

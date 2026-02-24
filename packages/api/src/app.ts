@@ -27,6 +27,7 @@ export interface AppDependencies {
   store: HistoryStore;
   publicDir?: string;
   rootDir?: string;
+  pluginCount?: number;
 }
 
 export function createApp(deps: AppDependencies): Express {
@@ -48,6 +49,7 @@ export function createApp(deps: AppDependencies): Express {
       status: "ok",
       provider: deps.provider.name,
       tools: deps.tools.map((t) => t.name),
+      pluginCount: deps.pluginCount ?? 0,
       metricsEnabled,
       timestamp: new Date().toISOString(),
     });

@@ -1,12 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import {
-  createProvider,
-  createTools,
-  createRouter,
-  createDebugger,
-  createDiffAnalyzer,
-} from "@dojops/api";
+import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { resolveToken } from "../config";
@@ -39,13 +34,13 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   const provider = createProvider({ provider: providerName, model, apiKey });
-  const tools = createTools(provider);
+  const projectRoot = findProjectRoot() ?? undefined;
+  const registry = createToolRegistry(provider, projectRoot);
+  const tools = registry.getAll();
   const router = createRouter(provider);
   const debugger_ = createDebugger(provider);
   const diffAnalyzer = createDiffAnalyzer(provider);
   const store = new HistoryStore();
-
-  const projectRoot = findProjectRoot() ?? undefined;
 
   const app = createApp({
     provider,
@@ -55,6 +50,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     diffAnalyzer,
     store,
     rootDir: projectRoot,
+    pluginCount: registry.getPlugins().length,
   });
 
   app.listen(port, () => {

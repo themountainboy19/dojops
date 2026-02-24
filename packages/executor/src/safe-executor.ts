@@ -19,15 +19,22 @@ export class SafeExecutor {
     this.approvalHandler = options.approvalHandler ?? new AutoApproveHandler();
   }
 
-  async executeTask(taskId: string, tool: DevOpsTool, input: unknown): Promise<ExecutionResult> {
+  async executeTask(
+    taskId: string,
+    tool: DevOpsTool,
+    input: unknown,
+    metadata?: Record<string, unknown>,
+  ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const filesWritten: string[] = [];
+    const meta = metadata;
 
     const validation = tool.validate(input);
     if (!validation.valid) {
       return this.buildResult(taskId, tool.name, "failed", startTime, {
         error: `Validation failed: ${validation.error}`,
         filesWritten,
+        metadata: meta,
       });
     }
 
@@ -42,6 +49,7 @@ export class SafeExecutor {
       return this.buildResult(taskId, tool.name, status, startTime, {
         error: err instanceof Error ? err.message : String(err),
         filesWritten,
+        metadata: meta,
       });
     }
 
@@ -50,6 +58,7 @@ export class SafeExecutor {
         error: generateOutput.error,
         output: generateOutput.data,
         filesWritten,
+        metadata: meta,
       });
     }
 
@@ -69,6 +78,7 @@ export class SafeExecutor {
             output: generateOutput.data,
             verification,
             filesWritten,
+            metadata: meta,
           });
         }
       } catch {
@@ -83,6 +93,7 @@ export class SafeExecutor {
         approval: "skipped",
         verification,
         filesWritten,
+        metadata: meta,
       });
     }
 
@@ -103,6 +114,7 @@ export class SafeExecutor {
           approval,
           verification,
           filesWritten,
+          metadata: meta,
         });
       }
     } else {
@@ -119,6 +131,7 @@ export class SafeExecutor {
           approval,
           verification,
           filesWritten,
+          metadata: meta,
         });
       }
 
@@ -127,6 +140,7 @@ export class SafeExecutor {
         approval,
         verification,
         filesWritten,
+        metadata: meta,
       });
     } catch (err) {
       const status =
@@ -138,6 +152,7 @@ export class SafeExecutor {
         approval,
         verification,
         filesWritten,
+        metadata: meta,
       });
     }
   }
@@ -157,6 +172,7 @@ export class SafeExecutor {
       approval?: ApprovalDecision;
       verification?: VerificationResult;
       filesWritten: string[];
+      metadata?: Record<string, unknown>;
     },
   ): ExecutionResult {
     const durationMs = Date.now() - startTime;
@@ -174,6 +190,16 @@ export class SafeExecutor {
       filesWritten: details.filesWritten,
       durationMs,
     };
+
+    // Enrich audit entry with plugin metadata if provided
+    const meta = details.metadata;
+    if (meta) {
+      if (meta.toolType) auditEntry.toolType = meta.toolType as AuditEntry["toolType"];
+      if (meta.pluginSource)
+        auditEntry.pluginSource = meta.pluginSource as AuditEntry["pluginSource"];
+      if (meta.pluginVersion) auditEntry.pluginVersion = meta.pluginVersion as string;
+      if (meta.pluginHash) auditEntry.pluginHash = meta.pluginHash as string;
+    }
     this.auditLog.push(auditEntry);
 
     return {

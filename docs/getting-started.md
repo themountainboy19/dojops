@@ -81,6 +81,21 @@ dojops "Set up GitHub Actions CI for a TypeScript project"
 dojops "Create a Prometheus monitoring config with alerting rules"
 ```
 
+### Updating Existing Configs
+
+DojOps can also update existing configurations. When a config file already exists, DojOps automatically reads it and tells the LLM to preserve and enhance it rather than starting from scratch:
+
+```bash
+# If you already have a GitHub Actions workflow, DojOps detects it and enhances it
+dojops "Add caching to the GitHub Actions workflow"
+
+# Same for Terraform, Docker Compose, etc.
+dojops "Add a Redis service to docker-compose"
+dojops "Add an S3 bucket to the existing Terraform config"
+```
+
+A `.bak` backup is created before overwriting any existing file.
+
 ---
 
 ## Project Initialization
@@ -193,6 +208,27 @@ The dashboard provides 5 tabs for monitoring and operations:
 - **History** — Execution history with type filtering
 
 See [Web Dashboard](dashboard.md) for the full guide.
+
+---
+
+## Extending with Plugins
+
+DojOps supports custom tools via a plugin system. Create a plugin by dropping a `plugin.yaml` manifest + JSON Schema into `~/.dojops/plugins/` (global) or `.dojops/plugins/` (project-scoped):
+
+```bash
+# Scaffold a new plugin
+dojops tools plugins init my-tool
+
+# List discovered plugins
+dojops tools plugins list
+
+# Validate a plugin manifest
+dojops tools plugins validate .dojops/plugins/my-tool/
+```
+
+Plugins are automatically available to all commands — the Planner includes them in capabilities, the Executor validates and runs them, and the audit trail tracks their usage.
+
+See [DevOps Tools — Plugin System](tools.md#plugin-system) for the full guide.
 
 ---
 

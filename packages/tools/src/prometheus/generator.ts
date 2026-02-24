@@ -5,14 +5,27 @@ import { PrometheusResponse, PrometheusResponseSchema, PrometheusInput } from ".
 export async function generatePrometheusConfig(
   input: PrometheusInput,
   provider: LLMProvider,
+  existingContent?: string,
 ): Promise<PrometheusResponse> {
-  const response = await provider.generate({
-    system: `You are a Prometheus monitoring expert. Generate Prometheus scrape configuration and alert rules as structured JSON.
-Respond with valid JSON matching the required structure.`,
-    prompt: `Generate a Prometheus configuration for the following targets: ${input.targets.join(", ")}
+  const isUpdate = !!existingContent;
+  const system = isUpdate
+    ? `You are a Prometheus monitoring expert. Update the existing Prometheus scrape configuration and alert rules as structured JSON.
+Preserve existing scrape configs and settings. Only add/modify what is requested.
+Respond with valid JSON matching the required structure.`
+    : `You are a Prometheus monitoring expert. Generate Prometheus scrape configuration and alert rules as structured JSON.
+Respond with valid JSON matching the required structure.`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} a Prometheus configuration for the following targets: ${input.targets.join(", ")}
 Scrape interval: ${input.scrapeInterval}
 ${input.alertRules ? `Alert rules needed: ${input.alertRules}` : "No alert rules needed — leave alertGroups as an empty array."}
-Include appropriate job names and labels for each target.`,
+Include appropriate job names and labels for each target.`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await provider.generate({
+    system,
+    prompt,
     schema: PrometheusResponseSchema,
   });
 

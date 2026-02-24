@@ -4,19 +4,33 @@ import { NginxConfig, NginxConfigSchema, NginxInput } from "./schemas";
 export async function generateNginxConfig(
   input: NginxInput,
   provider: LLMProvider,
+  existingContent?: string,
 ): Promise<NginxConfig> {
+  const isUpdate = !!existingContent;
   const upstreamDesc = input.upstreams
     .map((u) => `${u.name}: [${u.servers.join(", ")}]`)
     .join("; ");
 
-  const response = await provider.generate({
-    system: `You are an Nginx configuration expert. Generate a reverse proxy configuration as structured JSON.
+  const system = isUpdate
+    ? `You are an Nginx configuration expert. Update the existing reverse proxy configuration as structured JSON.
+Preserve existing server blocks and settings. Only add/modify what is requested.
 ${input.sslEnabled ? "Include SSL/TLS configuration with certificate paths." : "HTTP only, no SSL."}
-Respond with valid JSON matching the required structure.`,
-    prompt: `Generate an Nginx reverse proxy config for server: ${input.serverName}
+Respond with valid JSON matching the required structure.`
+    : `You are an Nginx configuration expert. Generate a reverse proxy configuration as structured JSON.
+${input.sslEnabled ? "Include SSL/TLS configuration with certificate paths." : "HTTP only, no SSL."}
+Respond with valid JSON matching the required structure.`;
+
+  const basePrompt = `${isUpdate ? "Update" : "Generate"} an Nginx reverse proxy config for server: ${input.serverName}
 Upstreams: ${upstreamDesc}
 ${input.sslEnabled ? "Enable SSL with certificate at /etc/nginx/ssl/cert.pem and key at /etc/nginx/ssl/key.pem." : ""}
-Include appropriate proxy headers (X-Real-IP, X-Forwarded-For, Host).`,
+Include appropriate proxy headers (X-Real-IP, X-Forwarded-For, Host).`;
+  const prompt = isUpdate
+    ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
+    : basePrompt;
+
+  const response = await provider.generate({
+    system,
+    prompt,
     schema: NginxConfigSchema,
   });
 

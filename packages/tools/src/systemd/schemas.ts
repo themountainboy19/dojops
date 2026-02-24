@@ -7,6 +7,12 @@ export const SystemdInputSchema = z.object({
   workingDirectory: z.string().optional(),
   description: z.string().optional(),
   outputPath: z.string().describe("Directory to write the service unit file to"),
+  existingContent: z
+    .string()
+    .optional()
+    .describe(
+      "Existing config file content to update/enhance. If omitted, tool auto-detects existing files.",
+    ),
 });
 
 export type SystemdInput = z.infer<typeof SystemdInputSchema>;
