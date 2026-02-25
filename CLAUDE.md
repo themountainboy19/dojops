@@ -49,6 +49,8 @@ pnpm dojops -- serve                 # in-repo alternative
 @dojops/cli            → Entry point: `dojops "prompt"` and `dojops serve`, imports factories from @dojops/api
 @dojops/api            → REST API (Express) + web dashboard, factory functions, exposes all capabilities via HTTP
 @dojops/tool-registry  → Tool registry + plugin system + custom agent discovery: discovers built-in + plugin tools, custom agents from .dojops/agents/
+@dojops/scanner        → Security scanning engine: vulnerability, dependency, IaC, and secret scanning (trivy, gitleaks, checkov, npm-audit, pip-audit, hadolint)
+@dojops/session        → Interactive AI chat session management with multi-turn conversation support
 @dojops/planner        → TaskGraph decomposition (LLM) + topological executor
 @dojops/executor       → SafeExecutor: sandbox + policy engine + approval workflows + audit log
 @dojops/tools          → 12 built-in DevOps tools: GitHub Actions, Terraform, K8s, Helm, Ansible,
@@ -66,7 +68,13 @@ pnpm dojops -- serve                 # in-repo alternative
 | POST   | `/api/plan`             | Decompose goal + optional execution                  |
 | POST   | `/api/debug-ci`         | CI log diagnosis                                     |
 | POST   | `/api/diff`             | Infrastructure diff analysis                         |
-| GET    | `/api/agents`           | List specialist agents                               |
+| POST   | `/api/scan`             | Run security/dependency/IaC scans                    |
+| POST   | `/api/chat`             | Send a chat message (with agent routing)             |
+| POST   | `/api/chat/sessions`    | Create a new chat session                            |
+| GET    | `/api/chat/sessions`    | List all chat sessions                               |
+| GET    | `/api/chat/sessions/:id`| Get a specific chat session                          |
+| DELETE | `/api/chat/sessions/:id`| Delete a chat session                                |
+| GET    | `/api/agents`           | List specialist agents (built-in + custom)           |
 | GET    | `/api/history`          | Execution history                                    |
 | GET    | `/api/history/:id`      | Single history entry                                 |
 | DELETE | `/api/history`          | Clear history                                        |
@@ -130,8 +138,10 @@ verifier.ts    → (optional) external tool validation (terraform validate, hado
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). All tools support updating existing configs via auto-detection + `existingContent` input field + `.bak` backup before overwrite. Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
 - `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + plugin tools discovered from `~/.dojops/plugins/` (global) and `.dojops/plugins/` (project). Plugin manifests (`plugin.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Plugin policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`pluginSource`/`pluginVersion`/`pluginHash`/`systemPromptHash`. Plugin isolation: verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention on manifest file paths. Custom agent discovery: parses structured README.md from `.dojops/agents/` (project) and `~/.dojops/agents/` (global), converts to `SpecialistConfig` for `AgentRouter`
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results + plugin metadata, `withTimeout()` for execution limits
+- `@dojops/scanner` — Security scanning engine with 6 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint), supports `--security`, `--deps`, `--iac` scan modes, produces structured scan reports saved to `.dojops/scans/`
+- `@dojops/session` — Interactive AI chat session management with multi-turn conversation support, session persistence, agent routing within chat context
 - `@dojops/cli` — Full lifecycle: `init`, `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan`, `tools` (including `plugins list/validate/init`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with plugin version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, plugin integrity validation on resume (extracted to `checkPluginIntegrity()`), plugin metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
-- `@dojops/api` — REST API (Express + cors) exposing all capabilities via 13 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 9 tabs: Generate, Plan, Debug CI, Infra Diff, Agents, History, Overview, Security, Audit), 30s auto-refresh on metrics tabs, `supertest` integration tests
+- `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 5 tabs: Overview, Security, Audit, Agents, History), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/PLUGIN_SPEC_v1.md` freezes the v1 plugin contract (manifest schema, discovery, security constraints, compatibility promise)
 - Dev tooling — Vitest (897 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
@@ -167,5 +177,7 @@ Defined in root `tsconfig.json`:
 - `@dojops/planner/*` → `packages/planner/src/*`
 - `@dojops/tools/*` → `packages/tools/src/*`
 - `@dojops/executor/*` → `packages/executor/src/*`
+- `@dojops/scanner/*` → `packages/scanner/src/*`
+- `@dojops/session/*` → `packages/session/src/*`
 - `@dojops/api/*` → `packages/api/src/*`
 - `@dojops/tool-registry/*` → `packages/tool-registry/src/*`
