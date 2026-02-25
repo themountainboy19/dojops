@@ -30,6 +30,9 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.noColor = true;
     } else if (arg === "--non-interactive") {
       globalOpts.nonInteractive = true;
+    } else if (arg === "--") {
+      // Standard end-of-flags separator (commonly passed by pnpm/npm scripts) — skip it
+      continue;
     } else if (arg === "--profile" && i + 1 < args.length) {
       globalOpts.profile = args[++i];
     } else if (arg.startsWith("--profile=")) {
@@ -110,6 +113,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "policy",
     "agents",
     "session",
+    "plugins",
   ]);
 
   const command: string[] = [];

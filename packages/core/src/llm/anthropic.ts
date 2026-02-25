@@ -32,8 +32,10 @@ export class AnthropicProvider implements LLMProvider {
         ]
       : [{ role: "user" as const, content: req.prompt }];
 
+    let usedPrefill = false;
     if (req.schema) {
       messages.push({ role: "assistant", content: "{" });
+      usedPrefill = true;
     }
 
     let message: Anthropic.Message;
@@ -46,7 +48,23 @@ export class AnthropicProvider implements LLMProvider {
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
       });
     } catch (err: unknown) {
-      throw new Error(extractApiError(err), { cause: err });
+      const errMsg = extractApiError(err);
+      // Some models don't support assistant prefill — retry without it
+      if (usedPrefill && errMsg.includes("prefill")) {
+        usedPrefill = false;
+        const messagesWithoutPrefill = messages.filter(
+          (m) => !(m.role === "assistant" && m.content === "{"),
+        );
+        message = await this.client.messages.create({
+          model: this.model,
+          max_tokens: req.maxTokens ?? 8192,
+          system,
+          messages: messagesWithoutPrefill,
+          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+        });
+      } else {
+        throw new Error(errMsg, { cause: err });
+      }
     }
 
     let content = message.content[0].type === "text" ? message.content[0].text : "";
@@ -57,7 +75,9 @@ export class AnthropicProvider implements LLMProvider {
           "LLM response was truncated (hit max_tokens limit). The generated JSON is incomplete.",
         );
       }
-      content = "{" + content;
+      if (usedPrefill) {
+        content = "{" + content;
+      }
       const parsed = parseAndValidate(content, req.schema);
       return { content, parsed };
     }

@@ -57,14 +57,16 @@ registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
+// Agents/history handlers use an internal dispatcher that expects args[0] to be the subcommand.
+// Since resolveCommand strips the subcommand from args, we wrap each registration to prepend it.
 registerCommand("inspect", inspectCommand);
-registerSubcommand("agents", "list", agentsCommand);
-registerSubcommand("agents", "info", agentsCommand);
-registerSubcommand("agents", "create", agentsCommand);
-registerSubcommand("agents", "remove", agentsCommand);
-registerSubcommand("history", "list", historyCommand);
-registerSubcommand("history", "show", historyCommand);
-registerSubcommand("history", "verify", historyCommand);
+registerSubcommand("agents", "list", (args, ctx) => agentsCommand(["list", ...args], ctx));
+registerSubcommand("agents", "info", (args, ctx) => agentsCommand(["info", ...args], ctx));
+registerSubcommand("agents", "create", (args, ctx) => agentsCommand(["create", ...args], ctx));
+registerSubcommand("agents", "remove", (args, ctx) => agentsCommand(["remove", ...args], ctx));
+registerSubcommand("history", "list", (args, ctx) => historyCommand(["list", ...args], ctx));
+registerSubcommand("history", "show", (args, ctx) => historyCommand(["show", ...args], ctx));
+registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify", ...args], ctx));
 
 // Nested: tools <sub>
 registerSubcommand("tools", "list", toolsListCommand);
