@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { GitHubActionsInputSchema, GitHubActionsInput } from "./schemas";
 import { detectProjectType } from "./detector";
@@ -71,8 +77,9 @@ export class GitHubActionsTool extends BaseTool<GitHubActionsInput> {
     }
 
     fs.mkdirSync(workflowDir, { recursive: true });
-    fs.writeFileSync(filePath, data.yaml, "utf-8");
+    atomicWriteFileSync(filePath, data.yaml);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

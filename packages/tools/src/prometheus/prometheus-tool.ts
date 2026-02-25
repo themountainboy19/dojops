@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { PrometheusInputSchema, PrometheusInput } from "./schemas";
 import { generatePrometheusConfig, prometheusToYaml, alertRulesToYaml } from "./generator";
@@ -61,12 +67,15 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
     }
 
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(filePath, data.prometheusYaml, "utf-8");
+    atomicWriteFileSync(filePath, data.prometheusYaml);
 
+    const filesWritten = [filePath];
     if (data.alertsYaml) {
-      fs.writeFileSync(path.join(input.outputPath, "alert-rules.yml"), data.alertsYaml, "utf-8");
+      const alertPath = path.join(input.outputPath, "alert-rules.yml");
+      atomicWriteFileSync(alertPath, data.alertsYaml);
+      filesWritten.push(alertPath);
     }
 
-    return result;
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

@@ -14,6 +14,15 @@ import {
 } from "../state";
 import { ExitCode } from "../exit-codes";
 
+function restoreBackup(filePath: string): boolean {
+  const bakPath = `${filePath}.bak`;
+  if (fs.existsSync(bakPath)) {
+    fs.renameSync(bakPath, filePath);
+    return true;
+  }
+  return false;
+}
+
 export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
@@ -45,24 +54,37 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
 
   const latest = executions[0];
   const filesToDelete = latest.filesCreated;
+  const filesToRestore = latest.filesModified ?? [];
 
-  if (filesToDelete.length === 0) {
+  if (filesToDelete.length === 0 && filesToRestore.length === 0) {
     p.log.info("No files to roll back.");
     return;
   }
 
-  const lines = filesToDelete.map((f) => `  ${pc.red("-")} ${f}`);
+  const lines: string[] = [];
+  for (const f of filesToDelete) {
+    lines.push(`  ${pc.red("-")} ${f}`);
+  }
+  for (const f of filesToRestore) {
+    lines.push(`  ${pc.yellow("↩")} ${f} ${pc.dim("(restore from .bak)")}`);
+  }
   p.note(lines.join("\n"), pc.yellow(`Rollback plan ${planId}`));
 
   if (dryRun) {
-    p.log.info(`${filesToDelete.length} file(s) would be removed.`);
+    if (filesToDelete.length > 0) {
+      p.log.info(`${filesToDelete.length} file(s) would be removed.`);
+    }
+    if (filesToRestore.length > 0) {
+      p.log.info(`${filesToRestore.length} file(s) would be restored from .bak.`);
+    }
     p.log.info(pc.dim("Dry run — no changes will be made."));
     return;
   }
 
+  const totalActions = filesToDelete.length + filesToRestore.length;
   if (!ctx.globalOpts.nonInteractive) {
     const confirm = await p.confirm({
-      message: `Delete ${filesToDelete.length} created file(s)?`,
+      message: `Roll back ${totalActions} file(s)?`,
     });
     if (p.isCancel(confirm) || !confirm) {
       p.cancel("Cancelled.");
@@ -93,6 +115,20 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       }
     }
 
+    let restored = 0;
+    for (const file of filesToRestore) {
+      try {
+        if (restoreBackup(file)) {
+          p.log.success(`Restored: ${file}`);
+          restored++;
+        } else {
+          p.log.warn(`No .bak found: ${file}`);
+        }
+      } catch (err) {
+        p.log.error(`Restore failed: ${(err as Error).message}`);
+      }
+    }
+
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: process.env.USER ?? "unknown",
@@ -103,7 +139,10 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       durationMs: Date.now() - startTime,
     });
 
-    p.log.success(`Rolled back ${deleted}/${filesToDelete.length} files.`);
+    const parts: string[] = [];
+    if (filesToDelete.length > 0) parts.push(`${deleted}/${filesToDelete.length} removed`);
+    if (filesToRestore.length > 0) parts.push(`${restored}/${filesToRestore.length} restored`);
+    p.log.success(`Rolled back: ${parts.join(", ")}.`);
   } finally {
     releaseLock(root);
   }

@@ -6,6 +6,8 @@ export interface ToolOutput {
   success: boolean;
   data?: unknown;
   error?: string;
+  filesWritten?: string[];
+  filesModified?: string[];
 }
 
 export interface VerificationIssue {

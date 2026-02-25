@@ -1,6 +1,11 @@
-import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { MakefileInputSchema, MakefileInput } from "./schemas";
 import { detectMakefileContext } from "./detector";
@@ -67,8 +72,9 @@ export class MakefileTool extends BaseTool<MakefileInput> {
       backupFile(filePath);
     }
 
-    fs.writeFileSync(filePath, data.makefile, "utf-8");
+    atomicWriteFileSync(filePath, data.makefile);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

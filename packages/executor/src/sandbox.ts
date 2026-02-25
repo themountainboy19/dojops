@@ -17,7 +17,9 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
       checkFileSize(Buffer.byteLength(content, "utf-8"), policy);
       const dir = path.dirname(filePath);
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(filePath, content, "utf-8");
+      const tmpPath = `${filePath}.tmp`;
+      fs.writeFileSync(tmpPath, content, "utf-8");
+      fs.renameSync(tmpPath, filePath);
     },
 
     mkdirSync(dirPath: string): void {

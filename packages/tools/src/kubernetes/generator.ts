@@ -1,6 +1,7 @@
 import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { KubernetesManifest, KubernetesManifestSchema } from "./schemas";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generateKubernetesManifest(
   appName: string,
@@ -125,8 +126,8 @@ export function manifestToYaml(
     },
   };
 
-  const deployYaml = yaml.dump(deployment, { lineWidth: 120, noRefs: true });
-  const serviceYaml = yaml.dump(service, { lineWidth: 120, noRefs: true });
+  const deployYaml = yaml.dump(deployment, YAML_DUMP_OPTIONS);
+  const serviceYaml = yaml.dump(service, YAML_DUMP_OPTIONS);
 
   return `${deployYaml}---\n${serviceYaml}`;
 }

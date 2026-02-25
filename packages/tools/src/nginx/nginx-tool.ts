@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { NginxInputSchema, NginxInput } from "./schemas";
 import { generateNginxConfig, nginxConfigToString } from "./generator";
@@ -51,8 +57,9 @@ export class NginxTool extends BaseTool<NginxInput> {
     }
 
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(filePath, data.nginxConf, "utf-8");
+    atomicWriteFileSync(filePath, data.nginxConf);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

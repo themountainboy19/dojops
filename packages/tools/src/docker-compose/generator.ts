@@ -2,6 +2,7 @@ import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { ComposeConfig, ComposeConfigSchema } from "./schemas";
 import { ComposeDetectionResult } from "./detector";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generateComposeConfig(
   detection: ComposeDetectionResult,
@@ -41,5 +42,5 @@ Use restart policy "unless-stopped" for production services.`;
 }
 
 export function composeToYaml(config: ComposeConfig): string {
-  return yaml.dump(config, { lineWidth: 120, noRefs: true });
+  return yaml.dump(config, YAML_DUMP_OPTIONS);
 }

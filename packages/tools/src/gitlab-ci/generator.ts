@@ -2,6 +2,7 @@ import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { GitLabCIConfig, GitLabCIConfigSchema } from "./schemas";
 import { GitLabProjectTypeResult } from "./detector";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generateGitLabCI(
   projectType: GitLabProjectTypeResult,
@@ -51,5 +52,5 @@ export function gitlabCIToYaml(config: GitLabCIConfig): string {
     doc[jobName] = { ...job };
   }
 
-  return yaml.dump(doc, { lineWidth: 120, noRefs: true });
+  return yaml.dump(doc, YAML_DUMP_OPTIONS);
 }

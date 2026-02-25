@@ -21,6 +21,7 @@ import {
   releaseLock,
   isLocked,
   loadContext,
+  checkGitDirty,
   PlanState,
 } from "../state";
 import { ExitCode } from "../exit-codes";
@@ -39,7 +40,8 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const resume = hasFlag(args, "--resume");
   const replay = hasFlag(args, "--replay");
   const installPackages = hasFlag(args, "--install-packages");
-  const verify = hasFlag(args, "--verify");
+  const skipVerify = hasFlag(args, "--skip-verify");
+  const force = hasFlag(args, "--force");
   const planId = args.find((a) => !a.startsWith("-"));
 
   let plan: PlanState | null;
@@ -129,6 +131,33 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     process.exit(ExitCode.LOCK_CONFLICT);
   }
 
+  // Git dirty working tree check
+  if (!force) {
+    const gitStatus = checkGitDirty(root);
+    if (gitStatus.dirty) {
+      p.log.warn(pc.bold("Working tree has uncommitted changes:"));
+      for (const f of gitStatus.files.slice(0, 10)) {
+        p.log.warn(`  ${pc.yellow(f)}`);
+      }
+      if (gitStatus.files.length > 10) {
+        p.log.warn(pc.dim(`  ...and ${gitStatus.files.length - 10} more`));
+      }
+
+      if (autoApprove) {
+        p.log.warn("Proceeding despite dirty tree (--yes).");
+      } else {
+        const proceed = await p.confirm({
+          message: "Continue with uncommitted changes?",
+        });
+        if (p.isCancel(proceed) || !proceed) {
+          p.cancel("Commit or stash changes first, or use --force to skip this check.");
+          releaseLock(root);
+          process.exit(0);
+        }
+      }
+    }
+  }
+
   const startTime = Date.now();
   try {
     let provider = ctx.getProvider();
@@ -191,7 +220,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         allowWrite: true,
         requireApproval: !autoApprove,
         timeoutMs: 60_000,
-        skipVerification: !verify,
+        skipVerification: skipVerify,
       },
       approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     });
@@ -226,6 +255,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const planResult = await executor.execute(graph, { completedTaskIds });
 
     const allFilesCreated: string[] = [];
+    const allFilesModified: string[] = [];
     const newResults: Array<{
       taskId: string;
       status: string;
@@ -280,7 +310,9 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         Object.keys(metadata).length > 0 ? metadata : undefined,
       );
       const taskFiles = execResult.auditLog?.filesWritten ?? [];
+      const taskModified = execResult.auditLog?.filesModified ?? [];
       allFilesCreated.push(...taskFiles);
+      allFilesModified.push(...taskModified);
 
       newResults.push({
         taskId: taskResult.taskId,
@@ -329,7 +361,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       executedAt: new Date().toISOString(),
       status: status as "SUCCESS" | "FAILURE" | "PARTIAL",
       filesCreated: allFilesCreated,
-      filesModified: [],
+      filesModified: allFilesModified,
       durationMs,
     });
 

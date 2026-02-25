@@ -1,6 +1,7 @@
 import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { PrometheusResponse, PrometheusResponseSchema, PrometheusInput } from "./schemas";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generatePrometheusConfig(
   input: PrometheusInput,
@@ -43,7 +44,7 @@ export function prometheusToYaml(config: PrometheusResponse): string {
 
   doc.scrape_configs = config.scrape_configs;
 
-  return yaml.dump(doc, { lineWidth: 120, noRefs: true });
+  return yaml.dump(doc, YAML_DUMP_OPTIONS);
 }
 
 export function alertRulesToYaml(config: PrometheusResponse): string | null {
@@ -56,5 +57,5 @@ export function alertRulesToYaml(config: PrometheusResponse): string | null {
     })),
   };
 
-  return yaml.dump(doc, { lineWidth: 120, noRefs: true });
+  return yaml.dump(doc, YAML_DUMP_OPTIONS);
 }

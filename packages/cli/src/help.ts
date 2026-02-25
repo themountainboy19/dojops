@@ -57,14 +57,16 @@ export function printHelp(): void {
   console.log(pc.bold("PLAN OPTIONS"));
   console.log(`  ${pc.cyan("--execute")}          Generate + execute with approval workflow`);
   console.log(`  ${pc.cyan("--yes")}              Auto-approve all executions`);
+  console.log(`  ${pc.cyan("--skip-verify")}      Skip external config validation`);
   console.log();
   console.log(pc.bold("APPLY OPTIONS"));
   console.log(`  ${pc.cyan("--dry-run")}              Preview changes without executing`);
   console.log(`  ${pc.cyan("--resume")}               Resume a partially-applied plan`);
   console.log(`  ${pc.cyan("--yes")}                  Auto-approve all executions`);
   console.log(
-    `  ${pc.cyan("--verify")}               Validate generated configs with external tools`,
+    `  ${pc.cyan("--skip-verify")}          Skip external config validation (on by default)`,
   );
+  console.log(`  ${pc.cyan("--force")}                Skip git dirty working tree check`);
   console.log(`  ${pc.cyan("--install-packages")}     Run package install after apply`);
   console.log(
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
@@ -140,9 +142,14 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops plan --execute <prompt>`);
       console.log(`  ${pc.dim("$")} dojops plan --execute --yes <prompt>`);
       console.log(`\n${pc.bold("OPTIONS")}`);
-      console.log(`  ${pc.cyan("--execute")}    Generate + execute tasks with approval workflow`);
       console.log(
-        `  ${pc.cyan("--yes")}        Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
+        `  ${pc.cyan("--execute")}       Generate + execute tasks with approval workflow`,
+      );
+      console.log(
+        `  ${pc.cyan("--yes")}           Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
+      );
+      console.log(
+        `  ${pc.cyan("--skip-verify")}   Skip external config validation ${pc.dim("(--execute only)")}`,
       );
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops plan "Set up CI/CD for a Node.js app"`);
@@ -180,8 +187,9 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("--yes")}                Auto-approve all executions ${pc.dim("(implies --non-interactive)")}`,
       );
       console.log(
-        `  ${pc.cyan("--verify")}            Validate generated configs (terraform, hadolint, kubectl)`,
+        `  ${pc.cyan("--skip-verify")}       Skip external config validation (verification on by default)`,
       );
+      console.log(`  ${pc.cyan("--force")}              Skip git dirty working tree check`);
       console.log(`  ${pc.cyan("--install-packages")}  Run package install after successful apply`);
       console.log(
         `  ${pc.cyan("--replay")}            Deterministic replay: force temp=0, validate environment match`,
@@ -204,7 +212,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops apply`);
       console.log(`  ${pc.dim("$")} dojops apply --dry-run`);
       console.log(`  ${pc.dim("$")} dojops apply --resume --yes`);
-      console.log(`  ${pc.dim("$")} dojops apply --verify`);
+      console.log(`  ${pc.dim("$")} dojops apply --skip-verify`);
       console.log(`  ${pc.dim("$")} dojops apply --install-packages`);
       console.log(`  ${pc.dim("$")} dojops apply --replay`);
       console.log(`  ${pc.dim("$")} dojops apply --replay --yes`);

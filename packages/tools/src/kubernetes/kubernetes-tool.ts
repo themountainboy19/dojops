@@ -6,6 +6,7 @@ import {
   VerificationResult,
   readExistingConfig,
   backupFile,
+  atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { KubernetesInputSchema, KubernetesInput } from "./schemas";
@@ -74,8 +75,9 @@ export class KubernetesTool extends BaseTool<KubernetesInput> {
     }
 
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(filePath, data.yaml, "utf-8");
+    atomicWriteFileSync(filePath, data.yaml);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

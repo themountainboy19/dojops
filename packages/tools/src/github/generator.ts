@@ -2,6 +2,18 @@ import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { LLMWorkflowResponseSchema, Workflow } from "./schemas";
 import { ProjectTypeResult } from "./detector";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
+
+const GITHUB_KEY_ORDER = ["name", "on", "permissions", "env", "jobs"];
+
+function githubSortKeys(a: string, b: string): number {
+  const ai = GITHUB_KEY_ORDER.indexOf(a);
+  const bi = GITHUB_KEY_ORDER.indexOf(b);
+  if (ai !== -1 && bi !== -1) return ai - bi;
+  if (ai !== -1) return -1;
+  if (bi !== -1) return 1;
+  return a.localeCompare(b);
+}
 
 export async function generateWorkflow(
   projectType: ProjectTypeResult,
@@ -38,5 +50,5 @@ Include: checkout, setup, install dependencies, lint, test, build.`;
 }
 
 export function workflowToYaml(workflow: Workflow): string {
-  return yaml.dump(workflow, { lineWidth: 120, noRefs: true });
+  return yaml.dump(workflow, { ...YAML_DUMP_OPTIONS, sortKeys: githubSortKeys });
 }

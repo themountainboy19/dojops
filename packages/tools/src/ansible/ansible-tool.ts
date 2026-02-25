@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { AnsibleInputSchema, AnsibleInput } from "./schemas";
 import { generateAnsiblePlaybook, playbookToYaml } from "./generator";
@@ -56,8 +62,9 @@ export class AnsibleTool extends BaseTool<AnsibleInput> {
     }
 
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(filePath, data.yaml, "utf-8");
+    atomicWriteFileSync(filePath, data.yaml);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

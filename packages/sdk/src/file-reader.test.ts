@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
-import { readExistingConfig, backupFile } from "./file-reader";
+import { readExistingConfig, backupFile, atomicWriteFileSync, restoreBackup } from "./file-reader";
 
 describe("readExistingConfig", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-test-"));
@@ -64,5 +64,66 @@ describe("backupFile", () => {
     fs.writeFileSync(bakFile, "old backup", "utf-8");
     backupFile(testFile);
     expect(fs.readFileSync(bakFile, "utf-8")).toBe("new content");
+  });
+});
+
+describe("atomicWriteFileSync", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-atomic-"));
+  const testFile = path.join(tmpDir, "atomic.yml");
+
+  afterEach(() => {
+    for (const f of fs.readdirSync(tmpDir)) {
+      fs.unlinkSync(path.join(tmpDir, f));
+    }
+  });
+
+  it("writes file content", () => {
+    atomicWriteFileSync(testFile, "hello: world");
+    expect(fs.readFileSync(testFile, "utf-8")).toBe("hello: world");
+  });
+
+  it("does not leave .tmp file on success", () => {
+    atomicWriteFileSync(testFile, "content");
+    expect(fs.existsSync(`${testFile}.tmp`)).toBe(false);
+  });
+
+  it("overwrites existing file atomically", () => {
+    fs.writeFileSync(testFile, "old", "utf-8");
+    atomicWriteFileSync(testFile, "new");
+    expect(fs.readFileSync(testFile, "utf-8")).toBe("new");
+  });
+
+  it("creates parent directories if needed", () => {
+    const nestedFile = path.join(tmpDir, "sub", "dir", "file.yml");
+    atomicWriteFileSync(nestedFile, "nested content");
+    expect(fs.readFileSync(nestedFile, "utf-8")).toBe("nested content");
+    // Cleanup nested dirs
+    fs.rmSync(path.join(tmpDir, "sub"), { recursive: true });
+  });
+});
+
+describe("restoreBackup", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-restore-"));
+  const testFile = path.join(tmpDir, "config.yml");
+  const bakFile = `${testFile}.bak`;
+
+  afterEach(() => {
+    for (const f of fs.readdirSync(tmpDir)) {
+      fs.unlinkSync(path.join(tmpDir, f));
+    }
+  });
+
+  it("restores file from .bak", () => {
+    fs.writeFileSync(testFile, "modified content", "utf-8");
+    fs.writeFileSync(bakFile, "original content", "utf-8");
+    const result = restoreBackup(testFile);
+    expect(result).toBe(true);
+    expect(fs.readFileSync(testFile, "utf-8")).toBe("original content");
+    expect(fs.existsSync(bakFile)).toBe(false);
+  });
+
+  it("returns false when no .bak exists", () => {
+    const result = restoreBackup(path.join(tmpDir, "nonexistent.yml"));
+    expect(result).toBe(false);
   });
 });

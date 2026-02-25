@@ -1,6 +1,7 @@
 import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { HelmChartResponse, HelmChartResponseSchema, HelmInput } from "./schemas";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generateHelmValues(
   input: HelmInput,
@@ -74,11 +75,11 @@ export function generateChartYaml(input: HelmInput): string {
     version: "0.1.0",
     appVersion: input.appVersion,
   };
-  return yaml.dump(chart, { lineWidth: 120, noRefs: true });
+  return yaml.dump(chart, YAML_DUMP_OPTIONS);
 }
 
 export function valuesToYaml(values: HelmChartResponse["values"]): string {
-  return yaml.dump(values, { lineWidth: 120, noRefs: true });
+  return yaml.dump(values, YAML_DUMP_OPTIONS);
 }
 
 export function generateDeploymentTemplate(chartName: string): string {

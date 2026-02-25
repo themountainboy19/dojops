@@ -6,6 +6,7 @@ import {
   VerificationResult,
   readExistingConfig,
   backupFile,
+  atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { DockerfileInputSchema, DockerfileInput } from "./schemas";
@@ -92,12 +93,15 @@ export class DockerfileTool extends BaseTool<DockerfileInput> {
     }
 
     fs.mkdirSync(input.outputPath, { recursive: true });
-    fs.writeFileSync(filePath, data.dockerfile, "utf-8");
+    atomicWriteFileSync(filePath, data.dockerfile);
 
+    const filesWritten = [filePath];
     if (data.dockerignore) {
-      fs.writeFileSync(path.join(input.outputPath, ".dockerignore"), data.dockerignore, "utf-8");
+      const ignorePath = path.join(input.outputPath, ".dockerignore");
+      atomicWriteFileSync(ignorePath, data.dockerignore);
+      filesWritten.push(ignorePath);
     }
 
-    return result;
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

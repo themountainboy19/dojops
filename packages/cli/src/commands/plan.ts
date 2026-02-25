@@ -23,8 +23,13 @@ import {
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
   const executeMode = hasFlag(args, "--execute");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
+  const skipVerify = hasFlag(args, "--skip-verify");
 
-  const prompt = stripFlags(args, new Set(["--execute", "--yes"]), new Set<string>()).join(" ");
+  const prompt = stripFlags(
+    args,
+    new Set(["--execute", "--yes", "--skip-verify"]),
+    new Set<string>(),
+  ).join(" ");
 
   if (!prompt) {
     p.log.error("No prompt provided.");
@@ -123,6 +128,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
         allowWrite: true,
         requireApproval: !autoApprove,
         timeoutMs: 60_000,
+        skipVerification: skipVerify,
       },
       approvalHandler: autoApprove ? new AutoApproveHandler() : cliApprovalHandler(),
     });

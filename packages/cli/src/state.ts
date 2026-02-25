@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { execFileSync } from "node:child_process";
 import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
@@ -497,6 +498,27 @@ export function listScanReports(rootDir: string): Array<Record<string, unknown>>
       const tb = new Date(b.timestamp as string).getTime();
       return tb - ta;
     });
+}
+
+// ── Git status ────────────────────────────────────────────────────
+
+export function checkGitDirty(cwd: string): { dirty: boolean; files: string[] } {
+  try {
+    const output = execFileSync("git", ["status", "--porcelain"], {
+      cwd,
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const files = output
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return { dirty: files.length > 0, files };
+  } catch {
+    // Not a git repo or git not available — skip check
+    return { dirty: false, files: [] };
+  }
 }
 
 // ── Repo context ──────────────────────────────────────────────────

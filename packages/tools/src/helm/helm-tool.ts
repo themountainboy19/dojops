@@ -1,6 +1,12 @@
 import * as fs from "fs";
 import * as path from "path";
-import { BaseTool, ToolOutput, readExistingConfig, backupFile } from "@dojops/sdk";
+import {
+  BaseTool,
+  ToolOutput,
+  readExistingConfig,
+  backupFile,
+  atomicWriteFileSync,
+} from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { HelmInputSchema, HelmInput } from "./schemas";
 import {
@@ -81,16 +87,19 @@ export class HelmTool extends BaseTool<HelmInput> {
 
     fs.mkdirSync(templatesDir, { recursive: true });
 
-    fs.writeFileSync(path.join(chartDir, "Chart.yaml"), data.chartYaml, "utf-8");
-    fs.writeFileSync(path.join(chartDir, "values.yaml"), data.valuesYaml, "utf-8");
-    fs.writeFileSync(
-      path.join(templatesDir, "deployment.yaml"),
-      data.templates.deployment,
-      "utf-8",
-    );
-    fs.writeFileSync(path.join(templatesDir, "service.yaml"), data.templates.service, "utf-8");
-    fs.writeFileSync(path.join(templatesDir, "_helpers.tpl"), data.templates.helpers, "utf-8");
+    const chartYamlPath = path.join(chartDir, "Chart.yaml");
+    const valuesYamlPath = path.join(chartDir, "values.yaml");
+    const deploymentPath = path.join(templatesDir, "deployment.yaml");
+    const servicePath = path.join(templatesDir, "service.yaml");
+    const helpersPath = path.join(templatesDir, "_helpers.tpl");
 
-    return result;
+    atomicWriteFileSync(chartYamlPath, data.chartYaml);
+    atomicWriteFileSync(valuesYamlPath, data.valuesYaml);
+    atomicWriteFileSync(deploymentPath, data.templates.deployment);
+    atomicWriteFileSync(servicePath, data.templates.service);
+    atomicWriteFileSync(helpersPath, data.templates.helpers);
+
+    const filesWritten = [chartYamlPath, valuesYamlPath, deploymentPath, servicePath, helpersPath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [valuesYamlPath] : [] };
   }
 }

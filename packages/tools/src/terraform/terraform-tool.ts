@@ -6,6 +6,7 @@ import {
   VerificationResult,
   readExistingConfig,
   backupFile,
+  atomicWriteFileSync,
 } from "@dojops/sdk";
 import { LLMProvider } from "@dojops/core";
 import { TerraformInputSchema, TerraformInput } from "./schemas";
@@ -75,8 +76,9 @@ export class TerraformTool extends BaseTool<TerraformInput> {
     }
 
     fs.mkdirSync(input.projectPath, { recursive: true });
-    fs.writeFileSync(filePath, data.hcl, "utf-8");
+    atomicWriteFileSync(filePath, data.hcl);
 
-    return result;
+    const filesWritten = [filePath];
+    return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };
   }
 }

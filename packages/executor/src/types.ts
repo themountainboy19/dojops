@@ -51,6 +51,7 @@ export interface AuditEntry {
   error?: string;
   verification?: VerificationResult;
   filesWritten: string[];
+  filesModified: string[];
   durationMs: number;
   toolType?: "built-in" | "plugin";
   pluginSource?: "global" | "project";

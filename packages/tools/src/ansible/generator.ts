@@ -1,6 +1,7 @@
 import { LLMProvider } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { AnsiblePlaybook, AnsiblePlaybookSchema, AnsibleInput } from "./schemas";
+import { YAML_DUMP_OPTIONS } from "../yaml-options";
 
 export async function generateAnsiblePlaybook(
   input: AnsibleInput,
@@ -98,5 +99,5 @@ export function playbookToYaml(playbook: AnsiblePlaybook, input: AnsibleInput): 
     }));
   }
 
-  return yaml.dump([play], { lineWidth: 120, noRefs: true });
+  return yaml.dump([play], YAML_DUMP_OPTIONS);
 }

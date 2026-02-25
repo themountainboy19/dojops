@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { execFileSync } from "node:child_process";
 import {
   initProject,
   loadSession,
@@ -20,6 +21,7 @@ import {
   acquireLock,
   releaseLock,
   isLocked,
+  checkGitDirty,
   PlanState,
   SessionState,
 } from "./state";
@@ -395,5 +397,35 @@ describe("plan with PARTIAL status", () => {
     expect(loaded!.results![0].filesCreated).toEqual(["main.tf"]);
     expect(loaded!.results![0].executionStatus).toBe("completed");
     expect(loaded!.results![1].error).toBe("LLM provider timeout");
+  });
+});
+
+describe("checkGitDirty", () => {
+  it("returns dirty: false for non-git directory", () => {
+    const result = checkGitDirty(tmpDir);
+    expect(result.dirty).toBe(false);
+    expect(result.files).toEqual([]);
+  });
+
+  it("detects dirty working tree in a git repo", () => {
+    // Init a git repo
+    execFileSync("git", ["init"], { cwd: tmpDir, stdio: "pipe" });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: tmpDir, stdio: "pipe" });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: tmpDir, stdio: "pipe" });
+
+    // Create and commit a file
+    fs.writeFileSync(path.join(tmpDir, "clean.txt"), "clean", "utf-8");
+    execFileSync("git", ["add", "."], { cwd: tmpDir, stdio: "pipe" });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, stdio: "pipe" });
+
+    // Clean state
+    const clean = checkGitDirty(tmpDir);
+    expect(clean.dirty).toBe(false);
+
+    // Dirty state: create uncommitted file
+    fs.writeFileSync(path.join(tmpDir, "dirty.txt"), "dirty", "utf-8");
+    const dirty = checkGitDirty(tmpDir);
+    expect(dirty.dirty).toBe(true);
+    expect(dirty.files.length).toBeGreaterThan(0);
   });
 });

@@ -27,6 +27,7 @@ export class SafeExecutor {
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const filesWritten: string[] = [];
+    const filesModified: string[] = [];
     const meta = metadata;
 
     const validation = tool.validate(input);
@@ -124,6 +125,10 @@ export class SafeExecutor {
     try {
       const executeOutput = await withTimeout(tool.execute(input as never), this.policy.timeoutMs);
 
+      // Extract file metadata from tool output
+      if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
+      if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
+
       if (!executeOutput.success) {
         return this.buildResult(taskId, tool.name, "failed", startTime, {
           error: executeOutput.error,
@@ -131,6 +136,7 @@ export class SafeExecutor {
           approval,
           verification,
           filesWritten,
+          filesModified,
           metadata: meta,
         });
       }
@@ -140,6 +146,7 @@ export class SafeExecutor {
         approval,
         verification,
         filesWritten,
+        filesModified,
         metadata: meta,
       });
     } catch (err) {
@@ -172,6 +179,7 @@ export class SafeExecutor {
       approval?: ApprovalDecision;
       verification?: VerificationResult;
       filesWritten: string[];
+      filesModified?: string[];
       metadata?: Record<string, unknown>;
     },
   ): ExecutionResult {
@@ -188,6 +196,7 @@ export class SafeExecutor {
       error: details.error,
       verification: details.verification,
       filesWritten: details.filesWritten,
+      filesModified: details.filesModified ?? [],
       durationMs,
     };
 
