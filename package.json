@@ -38,8 +38,10 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@codecov/vite-plugin": "^1.9.1",
     "@eslint/js": "^10.0.1",
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "eslint": "^10.0.1",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
@@ -48,7 +50,6 @@
     "turbo": "^2.0.0",
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.56.0",
-    "@vitest/coverage-v8": "^4.0.18",
     "vitest": "^4.0.18"
   }
 }

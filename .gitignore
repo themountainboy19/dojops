@@ -57,5 +57,8 @@ CLAUDE.md
 # MCP (local server config)
 .mcp.json
 
+# Test reports
+test-report.junit.xml
+
 # DojOps project runtime data (created by `dojops init`, user-local)
 .dojops/
