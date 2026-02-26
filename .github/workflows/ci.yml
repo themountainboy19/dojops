@@ -276,7 +276,8 @@ jobs:
             let summaryContent = `## ${overallStatus} — DojOps CI Pipeline\n\n`;
             summaryContent += `**Workflow:** \`${{ github.workflow }}\`  \n`;
             summaryContent += `**Branch:** \`${{ github.ref_name }}\`  \n`;
-            summaryContent += `**Commit:** [\`${{ github.sha.substring(0, 7) }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})  \n`;
+            const shortSha = '${{ github.sha }}'.substring(0, 7);
+            summaryContent += `**Commit:** [\`${shortSha}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})  \n`;
             summaryContent += `**Triggered by:** @${{ github.actor }}  \n\n`;
 
             // Pipeline status table
