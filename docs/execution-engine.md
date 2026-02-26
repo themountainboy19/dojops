@@ -185,7 +185,7 @@ Audit entries form a hash chain:
 
 ### Storage
 
-Audit entries are appended to `.dojops/history/audit.jsonl` (one JSON object per line, append-only).
+Audit entries are appended to `.dojops/history/audit.jsonl` (one JSON object per line, append-only). The JSONL format is directly compatible with SIEM ingestion tools (Splunk, ELK, Datadog) for enterprise audit integration.
 
 ---
 

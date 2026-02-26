@@ -128,19 +128,23 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Execution
 
 - **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
-- **Verification pipeline** — `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl --dry-run=client). Enabled by default; use `--skip-verify` to skip. Graceful fallback when tools are missing
+- **Risk-aware planning** — Plans are automatically classified as LOW / MEDIUM / HIGH risk based on tool types and keyword analysis (IAM, production, secrets, RBAC). HIGH risk plans require explicit confirmation even with `--yes`
+- **Verification pipeline** — `verify()` step between generate and execute validates output with external tools (terraform validate, hadolint, kubectl dry-run) and built-in structure linters (GitHub Actions, GitLab CI). Enabled by default; use `--skip-verify` to skip
+- **Drift awareness** — Pre-apply warnings for stateful tools (Terraform, Kubernetes, Helm, Ansible) remind users to verify remote state before applying local config changes
 - **Git dirty check** — `apply` warns when uncommitted changes exist in the working tree. Use `--force` to skip
 - **Atomic file writes** — All file writes use temp-file + rename for crash safety (no partial writes)
-- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with atomic writes
-- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, environment variables, timeouts, file size limits, and verification toggle
+- **DevOps write allowlist** — By default, only DevOps files (CI configs, Dockerfiles, Terraform, K8s manifests, etc.) can be written. Prevents LLM-generated code from mutating application source. Use `--allow-all-paths` to bypass
+- **Sandboxed execution** — `SandboxedFs` restricts file operations to policy-allowed paths with per-file size limits (1MB default), execution timeouts (30s default), and atomic writes. These guardrails apply uniformly to both built-in tools and plugins
+- **Policy engine** — `ExecutionPolicy` controls write permissions, allowed/denied paths, DevOps allowlist, environment variables, timeouts, file size limits, and verification toggle
 - **Approval workflows** — Auto-approve, auto-deny, or interactive callback with diff preview before any write operation
 - **Resume on failure** — `dojops apply --resume` skips completed tasks and retries failed ones
-- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and plugin system prompts match the plan's execution context for bit-for-bit reproducibility
+- **Deterministic replay** — `dojops apply --replay` forces temperature=0 and validates that provider, model, and plugin system prompts match the plan's execution context for deterministic execution under identical provider and model conditions
+- **Plan snapshot freezing** — Plans capture DojOps version, policy hash, and tool versions at creation time. Version drift is detected at apply time (warning in normal mode, blocking in `--replay` mode)
 
 ### Observability
 
 - **Metrics dashboard** — Overview (plans, success rate, execution time, critical issues), Security (severity breakdown, findings trend, top issues, scan history), and Audit (chain integrity, status breakdown, command distribution, timeline) — with 30-second auto-refresh
-- **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `dojops history verify`
+- **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `dojops history verify`. JSONL format is compatible with SIEM ingestion (Splunk, ELK, Datadog)
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
 - **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity)

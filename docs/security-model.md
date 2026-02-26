@@ -129,7 +129,7 @@ All 12 built-in tools and plugin tools also use `atomicWriteFileSync()` from `@d
 
 Every operation produces a hash-chained audit entry:
 
-- **Append-only** — Entries are appended to `.dojops/history/audit.jsonl`
+- **Append-only** — Entries are appended to `.dojops/history/audit.jsonl` (JSONL format, SIEM-compatible)
 - **Hash chain** — Each entry's hash includes the previous entry's hash (SHA-256)
 - **Tamper detection** — `dojops history verify` recomputes all hashes and detects any modifications
 - **Structured entries** — Each entry includes seq, timestamp, command, tool, status, verification result
@@ -175,7 +175,7 @@ See [Security Scanning](security-scanning.md) for details.
 
 ## Plugin Isolation
 
-Plugin tools are sandboxed with three security controls:
+Plugin tools execute through the same `SafeExecutor` pipeline as built-in tools (inheriting `maxFileSize`, `timeoutMs`, DevOps write allowlist, and per-file audit logging), plus three additional security controls:
 
 ### Verification Command Whitelist
 
