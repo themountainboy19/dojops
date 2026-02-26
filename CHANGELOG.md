@@ -25,4 +25,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Metrics Dashboard**: `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with Overview, Security, and Audit dashboard tabs.
 - **Trust Hardening**: Hard file write allowlist, plan snapshot freezing, risk classification, drift awareness warnings, SBOM persistence versioning, change impact summary, CI provider schema validation.
 - **Atomic File Writes**: Write to `.tmp` then rename for crash safety across all 12 tools and `SandboxedFs`.
-- **Dev Tooling**: 973 Vitest tests, ESLint, Prettier, Husky + lint-staged, Turbo monorepo build.
+- **Dev Tooling**: 992 Vitest tests, ESLint, Prettier, Husky + lint-staged, Turbo monorepo build, conventional commit hooks, Dependabot, release workflow.

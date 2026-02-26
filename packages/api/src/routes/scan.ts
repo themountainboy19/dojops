@@ -1,4 +1,5 @@
 import { Router } from "express";
+import fs from "fs";
 import path from "path";
 import { runScan } from "@dojops/scanner";
 import type { ScanType } from "@dojops/scanner";
@@ -14,9 +15,16 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
     try {
       const { target, scanType } = req.body as { target?: string; scanType: ScanType };
       const projectPath = target ?? process.cwd();
-      const resolved = path.resolve(projectPath);
-      const root = path.resolve(rootDir ?? process.cwd());
-      if (!resolved.startsWith(root)) {
+      let realResolved: string;
+      let realRoot: string;
+      try {
+        realResolved = fs.realpathSync(path.resolve(projectPath));
+        realRoot = fs.realpathSync(path.resolve(rootDir ?? process.cwd()));
+      } catch {
+        res.status(400).json({ error: "Target path does not exist" });
+        return;
+      }
+      if (realResolved !== realRoot && !realResolved.startsWith(realRoot + path.sep)) {
         res.status(400).json({ error: "Target path must be within the project directory" });
         return;
       }

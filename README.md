@@ -548,7 +548,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 973 tests
+pnpm test               # Run all 992 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -583,17 +583,17 @@ packages/
 
 | Package                 | Tests   |
 | ----------------------- | ------- |
-| `@dojops/core`          | 228     |
-| `@dojops/cli`           | 148     |
+| `@dojops/core`          | 238     |
+| `@dojops/cli`           | 174     |
 | `@dojops/tool-registry` | 148     |
-| `@dojops/tools`         | 121     |
-| `@dojops/api`           | 99      |
-| `@dojops/scanner`       | 43      |
-| `@dojops/executor`      | 40      |
+| `@dojops/tools`         | 139     |
+| `@dojops/api`           | 118     |
+| `@dojops/executor`      | 50      |
+| `@dojops/scanner`       | 49      |
 | `@dojops/planner`       | 28      |
 | `@dojops/session`       | 28      |
 | `@dojops/sdk`           | 20      |
-| **Total**               | **973** |
+| **Total**               | **992** |
 
 ---
 

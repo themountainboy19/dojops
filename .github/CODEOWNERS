@@ -1,0 +1,16 @@
+# Default owner for everything
+* @dojops/maintainers
+
+# Package-specific ownership
+packages/core/     @dojops/maintainers
+packages/cli/      @dojops/maintainers
+packages/api/      @dojops/maintainers
+packages/executor/ @dojops/maintainers
+packages/scanner/  @dojops/maintainers
+packages/tools/    @dojops/maintainers
+
+# CI/CD
+.github/ @dojops/maintainers
+
+# Documentation
+docs/ @dojops/maintainers

@@ -30,7 +30,7 @@ export const DiffRequestSchema = z.object({
 export type DiffRequest = z.infer<typeof DiffRequestSchema>;
 
 export const ScanRequestSchema = z.object({
-  target: z.string().optional(),
+  target: z.string().max(2048, "Path too long").optional(),
   scanType: z.enum(["all", "security", "deps", "iac"]).optional().default("all"),
 });
 

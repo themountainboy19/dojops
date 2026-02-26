@@ -1,12 +1,17 @@
 import { Router } from "express";
 import { HistoryStore } from "../store";
 
+const ALLOWED_TYPES = new Set(["generate", "plan", "debug-ci", "diff", "scan", "chat"]);
+const MAX_LIMIT = 1000;
+
 export function createHistoryRouter(store: HistoryStore): Router {
   const router = Router();
 
   router.get("/", (req, res) => {
-    const type = req.query.type as string | undefined;
-    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const rawType = req.query.type as string | undefined;
+    const type = rawType && ALLOWED_TYPES.has(rawType) ? rawType : undefined;
+    const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const limit = rawLimit && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : undefined;
 
     const entries = store.getAll({ type, limit });
     res.json({ entries, count: entries.length });
