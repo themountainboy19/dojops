@@ -171,6 +171,7 @@ Scan your project for vulnerabilities, dependency issues, and IaC misconfigurati
 dojops scan                  # Run all applicable scanners
 dojops scan --security       # Security scanners only (trivy, gitleaks)
 dojops scan --deps           # Dependency audit only (npm, pip)
+dojops scan --sbom           # Generate SBOM (CycloneDX) with hash tracking
 dojops scan --fix            # Generate and apply LLM-powered remediation
 ```
 

@@ -86,9 +86,6 @@ export function isDevOpsFile(filePath: string): boolean {
   // Extract a relative path: strip leading ./ and any absolute prefix
   let relative = filePath.replace(/\\/g, "/");
   if (path.isAbsolute(relative)) {
-    relative = path.basename(relative);
-    // For paths like /project/.github/workflows/ci.yml, we need the relative part
-    // Use the original filePath with path operations
     const segments = filePath.replace(/\\/g, "/").split("/");
     // Find the first segment that matches a known DevOps root
     const devopsRoots = [

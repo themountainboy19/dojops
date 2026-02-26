@@ -188,6 +188,9 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     process.exit(ExitCode.LOCK_CONFLICT);
   }
 
+  // Ensure lock is released even on abrupt process.exit() calls
+  process.once("exit", () => releaseLock(root));
+
   // Git dirty working tree check
   if (!force) {
     const gitStatus = checkGitDirty(root);

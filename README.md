@@ -203,6 +203,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops apply --resume`          | Resume a partially-failed plan                    |
 | `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
 | `dojops apply --dry-run`         | Preview changes without writing files             |
+| `dojops apply --allow-all-paths` | Bypass DevOps file write allowlist                |
 | `dojops validate [<plan-id>]`    | Validate plan against schemas                     |
 | `dojops explain [<plan-id>]`     | LLM explains a plan in plain language             |
 
@@ -217,6 +218,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops scan --security`     | Run security scanners only (trivy, gitleaks)          |
 | `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
 | `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
+| `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 
 #### Interactive
@@ -443,7 +445,7 @@ DojOps includes 16 built-in agents plus support for user-defined custom agents. 
 | `POST`   | `/api/plan`              | Decompose goal into task graph                       |
 | `POST`   | `/api/debug-ci`          | Diagnose CI log failures                             |
 | `POST`   | `/api/diff`              | Analyze infrastructure diff                          |
-| `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac)         |
+| `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac, sbom)   |
 | `POST`   | `/api/chat`              | Send chat message to a session                       |
 | `POST`   | `/api/chat/sessions`     | Create new chat session                              |
 | `GET`    | `/api/chat/sessions`     | List all chat sessions                               |

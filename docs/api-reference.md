@@ -240,10 +240,10 @@ Run security scanners against a project directory.
 }
 ```
 
-| Field      | Type   | Required | Description                                |
-| ---------- | ------ | -------- | ------------------------------------------ |
-| `target`   | string | No       | Project path (defaults to cwd)             |
-| `scanType` | string | No       | `all` (default), `security`, `deps`, `iac` |
+| Field      | Type   | Required | Description                                        |
+| ---------- | ------ | -------- | -------------------------------------------------- |
+| `target`   | string | No       | Project path (defaults to cwd)                     |
+| `scanType` | string | No       | `all` (default), `security`, `deps`, `iac`, `sbom` |
 
 **Response:**
 

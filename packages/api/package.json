@@ -41,7 +41,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
-    "prepublishOnly": "node -e \"if(JSON.stringify(require('./package.json')).includes('workspace:'))process.exit(1)\""
+    "prepublishOnly": "test -d dist"
   },
   "dependencies": {
     "@dojops/core": "workspace:*",

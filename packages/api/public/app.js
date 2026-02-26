@@ -739,7 +739,10 @@ $("history-type").addEventListener("change", loadHistory);
 
 $("history-clear").addEventListener("click", async () => {
   try {
-    await apiCall("/history", { method: "DELETE" });
+    await apiCall("/history", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "X-Confirm": "clear" },
+    });
     toast("success", "History cleared", "All entries have been removed.");
     loadHistory();
   } catch {

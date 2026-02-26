@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { scanRepo, enrichWithLLM } from "@dojops/core";
@@ -430,7 +430,10 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
       if (editor) {
         p.log.info(`Opening ${pc.cyan(contextMdPath)} in ${pc.cyan(editor)}...`);
         try {
-          execSync(`${editor} "${contextMdPath}"`, { stdio: "inherit" });
+          const editorParts = editor.split(/\s+/);
+          execFileSync(editorParts[0], [...editorParts.slice(1), contextMdPath], {
+            stdio: "inherit",
+          });
           p.log.success("Context file updated.");
         } catch {
           p.log.warn(`Could not open editor. Edit manually: ${pc.dim(contextMdPath)}`);

@@ -1,5 +1,5 @@
 import * as crypto from "crypto";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { ZodTypeAny } from "zod";
 import {
   DevOpsTool,
@@ -149,18 +149,24 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
     const data = result.data as { generated: unknown; isUpdate: boolean };
 
     try {
+      const filesWritten: string[] = [];
+      const filesModified: string[] = [];
+
       for (const file of this.manifest.files) {
         const filePath = this.resolveFilePath(file.path, input);
 
         if (data.isUpdate) {
           backupFile(filePath);
+          filesModified.push(filePath);
+        } else {
+          filesWritten.push(filePath);
         }
 
         const content = serialize(data.generated, file.serializer);
         atomicWriteFileSync(filePath, content);
       }
 
-      return result;
+      return { ...result, filesWritten, filesModified };
     } catch (err) {
       return {
         success: false,
@@ -200,7 +206,8 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
 
     // Whitelisted + permission required → execute
     try {
-      execSync(command, {
+      const parts = command.split(/\s+/);
+      execFileSync(parts[0], parts.slice(1), {
         cwd: this.pluginDir,
         encoding: "utf-8",
         timeout: 30_000,

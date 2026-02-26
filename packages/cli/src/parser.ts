@@ -46,9 +46,14 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
     } else if (arg.startsWith("--model=")) {
       globalOpts.model = arg.slice("--model=".length);
     } else if (arg === "--temperature" && i + 1 < args.length) {
-      globalOpts.temperature = Number(args[++i]);
+      const t = Number(args[++i]);
+      if (isNaN(t)) throw new Error(`Invalid --temperature value: "${args[i]}"`);
+      globalOpts.temperature = t;
     } else if (arg.startsWith("--temperature=")) {
-      globalOpts.temperature = Number(arg.slice("--temperature=".length));
+      const raw = arg.slice("--temperature=".length);
+      const t = Number(raw);
+      if (isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
+      globalOpts.temperature = t;
     } else if (arg === "--output" && i + 1 < args.length) {
       globalOpts.output = args[++i] as OutputFormat;
     } else if (arg.startsWith("--output=")) {

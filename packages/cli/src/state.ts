@@ -468,7 +468,7 @@ function scanHistoryDir(rootDir: string): string {
 export function saveScanReport(rootDir: string, report: Record<string, unknown>): void {
   const dir = scanHistoryDir(rootDir);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const id = report.id as string;
+  const id = (report.id as string) ?? `scan-${Date.now()}`;
   const file = path.join(dir, `${id}.json`);
   fs.writeFileSync(file, JSON.stringify(report, null, 2) + "\n");
 }

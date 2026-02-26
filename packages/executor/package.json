@@ -36,7 +36,7 @@
     "build": "tsc",
     "lint": "eslint src/",
     "test": "vitest run",
-    "prepublishOnly": "node -e \"if(JSON.stringify(require('./package.json')).includes('workspace:'))process.exit(1)\""
+    "prepublishOnly": "test -d dist"
   },
   "dependencies": {
     "@dojops/sdk": "workspace:*",
