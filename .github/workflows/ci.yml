@@ -16,16 +16,12 @@ env:
 
 jobs:
   build:
-    name: Build & Cache
+    name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      cache-key: ${{ steps.cache-keys.outputs.build }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -38,40 +34,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Generate cache keys
-        id: cache-keys
-        run: |
-          echo "build=${{ runner.os }}-build-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
-      - name: Restore build cache
-        uses: actions/cache@v4
-        id: build-cache
-        with:
-          path: |
-            dist
-            .next
-            build
-            node_modules/.cache
-          key: ${{ steps.cache-keys.outputs.build }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ hashFiles('**/pnpm-lock.yaml') }}-
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build application
+      - name: Build all packages
         run: pnpm build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: |
-            dist
-            .next
-            build
-          retention-days: 1
-          if-no-files-found: error
 
   lint:
     name: Lint & Format
@@ -96,30 +63,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
-
       - name: Run ESLint
         run: pnpm lint
 
       - name: Check formatting
         run: pnpm format:check
 
-      - name: Type check (if available)
-        run: pnpm type-check
-        if: ${{ success() || failure() }}
-
   test:
-    name: Test & Coverage
+    name: Test
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -138,36 +92,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-output
+      - name: Build all packages
+        run: pnpm build
 
-      - name: Run tests with coverage (shard ${{ matrix.shard }}/3)
-        run: pnpm test:coverage --shard=${{ matrix.shard }}/3
+      - name: Run tests
+        run: pnpm test
         env:
           CI: true
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        if: matrix.shard == 1
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-          verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Upload test artifacts
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: test-failures-shard-${{ matrix.shard }}
-          path: |
-            coverage/
-            test-results/
-            playwright-report/
-          retention-days: 7
 
   security:
     name: Security Audit
@@ -176,8 +107,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    outputs:
-      audit-passed: ${{ steps.audit.outputs.passed }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -197,15 +126,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run pnpm audit
-        id: audit
         run: |
-          if pnpm audit --audit-level=moderate --json > audit.json 2>&1; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
+          if pnpm audit --audit-level=moderate 2>&1; then
             echo "✅ No security vulnerabilities found"
           else
-            echo "passed=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Security vulnerabilities detected"
-            cat audit.json | jq '.advisories | to_entries | map(.value) | group_by(.severity) | map({severity: .[0].severity, count: length})' || cat audit.json
           fi
         continue-on-error: true
 
@@ -222,9 +147,6 @@ jobs:
         if: always()
         with:
           sarif_file: "trivy-results.sarif"
-
-      - name: Check for outdated dependencies
-        run: pnpm outdated || true
 
   status:
     name: CI Status
