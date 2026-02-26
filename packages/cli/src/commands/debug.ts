@@ -1,19 +1,38 @@
+import * as fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createDebugger } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence } from "../formatter";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
+import { extractFlagValue } from "../parser";
+import { readStdin } from "../stdin";
 
 export async function debugCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // Subcommand: debug ci <log>
-  // args[0] should be "ci" (already parsed from command path)
-  const logContent = args.filter((a) => !a.startsWith("-")).join(" ");
+  // Resolve content from: --file flag > stdin > positional args
+  const filePath = extractFlagValue(args, "--file");
+  let logContent: string | undefined;
 
-  if (!logContent) {
-    p.log.error("No CI log content provided.");
+  if (filePath) {
+    try {
+      logContent = fs.readFileSync(filePath, "utf-8");
+    } catch {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Cannot read file: ${filePath}`);
+    }
+  } else {
+    const stdinContent = readStdin();
+    if (stdinContent && stdinContent.trim()) {
+      logContent = stdinContent;
+    } else {
+      logContent = args.filter((a) => !a.startsWith("-")).join(" ");
+    }
+  }
+
+  if (!logContent || !logContent.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops debug ci <log-content>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    p.log.info(`  ${pc.dim("$")} dojops debug ci --file <path>`);
+    p.log.info(`  ${pc.dim("$")} cat ci.log | dojops debug ci`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No CI log content provided.");
   }
 
   const provider = ctx.getProvider();

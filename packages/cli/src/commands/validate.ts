@@ -2,13 +2,12 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 export async function validateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(ExitCode.NO_PROJECT);
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
   }
 
   const planId = args.find((a) => !a.startsWith("-"));
@@ -17,15 +16,16 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
   if (planId) {
     plan = loadPlan(root, planId);
     if (!plan) {
-      p.log.error(`Plan "${planId}" not found.`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
     }
   } else {
     const session = loadSession(root);
     plan = session.currentPlan ? loadPlan(root, session.currentPlan) : getLatestPlan(root);
     if (!plan) {
-      p.log.error("No plan found. Run `dojops plan <prompt>` first.");
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        "No plan found. Run `dojops plan <prompt>` first.",
+      );
     }
   }
 
@@ -69,7 +69,6 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
   if (allValid) {
     p.log.success(pc.bold("All tasks valid."));
   } else {
-    p.log.error(pc.bold("Validation failed."));
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Validation failed.");
   }
 }

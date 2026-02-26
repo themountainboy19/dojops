@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
 import { findProjectRoot, loadContext, appendAudit } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 const MAX_FILES = 20;
 const MAX_FILE_SIZE = 50 * 1024; // 50 KB
@@ -14,14 +14,18 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   const start = Date.now();
   const root = findProjectRoot();
   if (!root) {
-    p.log.error(`No .dojops/ project found. Run ${pc.cyan("dojops init")} first.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `No .dojops/ project found. Run dojops init first.`,
+    );
   }
 
   const ctx = loadContext(root);
   if (!ctx) {
-    p.log.error(`Could not load context.json. Run ${pc.cyan("dojops init")} to regenerate.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Could not load context.json. Run dojops init to regenerate.`,
+    );
   }
 
   if (ctx.devopsFiles.length === 0) {
@@ -53,9 +57,11 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   try {
     provider = cliCtx.getProvider();
   } catch (err) {
-    p.log.error(`LLM provider required. ${(err as Error).message}`);
     p.log.info(`Run ${pc.cyan("dojops config")} to configure a provider.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `LLM provider required. ${(err as Error).message}`,
+    );
   }
 
   const s = p.spinner();
@@ -159,8 +165,6 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     });
   } catch (err) {
     s.stop("Analysis failed.");
-    p.log.error(`Check failed: ${err instanceof Error ? err.message : String(err)}`);
-
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: process.env.USER ?? "unknown",
@@ -169,6 +173,9 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       status: "failure",
       durationMs: Date.now() - start,
     });
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Check failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 };

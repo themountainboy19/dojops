@@ -4,7 +4,7 @@ import { loadConfig, saveConfig, getConfigPath, validateProvider } from "../conf
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { maskToken } from "../formatter";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 export async function authCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -29,7 +29,7 @@ async function authLogin(args: string[]): Promise<void> {
     p.log.warn('Tip: Use "dojops config" for interactive setup, or provide --token:');
     p.log.info(`  ${pc.dim("$")} dojops auth login --token <API_KEY>`);
     p.log.info(`  ${pc.dim("$")} dojops config`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR);
   }
 
   const config = loadConfig();
@@ -39,18 +39,19 @@ async function authLogin(args: string[]): Promise<void> {
   try {
     validateProvider(provider);
   } catch (err) {
-    p.log.error((err as Error).message);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
   }
 
   if (provider === "ollama") {
-    p.log.error("Ollama runs locally and does not require an API token.");
     p.log.info(
       pc.dim(
         "Just set DOJOPS_PROVIDER=ollama or run: dojops auth login --provider openai --token <KEY>",
       ),
     );
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      "Ollama runs locally and does not require an API token.",
+    );
   }
 
   config.tokens = config.tokens ?? {};

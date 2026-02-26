@@ -6,7 +6,7 @@ import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { statusIcon, statusText, formatOutput, getOutputFileName } from "../formatter";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
 import { classifyPlanRisk } from "../risk-classifier";
 import crypto from "node:crypto";
@@ -39,9 +39,8 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   ).join(" ");
 
   if (!prompt) {
-    p.log.error("No prompt provided.");
     p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
   const provider = ctx.getProvider();
@@ -52,19 +51,19 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const tools = registry.getAll();
   const repoContext = projectRoot ? loadContext(projectRoot) : null;
 
+  const isJson = ctx.globalOpts.output === "json";
   const s = p.spinner();
-  s.start("Decomposing goal into tasks...");
+  if (!isJson) s.start("Decomposing goal into tasks...");
   let graph;
   try {
     graph = await decompose(prompt, provider, tools, {
       repoContext: repoContext ?? undefined,
     });
   } catch (err) {
-    s.stop("Decomposition failed.");
-    p.log.error(err instanceof Error ? err.message : String(err));
-    process.exit(ExitCode.GENERAL_ERROR);
+    if (!isJson) s.stop("Decomposition failed.");
+    throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
   }
-  s.stop("Tasks decomposed.");
+  if (!isJson) s.stop("Tasks decomposed.");
 
   // Enrich tasks with plugin metadata
   for (const task of graph.tasks) {
@@ -81,11 +80,13 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   }
 
   // Display task graph
-  const taskLines = graph.tasks.map((task) => {
-    const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
-    return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
-  });
-  p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
+  if (!isJson) {
+    const taskLines = graph.tasks.map((task) => {
+      const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
+      return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
+    });
+    p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
+  }
 
   // Save plan to .dojops/plans/
   let root = findProjectRoot();
@@ -140,10 +141,8 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   session.mode = "PLAN";
   saveSession(root, session);
 
-  p.log.success(`Plan saved as ${pc.bold(planId)}`);
-
-  if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify(graph, null, 2));
+  if (!isJson) {
+    p.log.success(`Plan saved as ${pc.bold(planId)}`);
   }
 
   const startTime = Date.now();
@@ -177,8 +176,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     if (!acquireLock(root, "plan-execute")) {
       const { info } = isLocked(root);
-      p.log.error(`Operation locked by PID ${info?.pid} (${info?.operation})`);
-      process.exit(ExitCode.LOCK_CONFLICT);
+      throw new CLIError(
+        ExitCode.LOCK_CONFLICT,
+        `Operation locked by PID ${info?.pid} (${info?.operation})`,
+      );
     }
     process.once("exit", () => releaseLock(root));
 
@@ -281,10 +282,16 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       durationMs: Date.now() - startTime,
     });
 
-    if (planResult.success) {
-      p.log.success(pc.bold("Plan succeeded."));
-    } else {
-      p.log.error(pc.bold("Plan failed."));
+    if (!isJson) {
+      if (planResult.success) {
+        p.log.success(pc.bold("Plan succeeded."));
+      } else {
+        p.log.error(pc.bold("Plan failed."));
+      }
+    }
+
+    if (isJson) {
+      console.log(JSON.stringify({ planId, graph, success: planResult.success }, null, 2));
     }
   } else {
     const executor = new PlannerExecutor(tools, {
@@ -302,58 +309,64 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     const result = await executor.execute(graph);
 
-    if (result.success) {
-      p.log.success(pc.bold("Plan succeeded."));
-    } else {
-      p.log.error(pc.bold("Plan failed."));
-    }
-    for (const r of result.results) {
-      const errMsg = r.error ? `: ${pc.red(r.error)}` : "";
-      p.log.message(
-        `${statusIcon(r.status)} ${pc.blue(r.taskId)} ${statusText(r.status)}${errMsg}`,
-      );
-    }
-
-    // Print generated output for completed tasks
-    const completedResults = result.results.filter((r) => r.status === "completed" && r.output);
-    if (completedResults.length > 0) {
-      for (const r of completedResults) {
-        const task = graph.tasks.find((t) => t.id === r.taskId);
-        const data = r.output as Record<string, unknown>;
-        const input = task?.input as Record<string, string> | undefined;
-        const basePath = input?.projectPath ?? input?.outputPath ?? ".";
-        const outputLines: string[] = [];
-
-        const isUpdate = !!(data as Record<string, unknown>).isUpdate;
-        const writeLabel = isUpdate ? pc.yellow("Would update:") : pc.green("Would write:");
-
-        outputLines.push(
-          pc.bold(
-            `[${r.taskId}] ${task?.tool ?? "unknown"}${isUpdate ? pc.yellow(" (update)") : ""}`,
-          ),
-        );
-
-        if (data.hcl) {
-          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/main.tf`)}`);
-          outputLines.push(formatOutput(data.hcl as string));
-        }
-        if (data.yaml) {
-          const fileName = getOutputFileName(task?.tool ?? "");
-          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/${fileName}`)}`);
-          outputLines.push(formatOutput(data.yaml as string));
-        }
-        if (data.chartYaml) {
-          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/Chart.yaml`)}`);
-          outputLines.push(formatOutput(data.chartYaml as string));
-        }
-        if (data.valuesYaml) {
-          outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/values.yaml`)}`);
-          outputLines.push(formatOutput(data.valuesYaml as string));
-        }
-
-        p.note(outputLines.join("\n"), "Generated Output");
+    if (!isJson) {
+      if (result.success) {
+        p.log.success(pc.bold("Plan succeeded."));
+      } else {
+        p.log.error(pc.bold("Plan failed."));
       }
-      p.log.info(pc.dim("To write files to disk, use --execute instead of plan"));
+      for (const r of result.results) {
+        const errMsg = r.error ? `: ${pc.red(r.error)}` : "";
+        p.log.message(
+          `${statusIcon(r.status)} ${pc.blue(r.taskId)} ${statusText(r.status)}${errMsg}`,
+        );
+      }
+
+      // Print generated output for completed tasks
+      const completedResults = result.results.filter((r) => r.status === "completed" && r.output);
+      if (completedResults.length > 0) {
+        for (const r of completedResults) {
+          const task = graph.tasks.find((t) => t.id === r.taskId);
+          const data = r.output as Record<string, unknown>;
+          const input = task?.input as Record<string, string> | undefined;
+          const basePath = input?.projectPath ?? input?.outputPath ?? ".";
+          const outputLines: string[] = [];
+
+          const isUpdate = !!(data as Record<string, unknown>).isUpdate;
+          const writeLabel = isUpdate ? pc.yellow("Would update:") : pc.green("Would write:");
+
+          outputLines.push(
+            pc.bold(
+              `[${r.taskId}] ${task?.tool ?? "unknown"}${isUpdate ? pc.yellow(" (update)") : ""}`,
+            ),
+          );
+
+          if (data.hcl) {
+            outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/main.tf`)}`);
+            outputLines.push(formatOutput(data.hcl as string));
+          }
+          if (data.yaml) {
+            const fileName = getOutputFileName(task?.tool ?? "");
+            outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/${fileName}`)}`);
+            outputLines.push(formatOutput(data.yaml as string));
+          }
+          if (data.chartYaml) {
+            outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/Chart.yaml`)}`);
+            outputLines.push(formatOutput(data.chartYaml as string));
+          }
+          if (data.valuesYaml) {
+            outputLines.push(`  ${writeLabel} ${pc.underline(`${basePath}/values.yaml`)}`);
+            outputLines.push(formatOutput(data.valuesYaml as string));
+          }
+
+          p.note(outputLines.join("\n"), "Generated Output");
+        }
+        p.log.info(pc.dim("To write files to disk, use --execute instead of plan"));
+      }
+    }
+
+    if (isJson) {
+      console.log(JSON.stringify({ planId, graph, success: result.success }, null, 2));
     }
 
     appendAudit(root, {

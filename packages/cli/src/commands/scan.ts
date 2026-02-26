@@ -7,7 +7,7 @@ import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
 import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
 import { CLIContext } from "../types";
 import { hasFlag } from "../parser";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import {
   findProjectRoot,
   initProject,
@@ -55,8 +55,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     report = await runScan(root, scanType, context);
   } catch (err) {
     scanSpinner.stop("Scan failed");
-    p.log.error(err instanceof Error ? err.message : String(err));
-    process.exit(ExitCode.GENERAL_ERROR);
+    throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
   }
 
   scanSpinner.stop(`Scan complete in ${report.durationMs}ms`);
@@ -255,10 +254,10 @@ function exitWithCode(report: ScanReport): never {
     process.exit(ExitCode.SUCCESS);
   }
   if (report.summary.critical > 0) {
-    process.exit(ExitCode.CRITICAL_VULNERABILITIES);
+    throw new CLIError(ExitCode.CRITICAL_VULNERABILITIES);
   }
   if (report.summary.high > 0) {
-    process.exit(ExitCode.SECURITY_ISSUES);
+    throw new CLIError(ExitCode.SECURITY_ISSUES);
   }
   process.exit(ExitCode.SUCCESS);
 }

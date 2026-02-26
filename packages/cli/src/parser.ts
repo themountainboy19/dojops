@@ -56,6 +56,10 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       if (isNaN(t)) throw new Error(`Invalid --temperature value: "${raw}"`);
       if (t < 0 || t > 2) throw new Error(`--temperature must be between 0 and 2, got: ${t}`);
       globalOpts.temperature = t;
+    } else if (arg === "--agent" && i + 1 < args.length) {
+      globalOpts.agent = args[++i];
+    } else if (arg.startsWith("--agent=")) {
+      globalOpts.agent = arg.slice("--agent=".length);
     } else if (arg === "--output" && i + 1 < args.length) {
       const fmt = args[++i];
       if (!["table", "json", "yaml"].includes(fmt))

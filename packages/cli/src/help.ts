@@ -51,6 +51,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--verbose")}          Verbose output`);
   console.log(`  ${pc.cyan("--debug")}            Debug-level output`);
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
+  console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
   console.log(`  ${pc.cyan("--no-color")}         Disable color output`);
   console.log(`  ${pc.cyan("--non-interactive")}  Disable interactive prompts`);
   console.log(`  ${pc.cyan("--help, -h")}         Show this help message`);
@@ -73,6 +74,7 @@ export function printHelp(): void {
   console.log(
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
   );
+  console.log(`  ${pc.cyan("--task=ID")}              Execute only a single task from the plan`);
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
@@ -169,13 +171,19 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops <prompt>`);
       console.log(`  ${pc.dim("$")} dojops generate <prompt>`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--agent=NAME")}    Force routing to a specific specialist agent`);
+      console.log(`  ${pc.cyan("--write=PATH")}    Write generated output to a file`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
+      console.log(`  Use --agent to bypass automatic routing and target a specific agent.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops "Create a Terraform config for S3"`);
       console.log(`  ${pc.dim("$")} dojops generate "Write a Kubernetes deployment"`);
       console.log(`  ${pc.dim("$")} dojops "Set up monitoring with Prometheus" --output json`);
+      console.log(`  ${pc.dim("$")} dojops --agent terraform "Create S3 bucket"`);
+      console.log(`  ${pc.dim("$")} dojops generate "CI for Node" --write ci.yml`);
       console.log();
       break;
 
@@ -256,14 +264,20 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("dojops debug ci")} — Diagnose CI/CD log failures`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops debug ci <log-content>`);
+      console.log(`  ${pc.dim("$")} dojops debug ci --file <path>`);
+      console.log(`  ${pc.dim("$")} cat ci.log | dojops debug ci`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--file=PATH")}    Read log content from a file`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Analyzes CI build logs to identify root causes of failures.`);
       console.log(
         `  Returns error type, summary, root cause, affected files, and suggested fixes.`,
       );
+      console.log(`  Accepts input via argument, --file flag, or stdin pipe.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops debug ci "ERROR: tsc failed with exit code 1"`);
-      console.log(`  ${pc.dim("$")} dojops debug ci "npm ERR! peer dep missing: react@^18"`);
+      console.log(`  ${pc.dim("$")} dojops debug ci --file build.log`);
+      console.log(`  ${pc.dim("$")} cat ci.log | dojops debug ci`);
       console.log();
       break;
 
@@ -272,12 +286,18 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("dojops analyze diff")} — Analyze infrastructure diff for risk`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
+      console.log(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
+      console.log(`  ${pc.dim("$")} terraform plan | dojops analyze diff`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--file=PATH")}    Read diff content from a file`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Analyzes infrastructure diffs (e.g. terraform plan output) and provides`);
       console.log(`  risk assessment, cost impact, security impact, and recommendations.`);
+      console.log(`  Accepts input via argument, --file flag, or stdin pipe.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops analyze diff "terraform plan output..."`);
-      console.log(`  ${pc.dim("$")} dojops analyze diff "+ resource aws_s3_bucket main {}"`);
+      console.log(`  ${pc.dim("$")} dojops analyze diff --file plan.diff`);
+      console.log(`  ${pc.dim("$")} terraform plan | dojops analyze diff`);
       console.log();
       break;
 

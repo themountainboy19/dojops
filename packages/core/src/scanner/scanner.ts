@@ -708,6 +708,26 @@ export function collectDevopsFiles(
   if (security.hasSecretScanning) files.add(".github/secret_scanning.yml");
   if (security.hasEditorConfig) files.add(".editorconfig");
 
+  // Kubernetes manifests
+  if (infra.hasKubernetes) {
+    const k8sDirs = ["k8s", "kubernetes", "manifests", "deploy"];
+    for (const d of k8sDirs) {
+      const dirPath = path.join(root, d);
+      try {
+        if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+          const entries = fs.readdirSync(dirPath);
+          for (const f of entries) {
+            if (f.endsWith(".yaml") || f.endsWith(".yml")) {
+              files.add(`${d}/${f}`);
+            }
+          }
+        }
+      } catch {
+        // Unreadable
+      }
+    }
+  }
+
   // Infra extras
   if (infra.hasKustomize) {
     if (fs.existsSync(path.join(root, "kustomization.yaml"))) files.add("kustomization.yaml");

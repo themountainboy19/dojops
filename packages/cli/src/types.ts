@@ -8,6 +8,7 @@ export interface GlobalOptions {
   provider?: string;
   model?: string;
   temperature?: number;
+  agent?: string;
   output: OutputFormat;
   nonInteractive: boolean;
   verbose: boolean;

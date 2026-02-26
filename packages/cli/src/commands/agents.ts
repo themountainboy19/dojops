@@ -11,7 +11,7 @@ import {
 } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { runPreflight } from "../preflight";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import { findProjectRoot } from "../state";
 
 export async function agentsCommand(args: string[], ctx: CLIContext): Promise<void> {
@@ -75,9 +75,8 @@ function agentList(ctx: CLIContext): void {
 function agentInfo(args: string[], ctx: CLIContext): void {
   const name = args[0];
   if (!name) {
-    p.log.error("Agent name required.");
     p.log.info(`  ${pc.dim("$")} dojops agents info <name>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");
   }
 
   const provider = ctx.getProvider();
@@ -86,13 +85,12 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   const agent = router.getAgents().find((a) => a.name.toLowerCase() === name.toLowerCase());
 
   if (!agent) {
-    p.log.error(`Agent "${name}" not found.`);
     const names = router
       .getAgents()
       .map((a) => a.name)
       .join(", ");
     p.log.info(`Available agents: ${names}`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Agent "${name}" not found.`);
   }
 
   const isCustom = customAgentNames.has(agent.name);
@@ -170,10 +168,9 @@ async function agentCreate(args: string[], ctx: CLIContext): Promise<void> {
   }
 
   if (!description) {
-    p.log.error("Description required for LLM-generated agents.");
     p.log.info(`  ${pc.dim("$")} dojops agents create "an SRE specialist for incident response"`);
     p.log.info(`  ${pc.dim("$")} dojops agents create --manual`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Description required for LLM-generated agents.");
   }
 
   return agentCreateLLM(description, ctx, isGlobal);
@@ -204,8 +201,10 @@ Generate a complete agent definition with:
   s.stop("Agent generated.");
 
   if (!result.parsed) {
-    p.log.error("Failed to generate a valid agent definition from LLM.");
-    process.exit(ExitCode.GENERAL_ERROR);
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      "Failed to generate a valid agent definition from LLM.",
+    );
   }
 
   const agent = result.parsed as {
@@ -218,8 +217,10 @@ Generate a complete agent definition with:
 
   // Validate name format (LLM output is untrusted)
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(agent.name)) {
-    p.log.error(`LLM returned an invalid agent name: "${agent.name}". Must be kebab-case.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `LLM returned an invalid agent name: "${agent.name}". Must be kebab-case.`,
+    );
   }
 
   // Show preview — wrap long lines to terminal width
@@ -338,9 +339,8 @@ function writeAgentToDisk(name: string, readme: string, isGlobal: boolean): void
 async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
   const name = args.filter((a) => !a.startsWith("-"))[0];
   if (!name) {
-    p.log.error("Agent name required.");
     p.log.info(`  ${pc.dim("$")} dojops agents remove <name>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");
   }
 
   // Check project dir first, then global
@@ -360,8 +360,7 @@ async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
   }
 
   if (!targetDir) {
-    p.log.error(`Custom agent "${name}" not found.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Custom agent "${name}" not found.`);
   }
 
   if (!ctx.globalOpts.nonInteractive && !args.includes("--yes")) {

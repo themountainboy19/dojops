@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import {
   loadProfile,
   saveProfile,
@@ -18,9 +18,8 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
     case "create": {
       const name = args[1];
       if (!name) {
-        p.log.error("Profile name required.");
         p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, "Profile name required.");
       }
       const config = loadConfig();
       saveProfile(name, config);
@@ -30,18 +29,16 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
     case "use": {
       const name = args[1];
       if (!name) {
-        p.log.error("Profile name required.");
         p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, "Profile name required.");
       }
       const existing = loadProfile(name);
       if (!existing) {
-        p.log.error(`Profile "${name}" not found.`);
         const available = listProfiles();
         if (available.length > 0) {
           p.log.info(`Available profiles: ${available.join(", ")}`);
         }
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, `Profile "${name}" not found.`);
       }
       setActiveProfile(name);
       p.log.success(`Switched to profile "${name}".`);
@@ -67,10 +64,12 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       break;
     }
     default:
-      p.log.error(`Unknown profile subcommand: ${sub ?? "(none)"}`);
       p.log.info(`  ${pc.dim("$")} dojops config profile create <name>`);
       p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
       p.log.info(`  ${pc.dim("$")} dojops config profile list`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Unknown profile subcommand: ${sub ?? "(none)"}`,
+      );
   }
 }

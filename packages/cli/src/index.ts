@@ -19,7 +19,7 @@ import { remapLegacyArgs } from "./compat";
 import { printHelp, printCommandHelp, printBanner } from "./help";
 import { resolveCommand } from "./commands";
 import { CLIContext } from "./types";
-import { ExitCode } from "./exit-codes";
+import { ExitCode, CLIError } from "./exit-codes";
 import { getDojopsVersion } from "./state";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
@@ -142,8 +142,7 @@ async function main() {
       try {
         providerName = resolveProvider(globalOpts.provider, config);
       } catch (err) {
-        p.log.error((err as Error).message);
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
       }
 
       const model = resolveModel(globalOpts.model, config);
@@ -192,6 +191,10 @@ async function main() {
       await generateCommand(remapped, ctx);
     }
   } catch (err) {
+    if (err instanceof CLIError) {
+      if (err.message) p.log.error(err.message);
+      process.exit(err.exitCode);
+    }
     const msg = err instanceof Error ? err.message : String(err);
     p.log.error(msg);
     if (globalOpts.debug) {
@@ -206,7 +209,13 @@ async function main() {
 }
 
 main().catch((err) => {
+  if (err instanceof CLIError) {
+    if (err.message) {
+      console.error(err.message);
+    }
+    process.exit(err.exitCode);
+  }
   const msg = err instanceof Error ? err.message : String(err);
-  p.log.error(msg);
+  console.error(msg);
   process.exit(ExitCode.GENERAL_ERROR);
 });

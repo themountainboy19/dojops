@@ -9,7 +9,7 @@ export interface DecomposeOptions {
   repoContext?: RepoContext;
 }
 
-function buildContextSection(ctx: RepoContext): string {
+export function buildContextSection(ctx: RepoContext): string {
   const parts: string[] = [];
   parts.push("\n## Project Context (from repo scan)\n");
   parts.push("Use this context to choose correct file paths and tool inputs.\n");

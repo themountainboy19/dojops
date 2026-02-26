@@ -13,28 +13,25 @@ import {
   releaseLock,
   isLocked,
 } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 export async function destroyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(ExitCode.NO_PROJECT);
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
   }
 
   const dryRun = hasFlag(args, "--dry-run");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
-    p.log.error("Plan ID required for destroy (safety measure).");
     p.log.info(`  ${pc.dim("$")} dojops destroy <plan-id>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for destroy (safety measure).");
   }
 
   const plan = loadPlan(root, planId);
   if (!plan) {
-    p.log.error(`Plan "${planId}" not found.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
   }
 
   // Collect files from execution records (same source as rollback)
@@ -71,8 +68,10 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
 
   if (!acquireLock(root, "destroy")) {
     const { info } = isLocked(root);
-    p.log.error(`Operation locked by PID ${info?.pid} (${info?.operation})`);
-    process.exit(ExitCode.LOCK_CONFLICT);
+    throw new CLIError(
+      ExitCode.LOCK_CONFLICT,
+      `Operation locked by PID ${info?.pid} (${info?.operation})`,
+    );
   }
 
   const startTime = Date.now();

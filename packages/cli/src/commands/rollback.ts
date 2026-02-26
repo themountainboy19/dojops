@@ -13,7 +13,7 @@ import {
   releaseLock,
   isLocked,
 } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 function restoreBackup(filePath: string): boolean {
   const bakPath = `${filePath}.bak`;
@@ -27,30 +27,29 @@ function restoreBackup(filePath: string): boolean {
 export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(ExitCode.NO_PROJECT);
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
   }
 
   const dryRun = hasFlag(args, "--dry-run");
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
-    p.log.error("Plan ID required for rollback.");
     p.log.info(`  ${pc.dim("$")} dojops rollback <plan-id>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for rollback.");
   }
 
   const plan = loadPlan(root, planId);
   if (!plan) {
-    p.log.error(`Plan "${planId}" not found.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
   }
 
   // Find execution records for this plan
   const executions = listExecutions(root).filter((e) => e.planId === planId);
   if (executions.length === 0) {
-    p.log.error(`No execution records found for plan "${planId}".`);
     p.log.info("Only applied plans can be rolled back.");
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `No execution records found for plan "${planId}".`,
+    );
   }
 
   const latest = executions[0];
@@ -96,8 +95,10 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
 
   if (!acquireLock(root, "rollback")) {
     const { info } = isLocked(root);
-    p.log.error(`Operation locked by PID ${info?.pid} (${info?.operation})`);
-    process.exit(ExitCode.LOCK_CONFLICT);
+    throw new CLIError(
+      ExitCode.LOCK_CONFLICT,
+      `Operation locked by PID ${info?.pid} (${info?.operation})`,
+    );
   }
 
   const startTime = Date.now();

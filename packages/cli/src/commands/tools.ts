@@ -6,7 +6,7 @@ import { SYSTEM_TOOLS, findSystemTool, isToolSupportedOnCurrentPlatform } from "
 import { discoverPlugins, validateManifest } from "@dojops/tool-registry";
 import * as yaml from "js-yaml";
 import { CommandHandler } from "../types";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import {
   loadToolRegistry,
   installSystemTool,
@@ -134,9 +134,8 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
     }
 
     if (ctx.globalOpts.nonInteractive) {
-      p.log.error("Tool name required in non-interactive mode.");
       p.log.info(`  ${pc.dim("$")} dojops tools install <name>`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required in non-interactive mode.");
     }
 
     const selected = await p.multiselect({
@@ -197,9 +196,8 @@ async function doInstall(name: string): Promise<void> {
 export const toolsRemoveCommand: CommandHandler = async (args) => {
   const name = args[0];
   if (!name) {
-    p.log.error("Tool name required.");
     p.log.info(`  ${pc.dim("$")} dojops tools remove <name>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required.");
   }
 
   const removed = removeSystemTool(name);
@@ -271,15 +269,13 @@ export const toolsPluginsListCommand: CommandHandler = async (_args, ctx) => {
 export const toolsPluginsValidateCommand: CommandHandler = async (args) => {
   const pluginPath = args[0];
   if (!pluginPath) {
-    p.log.error("Plugin path required.");
     p.log.info(`  ${pc.dim("$")} dojops tools plugins validate <path>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plugin path required.");
   }
 
   const manifestPath = path.resolve(pluginPath, "plugin.yaml");
   if (!fs.existsSync(manifestPath)) {
-    p.log.error(`No plugin.yaml found at ${manifestPath}`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `No plugin.yaml found at ${manifestPath}`);
   }
 
   try {
@@ -300,34 +296,96 @@ export const toolsPluginsValidateCommand: CommandHandler = async (args) => {
         p.log.success("Input schema file exists.");
       }
     } else {
-      p.log.error(`Invalid plugin manifest: ${result.error}`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid plugin manifest: ${result.error}`);
     }
   } catch (err) {
-    p.log.error(`Failed to parse plugin.yaml: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Failed to parse plugin.yaml: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 };
 
-export const toolsPluginsInitCommand: CommandHandler = async (args) => {
-  const pluginName = args[0];
+export const toolsPluginsInitCommand: CommandHandler = async (args, ctx) => {
+  let pluginName = args[0];
+  let description = "";
+  let format: "yaml" | "json" | "toml" = "yaml";
+  let systemPrompt = "";
+  let filePath = "";
+  const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
+
+  // Interactive wizard when no name provided and not in non-interactive mode
+  if (!pluginName && !isNonInteractive) {
+    const nameInput = await p.text({
+      message: "Plugin name (lowercase, hyphens allowed):",
+      placeholder: "my-plugin",
+      validate: (val) => {
+        if (!val) return "Name is required";
+        if (!/^[a-z0-9-]+$/.test(val)) return "Must be lowercase alphanumeric with hyphens";
+        return undefined;
+      },
+    });
+    if (p.isCancel(nameInput)) return;
+    pluginName = nameInput;
+
+    const descInput = await p.text({
+      message: "Short description:",
+      placeholder: `${pluginName} configuration generator`,
+    });
+    if (p.isCancel(descInput)) return;
+    description = descInput || `${pluginName} configuration generator`;
+
+    const formatInput = await p.select({
+      message: "Output format:",
+      options: [
+        { value: "yaml", label: "YAML" },
+        { value: "json", label: "JSON" },
+        { value: "toml", label: "TOML" },
+      ],
+    });
+    if (p.isCancel(formatInput)) return;
+    format = formatInput as "yaml" | "json" | "toml";
+
+    const promptInput = await p.text({
+      message: "System prompt for the LLM generator:",
+      placeholder: `You are a ${pluginName} configuration expert...`,
+    });
+    if (p.isCancel(promptInput)) return;
+    systemPrompt =
+      promptInput ||
+      `You are a ${pluginName} configuration expert. Generate valid configuration based on the user's requirements. Return a JSON object with the configuration content.`;
+
+    const fileInput = await p.text({
+      message: "Output file path template:",
+      placeholder: `{outputPath}/${pluginName}.${format}`,
+    });
+    if (p.isCancel(fileInput)) return;
+    filePath = fileInput || `{outputPath}/${pluginName}.${format}`;
+  }
+
   if (!pluginName) {
-    p.log.error("Plugin name required.");
     p.log.info(`  ${pc.dim("$")} dojops tools plugins init <name>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plugin name required.");
   }
 
   // Validate name format
   if (!/^[a-z0-9-]+$/.test(pluginName)) {
-    p.log.error("Plugin name must be lowercase alphanumeric with hyphens.");
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      "Plugin name must be lowercase alphanumeric with hyphens.",
+    );
   }
 
   const pluginDir = path.resolve(".dojops", "plugins", pluginName);
   if (fs.existsSync(pluginDir)) {
-    p.log.error(`Plugin directory already exists: ${pluginDir}`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plugin directory already exists: ${pluginDir}`);
   }
+
+  // Apply defaults for non-interactive mode
+  if (!description) description = `${pluginName} configuration generator`;
+  if (!systemPrompt)
+    systemPrompt = `You are a ${pluginName} configuration expert. Generate valid configuration based on the user's requirements. Return a JSON object with the configuration content.`;
+  if (!filePath) filePath = `{outputPath}/${pluginName}.${format}`;
 
   fs.mkdirSync(pluginDir, { recursive: true });
 
@@ -336,22 +394,22 @@ export const toolsPluginsInitCommand: CommandHandler = async (args) => {
     name: pluginName,
     version: "0.1.0",
     type: "tool",
-    description: `${pluginName} configuration generator`,
+    description,
     inputSchema: "input.schema.json",
     tags: [],
     generator: {
       strategy: "llm",
-      systemPrompt: `You are a ${pluginName} configuration expert. Generate valid configuration based on the user's requirements. Return a JSON object with the configuration content.`,
+      systemPrompt,
       updateMode: true,
     },
     files: [
       {
-        path: `{outputPath}/${pluginName}.yaml`,
-        serializer: "yaml",
+        path: filePath,
+        serializer: format,
       },
     ],
     detector: {
-      path: `{outputPath}/${pluginName}.yaml`,
+      path: filePath,
     },
   };
 
@@ -408,8 +466,7 @@ export const toolsPluginsCommand: CommandHandler = async (args, ctx) => {
       if (!sub) {
         return toolsPluginsListCommand(rest, ctx);
       }
-      p.log.error(`Unknown plugins subcommand: ${sub}`);
       p.log.info(`Available: list, validate, init`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Unknown plugins subcommand: ${sub}`);
   }
 };

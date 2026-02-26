@@ -26,7 +26,12 @@ Respond with valid JSON matching the required structure.`;
   const basePrompt = `${isUpdate ? "Update" : "Generate"} a multi-stage Dockerfile for a ${detection.projectType} project.
 Entry file: ${detection.entryFile || "auto-detect"}.
 Include: dependency install stage, build stage (if applicable), and production stage.
-Also include common .dockerignore patterns for ${detection.projectType}.`;
+Also include common .dockerignore patterns for ${detection.projectType}.
+
+Each stage MUST include:
+- "name": a unique stage name string (e.g. "deps", "builder", "runner")
+- "from": the base image for this stage (e.g. "node:20-alpine")
+- "commands": an array of Dockerfile instruction strings (e.g. ["WORKDIR /app", "COPY package.json ."]). Every stage should have at least one command.`;
   const prompt = isUpdate
     ? `${basePrompt}\n\n--- EXISTING CONFIGURATION ---\n${existingContent}\n--- END ---`
     : basePrompt;

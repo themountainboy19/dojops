@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
 import { listSubDirs } from "../discovery";
@@ -17,6 +18,25 @@ interface ShellCheckResult {
   fix?: { replacements: unknown[] };
 }
 
+/**
+ * Resolve the shellcheck binary path.
+ * Priority: sandbox (~/.dojops/tools/bin) → well-known system paths → PATH fallback.
+ */
+function resolveShellcheck(): string {
+  // 1. Sandbox install
+  const sandboxBin = path.join(os.homedir(), ".dojops", "tools", "bin", "shellcheck");
+  if (fs.existsSync(sandboxBin)) return sandboxBin;
+
+  // 2. Well-known system paths (avoids npm wrapper issues)
+  const systemPaths = ["/usr/bin/shellcheck", "/usr/local/bin/shellcheck"];
+  for (const sp of systemPaths) {
+    if (fs.existsSync(sp)) return sp;
+  }
+
+  // 3. Fall back to bare name (resolved via PATH)
+  return "shellcheck";
+}
+
 export async function scanShellcheck(projectPath: string): Promise<ScannerResult> {
   const scripts = findShellScripts(projectPath);
   if (scripts.length === 0) {
@@ -28,13 +48,14 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
     };
   }
 
+  const shellcheckBin = resolveShellcheck();
   const allFindings: ScanFinding[] = [];
   let combinedRawOutput = "";
 
   for (const script of scripts) {
     let rawOutput: string;
     try {
-      rawOutput = execFileSync("shellcheck", ["--format", "json", script], {
+      rawOutput = execFileSync(shellcheckBin, ["--format", "json", script], {
         encoding: "utf-8",
         timeout: 30_000,
         stdio: "pipe",

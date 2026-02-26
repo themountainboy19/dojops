@@ -8,7 +8,7 @@ import {
   listExecutions,
   verifyAuditIntegrity,
 } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 export async function historyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -79,15 +79,13 @@ function historyShow(args: string[], ctx: CLIContext): void {
 
   const planId = args[0];
   if (!planId) {
-    p.log.error("Plan ID required.");
     p.log.info(`  ${pc.dim("$")} dojops history show <plan-id>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required.");
   }
 
   const plan = loadPlan(root, planId);
   if (!plan) {
-    p.log.error(`Plan "${planId}" not found.`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
   }
 
   if (ctx.globalOpts.output === "json") {

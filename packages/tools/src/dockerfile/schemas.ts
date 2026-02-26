@@ -15,9 +15,9 @@ export const DockerfileInputSchema = z.object({
 export type DockerfileInput = z.infer<typeof DockerfileInputSchema>;
 
 export const DockerStageSchema = z.object({
-  name: z.string(),
+  name: z.string().default("stage"),
   from: z.string(),
-  commands: z.array(z.string()).min(1),
+  commands: z.array(z.string()).default([]),
 });
 
 export const DockerfileConfigSchema = z.object({

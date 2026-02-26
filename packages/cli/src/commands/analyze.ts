@@ -1,18 +1,38 @@
+import * as fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createDiffAnalyzer } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence, riskColor, changeColor } from "../formatter";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
+import { extractFlagValue } from "../parser";
+import { readStdin } from "../stdin";
 
 export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // Subcommands: analyze diff <content>
-  const content = args.filter((a) => !a.startsWith("-")).join(" ");
+  // Resolve content from: --file flag > stdin > positional args
+  const filePath = extractFlagValue(args, "--file");
+  let content: string | undefined;
 
-  if (!content) {
-    p.log.error("No diff content provided.");
+  if (filePath) {
+    try {
+      content = fs.readFileSync(filePath, "utf-8");
+    } catch {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Cannot read file: ${filePath}`);
+    }
+  } else {
+    const stdinContent = readStdin();
+    if (stdinContent && stdinContent.trim()) {
+      content = stdinContent;
+    } else {
+      content = args.filter((a) => !a.startsWith("-")).join(" ");
+    }
+  }
+
+  if (!content || !content.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
-    process.exit(ExitCode.VALIDATION_ERROR);
+    p.log.info(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
+    p.log.info(`  ${pc.dim("$")} cat diff.txt | dojops analyze diff`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No diff content provided.");
   }
 
   const provider = ctx.getProvider();

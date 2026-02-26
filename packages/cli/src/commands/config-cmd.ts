@@ -11,7 +11,7 @@ import {
 import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { extractFlagValue } from "../parser";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import { createProvider } from "@dojops/api";
 
 function showConfig(config: DojOpsConfig): void {
@@ -64,8 +64,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
       try {
         validateProvider(providerFlag);
       } catch (err) {
-        p.log.error((err as Error).message);
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
       }
       config.defaultProvider = providerFlag;
     }
@@ -73,8 +72,10 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     if (tokenFlag) {
       const provider = providerFlag ?? config.defaultProvider ?? "openai";
       if (provider === "ollama") {
-        p.log.error("Ollama runs locally and does not require an API token.");
-        process.exit(ExitCode.VALIDATION_ERROR);
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          "Ollama runs locally and does not require an API token.",
+        );
       }
       config.tokens = config.tokens ?? {};
       config.tokens[provider] = tokenFlag;

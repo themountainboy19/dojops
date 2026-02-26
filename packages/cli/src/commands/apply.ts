@@ -6,7 +6,7 @@ import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
-import { hasFlag } from "../parser";
+import { hasFlag, extractFlagValue } from "../parser";
 import { statusIcon, statusText, riskColor } from "../formatter";
 import {
   findProjectRoot,
@@ -24,7 +24,7 @@ import {
   checkGitDirty,
   PlanState,
 } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
 import { getDojopsVersion } from "../state";
 import { getDriftWarnings } from "../drift-warning";
@@ -33,8 +33,7 @@ import { validateReplayIntegrity, checkPluginIntegrity } from "./replay-validato
 export async function applyCommand(args: string[], ctx: CLIContext): Promise<void> {
   const root = findProjectRoot();
   if (!root) {
-    p.log.error("No .dojops/ project found. Run `dojops init` first.");
-    process.exit(ExitCode.NO_PROJECT);
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
   }
 
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
@@ -45,14 +44,14 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const skipVerify = hasFlag(args, "--skip-verify");
   const force = hasFlag(args, "--force");
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
-  const planId = args.find((a) => !a.startsWith("-"));
+  const singleTaskId = extractFlagValue(args, "--task");
+  const planId = args.find((a) => !a.startsWith("-") && a !== singleTaskId);
 
   let plan: PlanState | null;
   if (planId) {
     plan = loadPlan(root, planId);
     if (!plan) {
-      p.log.error(`Plan "${planId}" not found.`);
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
     }
   } else {
     // Try session.currentPlan first, then latest
@@ -63,14 +62,32 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       plan = getLatestPlan(root);
     }
     if (!plan) {
-      p.log.error("No plan found. Run `dojops plan <prompt>` first.");
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        "No plan found. Run `dojops plan <prompt>` first.",
+      );
     }
+  }
+
+  // --task <id>: run only a single task (mark all others as completed)
+  if (singleTaskId) {
+    const taskExists = plan.tasks.some((t) => t.id === singleTaskId);
+    if (!taskExists) {
+      const available = plan.tasks.map((t) => t.id).join(", ");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Task "${singleTaskId}" not found in plan. Available: ${available}`,
+      );
+    }
+    p.log.info(`Single task mode: running only ${pc.bold(singleTaskId)}`);
   }
 
   // Build skip set for resume
   let completedTaskIds = new Set<string>();
-  if (resume && plan.results?.length) {
+  if (singleTaskId) {
+    // Mark all tasks except the target as completed so only it runs
+    completedTaskIds = new Set(plan.tasks.filter((t) => t.id !== singleTaskId).map((t) => t.id));
+  } else if (resume && plan.results?.length) {
     completedTaskIds = new Set(
       plan.results
         .filter((r) => r.status === "completed" && r.executionStatus === "completed")
@@ -184,8 +201,10 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
 
   if (!acquireLock(root, "apply")) {
     const { info } = isLocked(root);
-    p.log.error(`Operation locked by PID ${info?.pid} (${info?.operation})`);
-    process.exit(ExitCode.LOCK_CONFLICT);
+    throw new CLIError(
+      ExitCode.LOCK_CONFLICT,
+      `Operation locked by PID ${info?.pid} (${info?.operation})`,
+    );
   }
 
   // Ensure lock is released even on abrupt process.exit() calls
@@ -241,7 +260,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         if (!autoApprove) {
           p.cancel("Replay aborted due to environment mismatch. Use --yes to force.");
           releaseLock(root);
-          process.exit(ExitCode.VALIDATION_ERROR);
+          throw new CLIError(ExitCode.VALIDATION_ERROR);
         }
         p.log.warn("Continuing despite replay mismatches (--yes).");
       } else {
@@ -269,7 +288,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
           if (p.isCancel(proceed) || !proceed) {
             p.cancel("Aborted due to plugin integrity mismatch.");
             releaseLock(root);
-            process.exit(ExitCode.VALIDATION_ERROR);
+            throw new CLIError(ExitCode.VALIDATION_ERROR);
           }
         }
       }

@@ -4,7 +4,7 @@ import { CLIContext } from "../types";
 import { maskToken } from "../formatter";
 import { getConfigPath } from "../config";
 import { findProjectRoot, loadSession } from "../state";
-import { ExitCode } from "../exit-codes";
+import { ExitCode, CLIError } from "../exit-codes";
 
 export async function inspectCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sub = args[0];
@@ -15,9 +15,8 @@ export async function inspectCommand(args: string[], ctx: CLIContext): Promise<v
     case "session":
       return inspectSession(ctx);
     default:
-      p.log.error(`Unknown inspect target: ${sub ?? "(none)"}`);
       p.log.info("Available: config, session");
-      process.exit(ExitCode.VALIDATION_ERROR);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Unknown inspect target: ${sub ?? "(none)"}`);
   }
 }
 
