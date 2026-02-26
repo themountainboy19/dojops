@@ -13,7 +13,8 @@ export function createChatRouter(
 ): Router {
   const router = Router();
 
-  // In-memory session store for API sessions
+  // In-memory session store for API sessions (capped to prevent memory exhaustion)
+  const MAX_SESSIONS = 500;
   const sessions = new Map<string, ChatSession>();
 
   function getOrCreateSession(
@@ -25,6 +26,12 @@ export function createChatRouter(
       const session = sessions.get(sessionId)!;
       if (agent) session.pinAgent(agent);
       return session;
+    }
+
+    // Evict oldest session if at capacity
+    if (sessions.size >= MAX_SESSIONS) {
+      const oldestKey = sessions.keys().next().value;
+      if (oldestKey) sessions.delete(oldestKey);
     }
 
     const session = new ChatSession({
@@ -76,6 +83,12 @@ export function createChatRouter(
 
   // POST /sessions — Create a new session
   router.post("/sessions", validateBody(ChatSessionRequestSchema), (req, res) => {
+    // Evict oldest session if at capacity
+    if (sessions.size >= MAX_SESSIONS) {
+      const oldestKey = sessions.keys().next().value;
+      if (oldestKey) sessions.delete(oldestKey);
+    }
+
     const { name, mode } = req.body;
     const session = new ChatSession({
       provider,

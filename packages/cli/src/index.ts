@@ -9,6 +9,7 @@ process.emitWarning = (warning: string | Error, ...args: unknown[]) => {
 };
 
 import "dotenv/config";
+import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider } from "@dojops/api";
 import { LLMProvider } from "@dojops/core";
@@ -19,6 +20,7 @@ import { printHelp, printCommandHelp, printBanner } from "./help";
 import { resolveCommand } from "./commands";
 import { CLIContext } from "./types";
 import { ExitCode } from "./exit-codes";
+import { getDojopsVersion } from "./state";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
 import { registerCommand, registerSubcommand } from "./commands";
@@ -91,6 +93,12 @@ async function main() {
     process.exit(0);
   }
 
+  // --version / -V
+  if (rawArgs.includes("--version") || rawArgs.includes("-V")) {
+    console.log(`dojops v${getDojopsVersion()}`);
+    process.exit(0);
+  }
+
   // Parse global options first
   const { globalOpts, remaining } = parseGlobalOptions(rawArgs);
 
@@ -159,6 +167,7 @@ async function main() {
     "check",
     "agents",
     "history",
+    "serve",
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
@@ -170,6 +179,14 @@ async function main() {
     if (resolved) {
       await resolved.handler(resolved.remaining, ctx);
     } else {
+      // Warn if first arg looks like a mistyped command (single lowercase word, no spaces)
+      const firstArg = remapped[0];
+      if (firstArg && /^[a-z][a-z-]*$/.test(firstArg) && !firstArg.startsWith("-")) {
+        p.log.warn(
+          `Unknown command: "${firstArg}". Run ${pc.dim("dojops --help")} to see available commands.`,
+        );
+      }
+
       // Default: generate command (dojops "prompt")
       const { generateCommand } = await import("./commands/generate");
       await generateCommand(remapped, ctx);
@@ -188,4 +205,8 @@ async function main() {
   }
 }
 
-main();
+main().catch((err) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  p.log.error(msg);
+  process.exit(ExitCode.GENERAL_ERROR);
+});

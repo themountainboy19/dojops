@@ -1,14 +1,14 @@
 import { z } from "zod";
 
 export const GenerateRequestSchema = z.object({
-  prompt: z.string().min(1, "prompt is required"),
+  prompt: z.string().min(1, "prompt is required").max(65536, "prompt too long"),
   temperature: z.number().min(0).max(2).optional(),
 });
 
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;
 
 export const PlanRequestSchema = z.object({
-  goal: z.string().min(1, "goal is required"),
+  goal: z.string().min(1, "goal is required").max(65536, "goal too long"),
   execute: z.boolean().optional().default(false),
   autoApprove: z.boolean().optional().default(false),
 });
@@ -16,29 +16,29 @@ export const PlanRequestSchema = z.object({
 export type PlanRequest = z.infer<typeof PlanRequestSchema>;
 
 export const DebugCIRequestSchema = z.object({
-  log: z.string().min(1, "log is required"),
+  log: z.string().min(1, "log is required").max(262144, "log too long"),
 });
 
 export type DebugCIRequest = z.infer<typeof DebugCIRequestSchema>;
 
 export const DiffRequestSchema = z.object({
-  diff: z.string().min(1, "diff is required"),
-  before: z.string().optional(),
-  after: z.string().optional(),
+  diff: z.string().min(1, "diff is required").max(262144, "diff too long"),
+  before: z.string().max(262144, "before too long").optional(),
+  after: z.string().max(262144, "after too long").optional(),
 });
 
 export type DiffRequest = z.infer<typeof DiffRequestSchema>;
 
 export const ScanRequestSchema = z.object({
   target: z.string().max(2048, "Path too long").optional(),
-  scanType: z.enum(["all", "security", "deps", "iac"]).optional().default("all"),
+  scanType: z.enum(["all", "security", "deps", "iac", "sbom"]).optional().default("all"),
 });
 
 export type ScanRequest = z.infer<typeof ScanRequestSchema>;
 
 export const ChatRequestSchema = z.object({
   sessionId: z.string().optional(),
-  message: z.string().min(1, "message is required"),
+  message: z.string().min(1, "message is required").max(65536, "message too long"),
   agent: z.string().optional(),
 });
 

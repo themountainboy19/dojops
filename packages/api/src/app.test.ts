@@ -283,7 +283,7 @@ describe("API Integration", () => {
     it("clears history", async () => {
       await request(app).post("/api/generate").send({ prompt: "test" });
 
-      const delRes = await request(app).delete("/api/history");
+      const delRes = await request(app).delete("/api/history").set("X-Confirm", "clear");
       expect(delRes.status).toBe(200);
 
       const res = await request(app).get("/api/history");

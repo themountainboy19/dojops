@@ -6,6 +6,7 @@ import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { resolveToken } from "../config";
 import { findProjectRoot } from "../state";
+import { ExitCode } from "../exit-codes";
 
 export async function serveCommand(args: string[], ctx: CLIContext): Promise<void> {
   const portArg = extractFlagValue(args, "--port");
@@ -52,9 +53,10 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     rootDir: projectRoot,
     pluginCount: registry.getPlugins().length,
     customAgentNames,
+    corsOrigin: `http://localhost:${port}`,
   });
 
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     const noteLines = [
       `${pc.bold("Provider:")}  ${provider.name}`,
       `${pc.bold("Agents:")}    ${pc.cyan(String(router.getAgents().length))} specialist agents loaded`,
@@ -64,4 +66,25 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     p.note(noteLines.join("\n"), "Server Started");
     p.log.success(`DojOps API server running on ${pc.underline(`http://localhost:${port}`)}`);
   });
+
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      p.log.error(`Port ${port} is already in use. Try: dojops serve --port=${port + 1}`);
+    } else {
+      p.log.error(`Server error: ${err.message}`);
+    }
+    process.exit(ExitCode.GENERAL_ERROR);
+  });
+
+  // Graceful shutdown on SIGINT/SIGTERM
+  const shutdown = () => {
+    p.log.info("Shutting down server...");
+    server.close(() => {
+      p.log.success("Server stopped.");
+      process.exit(ExitCode.SUCCESS);
+    });
+    setTimeout(() => process.exit(ExitCode.GENERAL_ERROR), 5_000).unref();
+  };
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }

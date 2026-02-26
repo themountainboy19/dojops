@@ -134,7 +134,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
     findings.push({
       id: "pip-audit-parse-error",
       tool: "pip-audit",
-      severity: "LOW",
+      severity: "MEDIUM",
       category: "SECURITY",
       message:
         "Failed to parse pip-audit output. The tool may have produced unexpected output format.",

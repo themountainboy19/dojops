@@ -3,6 +3,6 @@ export type {
   OverviewMetrics,
   SecurityMetrics,
   AuditMetrics,
-  AuditEntry,
+  MetricsAuditEntry,
   DashboardMetrics,
 } from "./types";

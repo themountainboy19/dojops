@@ -45,7 +45,7 @@ packages/
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   tools/            12 built-in DevOps tools
-  scanner/          6 security scanners + remediation engine
+  scanner/          8 security scanners + remediation engine
   session/          Chat session management + memory + context injection
   sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```

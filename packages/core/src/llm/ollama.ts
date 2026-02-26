@@ -20,29 +20,42 @@ export class OllamaProvider implements LLMProvider {
 
     let content: string;
 
-    if (req.messages?.length) {
-      const chatMessages = [
-        { role: "system", content: system ?? "" },
-        ...req.messages.filter((m) => m.role !== "system"),
-      ];
-      const response = await axios.post(`${this.baseUrl}/api/chat`, {
-        model: this.model,
-        messages: chatMessages,
-        stream: false,
-        ...(req.schema ? { format: "json" } : {}),
-        ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
-      });
-      content = response.data.message.content;
-    } else {
-      const response = await axios.post(`${this.baseUrl}/api/generate`, {
-        model: this.model,
-        prompt: req.prompt,
-        system,
-        stream: false,
-        ...(req.schema ? { format: "json" } : {}),
-        ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
-      });
-      content = response.data.response;
+    try {
+      if (req.messages?.length) {
+        const chatMessages = [
+          { role: "system", content: system ?? "" },
+          ...req.messages.filter((m) => m.role !== "system"),
+        ];
+        const response = await axios.post(`${this.baseUrl}/api/chat`, {
+          model: this.model,
+          messages: chatMessages,
+          stream: false,
+          ...(req.schema ? { format: "json" } : {}),
+          ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
+        });
+        content = response.data?.message?.content ?? "";
+      } else {
+        const response = await axios.post(`${this.baseUrl}/api/generate`, {
+          model: this.model,
+          prompt: req.prompt,
+          system,
+          stream: false,
+          ...(req.schema ? { format: "json" } : {}),
+          ...(req.temperature !== undefined ? { options: { temperature: req.temperature } } : {}),
+        });
+        content = response.data?.response ?? "";
+      }
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        if (err.code === "ECONNREFUSED") {
+          throw new Error(
+            `Cannot connect to Ollama at ${this.baseUrl}. Is the Ollama server running?`,
+            { cause: err },
+          );
+        }
+        throw new Error(`Ollama request failed: ${err.message}`, { cause: err });
+      }
+      throw err;
     }
 
     if (req.schema) {

@@ -80,7 +80,7 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
     findings.push({
       id: "checkov-parse-error",
       tool: "checkov",
-      severity: "LOW",
+      severity: "MEDIUM",
       category: "SECURITY",
       message:
         "Failed to parse checkov output. The tool may have produced unexpected output format.",

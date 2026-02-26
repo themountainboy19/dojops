@@ -39,7 +39,16 @@ export function createApp(deps: AppDependencies): Express {
 
   app.use(
     helmet({
-      contentSecurityPolicy: false, // dashboard uses inline scripts
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          connectSrc: ["'self'"],
+          imgSrc: ["'self'", "data:"],
+        },
+      },
     }),
   );
   app.use(cors({ origin: deps.corsOrigin ?? "http://localhost:3000" }));

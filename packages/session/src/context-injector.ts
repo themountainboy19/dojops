@@ -11,7 +11,14 @@ export function buildSessionContext(rootDir: string): string {
       const ctx = JSON.parse(fs.readFileSync(contextFile, "utf-8"));
       parts.push("## Project Context");
       if (ctx.name) parts.push(`Project: ${ctx.name}`);
-      if (ctx.languages?.length) parts.push(`Languages: ${ctx.languages.join(", ")}`);
+      if (ctx.languages?.length) {
+        const langs = Array.isArray(ctx.languages)
+          ? ctx.languages
+              .map((l: { name?: string }) => (typeof l === "string" ? l : (l?.name ?? String(l))))
+              .join(", ")
+          : String(ctx.languages);
+        parts.push(`Languages: ${langs}`);
+      }
       if (ctx.packageManagers?.length)
         parts.push(`Package managers: ${ctx.packageManagers.join(", ")}`);
       if (ctx.ciPlatforms?.length) parts.push(`CI/CD: ${ctx.ciPlatforms.join(", ")}`);

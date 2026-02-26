@@ -110,7 +110,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
     findings.push({
       id: "npm-audit-parse-error",
       tool: "npm-audit",
-      severity: "LOW",
+      severity: "MEDIUM",
       category: "SECURITY",
       message:
         "Failed to parse npm-audit output. The tool may have produced unexpected output format.",

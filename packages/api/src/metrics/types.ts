@@ -40,7 +40,7 @@ export interface SecurityMetrics {
   }>;
 }
 
-export interface AuditEntry {
+export interface MetricsAuditEntry {
   timestamp: string;
   user: string;
   command: string;
@@ -65,7 +65,7 @@ export interface AuditMetrics {
     status: string;
     planId?: string;
   }>;
-  recentEntries: AuditEntry[];
+  recentEntries: MetricsAuditEntry[];
 }
 
 export interface DashboardMetrics {

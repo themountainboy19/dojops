@@ -77,7 +77,7 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
       allFindings.push({
         id: "hadolint-parse-error",
         tool: "hadolint",
-        severity: "LOW",
+        severity: "MEDIUM",
         category: "SECURITY",
         message:
           "Failed to parse hadolint output. The tool may have produced unexpected output format.",

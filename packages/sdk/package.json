@@ -23,13 +23,20 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "node -e \"if(JSON.stringify(require('./package.json')).includes('workspace:'))process.exit(1)\""
   },
   "dependencies": {
     "zod": "^3.23.0"

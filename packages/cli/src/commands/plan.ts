@@ -50,9 +50,16 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   const s = p.spinner();
   s.start("Decomposing goal into tasks...");
-  const graph = await decompose(prompt, provider, tools, {
-    repoContext: repoContext ?? undefined,
-  });
+  let graph;
+  try {
+    graph = await decompose(prompt, provider, tools, {
+      repoContext: repoContext ?? undefined,
+    });
+  } catch (err) {
+    s.stop("Decomposition failed.");
+    p.log.error(err instanceof Error ? err.message : String(err));
+    process.exit(ExitCode.GENERAL_ERROR);
+  }
   s.stop("Tasks decomposed.");
 
   // Enrich tasks with plugin metadata

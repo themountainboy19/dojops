@@ -66,7 +66,7 @@ describe("API integration", () => {
       const app = createApp(deps);
 
       await request(app).post("/api/generate").send({ prompt: "test" });
-      await request(app).delete("/api/history").expect(200);
+      await request(app).delete("/api/history").set("X-Confirm", "clear").expect(200);
 
       const historyRes = await request(app).get("/api/history").expect(200);
       expect(historyRes.body.entries).toHaveLength(0);

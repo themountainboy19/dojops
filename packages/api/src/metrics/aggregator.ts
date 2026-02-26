@@ -5,7 +5,7 @@ import type {
   OverviewMetrics,
   SecurityMetrics,
   AuditMetrics,
-  AuditEntry,
+  MetricsAuditEntry,
   DashboardMetrics,
 } from "./types";
 
@@ -49,7 +49,7 @@ interface ScanReport {
   };
 }
 
-function computeAuditHash(entry: AuditEntry): string {
+function computeAuditHash(entry: MetricsAuditEntry): string {
   const payload = [
     entry.seq,
     entry.timestamp,
@@ -86,7 +86,7 @@ export class MetricsAggregator {
       .filter((item): item is T => item !== null);
   }
 
-  private readAuditEntries(): AuditEntry[] {
+  private readAuditEntries(): MetricsAuditEntry[] {
     const file = path.join(this.dojopsDir, "history", "audit.jsonl");
     if (!fs.existsSync(file)) return [];
     return fs
@@ -95,15 +95,15 @@ export class MetricsAggregator {
       .filter((line) => line.trim())
       .map((line) => {
         try {
-          return JSON.parse(line) as AuditEntry;
+          return JSON.parse(line) as MetricsAuditEntry;
         } catch {
           return null;
         }
       })
-      .filter((e): e is AuditEntry => e !== null);
+      .filter((e): e is MetricsAuditEntry => e !== null);
   }
 
-  private verifyAuditChain(entries: AuditEntry[]): {
+  private verifyAuditChain(entries: MetricsAuditEntry[]): {
     valid: boolean;
     errors: number;
     totalEntries: number;

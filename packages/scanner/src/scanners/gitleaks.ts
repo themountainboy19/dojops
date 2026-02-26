@@ -92,7 +92,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
       findings.push({
         id: "gitleaks-parse-error",
         tool: "gitleaks",
-        severity: "LOW",
+        severity: "MEDIUM",
         category: "SECRETS",
         message:
           "Failed to parse gitleaks output. The tool may have produced unexpected output format.",

@@ -23,6 +23,12 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "files": [
     "dist",
     "public"
@@ -34,7 +40,8 @@
     "lint": "eslint src/",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:smoke": "vitest run --config vitest.smoke.config.ts"
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "prepublishOnly": "node -e \"if(JSON.stringify(require('./package.json')).includes('workspace:'))process.exit(1)\""
   },
   "dependencies": {
     "@dojops/core": "workspace:*",

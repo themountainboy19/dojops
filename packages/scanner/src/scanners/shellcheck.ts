@@ -79,7 +79,7 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
       allFindings.push({
         id: "shellcheck-parse-error",
         tool: "shellcheck",
-        severity: "LOW",
+        severity: "MEDIUM",
         category: "IAC",
         message:
           "Failed to parse shellcheck output. The tool may have produced unexpected output format.",

@@ -26,7 +26,11 @@ export function createHistoryRouter(store: HistoryStore): Router {
     res.json(entry);
   });
 
-  router.delete("/", (_req, res) => {
+  router.delete("/", (req, res) => {
+    if (req.headers["x-confirm"] !== "clear") {
+      res.status(400).json({ error: "Missing X-Confirm: clear header" });
+      return;
+    }
     store.clear();
     res.json({ message: "History cleared" });
   });

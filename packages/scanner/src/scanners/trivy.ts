@@ -136,7 +136,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
     findings.push({
       id: "trivy-parse-error",
       tool: "trivy",
-      severity: "LOW",
+      severity: "MEDIUM",
       category: "SECURITY",
       message: "Failed to parse trivy output. The tool may have produced unexpected output format.",
       autoFixAvailable: false,

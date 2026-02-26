@@ -99,6 +99,14 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     pc.dim("Commands: /exit, /agent <name>, /history, /clear, /save, /plan <goal>, /apply, /scan"),
   );
 
+  // Graceful shutdown: save session on SIGINT during LLM call
+  const saveAndExit = () => {
+    saveChatSession(rootDir, session.getState());
+    p.log.success(`\nSession saved: ${session.id}`);
+    process.exit(ExitCode.SUCCESS);
+  };
+  process.on("SIGINT", saveAndExit);
+
   // REPL loop
   while (true) {
     const input = await p.text({
