@@ -59,7 +59,7 @@ const SCANNERS: ScannerEntry[] = [
   {
     name: "checkov",
     fn: scanCheckov,
-    categories: ["iac"],
+    categories: ["iac", "security"],
     applicable: (ctx) =>
       !ctx ||
       ctx.infra.hasTerraform ||

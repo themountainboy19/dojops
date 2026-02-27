@@ -387,6 +387,14 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const lockPath = file + ".lock";
   const lockFd = acquireAuditLock(lockPath);
 
+  // If lock acquisition failed, skip the write to avoid chain corruption
+  if (lockFd < 0) {
+    console.warn(
+      "[audit] Failed to acquire audit lock — skipping audit entry to protect chain integrity",
+    );
+    return;
+  }
+
   try {
     let previousHash = "genesis";
     let seq = 1;
@@ -418,11 +426,11 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
       } catch {
         // ignore
       }
-    }
-    try {
-      fs.unlinkSync(lockPath);
-    } catch {
-      // Already removed — no-op
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        // Already removed — no-op
+      }
     }
   }
 }
@@ -467,6 +475,7 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
   const errors: AuditVerificationResult["errors"] = [];
   let expectedPreviousHash = "genesis";
   let expectedSeq = 1;
+  let chainStarted = false;
 
   for (let i = 0; i < lines.length; i++) {
     let entry: AuditEntry;
@@ -474,17 +483,24 @@ export function verifyAuditIntegrity(rootDir: string): AuditVerificationResult {
       entry = JSON.parse(lines[i]) as AuditEntry;
     } catch {
       errors.push({ seq: expectedSeq, line: i + 1, reason: "Invalid JSON" });
-      expectedPreviousHash = "genesis";
       expectedSeq++;
       continue;
     }
 
-    // Legacy entry without hash fields — skip gracefully, reset chain
+    // Legacy entry without hash fields
     if (entry.seq == null || entry.hash == null) {
-      expectedPreviousHash = "genesis";
-      expectedSeq = 1;
+      if (chainStarted) {
+        // Hash-less entry after chain has started → error (potential tampering)
+        errors.push({
+          seq: expectedSeq,
+          line: i + 1,
+          reason: "Hash fields missing in chained entry",
+        });
+      }
+      // Legacy entries before chain starts are OK — skip them
       continue;
     }
+    chainStarted = true;
 
     if (entry.seq !== expectedSeq) {
       errors.push({

@@ -1343,3 +1343,203 @@ describe("RepoContextSchema with llmInsights", () => {
     expect(parsed.success).toBe(false);
   });
 });
+
+// ── Subdirectory detection (C1/M2 audit fixes) ─────────────────────
+
+describe("detectInfra — subdirectory scanning", () => {
+  it("detects Terraform in terraform/ subdirectory", () => {
+    const dir = makeTmpDir();
+    const tfDir = path.join(dir, "terraform");
+    fs.mkdirSync(tfDir);
+    fs.writeFileSync(path.join(tfDir, "main.tf"), 'provider "vultr" {}');
+    const result = detectInfra(dir);
+    expect(result.hasTerraform).toBe(true);
+    expect(result.tfProviders).toContain("vultr");
+  });
+
+  it("detects Terraform in infra/ subdirectory", () => {
+    const dir = makeTmpDir();
+    const tfDir = path.join(dir, "infra");
+    fs.mkdirSync(tfDir);
+    fs.writeFileSync(path.join(tfDir, "main.tf"), "resource {}");
+    const result = detectInfra(dir);
+    expect(result.hasTerraform).toBe(true);
+  });
+
+  it("detects Terraform in terraform-iac/ subdirectory", () => {
+    const dir = makeTmpDir();
+    const tfDir = path.join(dir, "terraform-iac");
+    fs.mkdirSync(tfDir);
+    fs.writeFileSync(path.join(tfDir, "main.tf"), 'provider "cloudflare" {}');
+    const result = detectInfra(dir);
+    expect(result.hasTerraform).toBe(true);
+    expect(result.tfProviders).toContain("cloudflare");
+  });
+
+  it("detects Helm in subdirectory", () => {
+    const dir = makeTmpDir();
+    const helmDir = path.join(dir, "helm");
+    fs.mkdirSync(helmDir);
+    fs.writeFileSync(path.join(helmDir, "Chart.yaml"), "name: my-chart");
+    const result = detectInfra(dir);
+    expect(result.hasHelm).toBe(true);
+  });
+
+  it("detects Ansible in subdirectory", () => {
+    const dir = makeTmpDir();
+    const ansibleDir = path.join(dir, "ansible");
+    fs.mkdirSync(ansibleDir);
+    fs.writeFileSync(path.join(ansibleDir, "playbook.yml"), "---");
+    const result = detectInfra(dir);
+    expect(result.hasAnsible).toBe(true);
+  });
+
+  it("detects Kustomize in subdirectory", () => {
+    const dir = makeTmpDir();
+    const kDir = path.join(dir, "deploy");
+    fs.mkdirSync(kDir);
+    fs.writeFileSync(path.join(kDir, "kustomization.yaml"), "resources: []");
+    const result = detectInfra(dir);
+    expect(result.hasKustomize).toBe(true);
+  });
+
+  it("detects Packer in subdirectory", () => {
+    const dir = makeTmpDir();
+    const packerDir = path.join(dir, "packer");
+    fs.mkdirSync(packerDir);
+    fs.writeFileSync(path.join(packerDir, "image.pkr.hcl"), "source {}");
+    const result = detectInfra(dir);
+    expect(result.hasPacker).toBe(true);
+  });
+});
+
+describe("detectMonitoring — subdirectory scanning", () => {
+  it("detects Prometheus in subdirectory", () => {
+    const dir = makeTmpDir();
+    const monDir = path.join(dir, "monitoring");
+    fs.mkdirSync(monDir);
+    fs.writeFileSync(path.join(monDir, "prometheus.yml"), "global:");
+    const result = detectMonitoring(dir);
+    expect(result.hasPrometheus).toBe(true);
+  });
+
+  it("detects Nginx in subdirectory", () => {
+    const dir = makeTmpDir();
+    const webDir = path.join(dir, "nginx");
+    fs.mkdirSync(webDir);
+    fs.writeFileSync(path.join(webDir, "nginx.conf"), "server {}");
+    const result = detectMonitoring(dir);
+    expect(result.hasNginx).toBe(true);
+  });
+
+  it("detects systemd .service in subdirectory", () => {
+    const dir = makeTmpDir();
+    const svcDir = path.join(dir, "systemd");
+    fs.mkdirSync(svcDir);
+    fs.writeFileSync(path.join(svcDir, "myapp.service"), "[Unit]");
+    const result = detectMonitoring(dir);
+    expect(result.hasSystemd).toBe(true);
+  });
+});
+
+describe("detectScripts — subdirectory scanning", () => {
+  it("detects shell scripts in child directories", () => {
+    const dir = makeTmpDir();
+    const appDir = path.join(dir, "app");
+    fs.mkdirSync(appDir);
+    fs.writeFileSync(path.join(appDir, "deploy.sh"), "#!/bin/bash");
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toContain("app/deploy.sh");
+  });
+
+  it("detects scripts in child/scripts/ subdirectory", () => {
+    const dir = makeTmpDir();
+    const scriptDir = path.join(dir, "app", "scripts");
+    fs.mkdirSync(scriptDir, { recursive: true });
+    fs.writeFileSync(path.join(scriptDir, "build.sh"), "#!/bin/bash");
+    const result = detectScripts(dir);
+    expect(result.shellScripts).toContain("app/scripts/build.sh");
+  });
+});
+
+describe("detectLanguages — expanded indicators", () => {
+  it("detects TypeScript from tsconfig.json", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "typescript")).toBe(true);
+  });
+
+  it("TypeScript has lower confidence than Node.js", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "package.json"), "{}");
+    fs.writeFileSync(path.join(dir, "tsconfig.json"), "{}");
+    const result = detectLanguages(dir);
+    const node = result.find((l) => l.name === "node");
+    const ts = result.find((l) => l.name === "typescript");
+    expect(node).toBeDefined();
+    expect(ts).toBeDefined();
+    expect(node!.confidence).toBeGreaterThan(ts!.confidence);
+  });
+
+  it("detects PHP from composer.json", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "composer.json"), "{}");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "php")).toBe(true);
+  });
+
+  it("detects .NET from *.csproj glob", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "MyApp.csproj"), "<Project/>");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "dotnet")).toBe(true);
+  });
+
+  it("detects Elixir from mix.exs", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "mix.exs"), "defmodule Mix {}");
+    const result = detectLanguages(dir);
+    expect(result.some((l) => l.name === "elixir")).toBe(true);
+  });
+});
+
+describe("TF provider patterns — expanded", () => {
+  it("detects vultr provider", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), 'provider "vultr" { api_key = var.key }');
+    const result = detectInfra(dir);
+    expect(result.tfProviders).toContain("vultr");
+  });
+
+  it("detects digitalocean provider", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), 'provider "digitalocean" {}');
+    const result = detectInfra(dir);
+    expect(result.tfProviders).toContain("digitalocean");
+  });
+
+  it("detects cloudflare provider", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), 'provider "cloudflare" {}');
+    const result = detectInfra(dir);
+    expect(result.tfProviders).toContain("cloudflare");
+  });
+
+  it("detects kubernetes provider", () => {
+    const dir = makeTmpDir();
+    fs.writeFileSync(path.join(dir, "main.tf"), 'provider "kubernetes" {}');
+    const result = detectInfra(dir);
+    expect(result.tfProviders).toContain("kubernetes");
+  });
+
+  it("detects providers in subdirectory .tf files", () => {
+    const dir = makeTmpDir();
+    const tfDir = path.join(dir, "terraform");
+    fs.mkdirSync(tfDir);
+    fs.writeFileSync(path.join(tfDir, "main.tf"), 'provider "hcloud" { token = var.hc_token }');
+    const result = detectInfra(dir);
+    expect(result.hasTerraform).toBe(true);
+    expect(result.tfProviders).toContain("hetzner");
+  });
+});

@@ -28,6 +28,7 @@ export {
   createDebugger,
   createDiffAnalyzer,
 } from "./factory";
+export { NoopProvider } from "./noop-provider";
 export type { ProviderOptions, CreateRouterResult } from "./factory";
 export type { ToolRegistry } from "./factory";
 export { MetricsAggregator } from "./metrics";

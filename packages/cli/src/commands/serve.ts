@@ -47,7 +47,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.info(`  ${pc.dim("$")} dojops auth login --provider ${providerName} --token <YOUR_KEY>`);
   }
 
-  const provider = createProvider({ provider: providerName, model, apiKey });
+  const provider = createProvider({ provider: providerName, model, apiKey, allowMissing: true });
   const projectRoot = findProjectRoot() ?? undefined;
   const registry = createToolRegistry(provider, projectRoot);
   const tools = registry.getAll();

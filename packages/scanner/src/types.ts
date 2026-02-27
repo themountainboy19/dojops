@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export type ScanSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 export type ScanCategory = "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS" | "LICENSE";
-export type ScanType = "all" | "security" | "deps" | "iac" | "sbom";
+export type ScanType = "all" | "security" | "deps" | "iac" | "sbom" | "license";
 
 // ── Finding ────────────────────────────────────────────────────────
 

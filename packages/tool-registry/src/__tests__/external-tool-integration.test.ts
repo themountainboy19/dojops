@@ -152,15 +152,20 @@ describe("External Tool Integration: Full Lifecycle", () => {
   let projectDir: string;
   let origHome: string | undefined;
 
+  let origCwd: string;
+
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-ext-tool-"));
     projectDir = path.join(tmpDir, "project");
     fs.mkdirSync(projectDir, { recursive: true });
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
+    origCwd = process.cwd();
+    process.chdir(tmpDir);
   });
 
   afterEach(() => {
+    process.chdir(origCwd);
     process.env.HOME = origHome;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -452,7 +457,7 @@ save 300 10
       writeTraefikTool(toolsDir);
       const entry = discoverTools(projectDir)[0];
 
-      const outputDir = path.join(tmpDir, "output");
+      const outputDir = "output";
       const tool = new CustomTool(
         entry.manifest,
         provider,
@@ -496,7 +501,7 @@ save 300 10
       writeRedisTool(toolsDir);
       const entry = discoverTools(projectDir)[0];
 
-      const outputDir = path.join(tmpDir, "redis-output");
+      const outputDir = "redis-output";
       const tool = new CustomTool(
         entry.manifest,
         provider,
@@ -528,7 +533,7 @@ save 300 10
       writeTraefikTool(toolsDir);
       const entry = discoverTools(projectDir)[0];
 
-      const outputDir = path.join(tmpDir, "output");
+      const outputDir = "output";
       fs.mkdirSync(outputDir, { recursive: true });
       const filePath = path.join(outputDir, "traefik.yaml");
       fs.writeFileSync(filePath, "original: content\n", "utf-8");

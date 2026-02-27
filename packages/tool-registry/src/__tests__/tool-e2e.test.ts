@@ -522,13 +522,18 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
   let tmpDir: string;
   let origHome: string | undefined;
 
+  let origCwd: string;
+
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-e2e-exec-"));
     origHome = process.env.HOME;
     process.env.HOME = tmpDir;
+    origCwd = process.cwd();
+    process.chdir(tmpDir);
   });
 
   afterEach(() => {
+    process.chdir(origCwd);
     process.env.HOME = origHome;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -593,7 +598,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     writeCaddyTool(projectToolsDir);
 
     const entry = discoverTools(projectDir)[0];
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
 
     const tool = new CustomTool(
       entry.manifest,
@@ -637,7 +642,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     writeCaddyTool(projectToolsDir);
 
     const entry = discoverTools(projectDir)[0];
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
 
     const tool = new CustomTool(
       entry.manifest,
@@ -700,7 +705,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     writeEnvoyTool(projectToolsDir);
 
     const entry = discoverTools(projectDir)[0];
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
 
     const tool = new CustomTool(
       entry.manifest,
@@ -742,7 +747,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     writeCaddyTool(projectToolsDir);
     const entry = discoverTools(projectDir)[0];
 
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
     fs.mkdirSync(outputDir, { recursive: true });
     const filePath = path.join(outputDir, "Caddyfile");
     fs.writeFileSync(filePath, "original content", "utf-8");

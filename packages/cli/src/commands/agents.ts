@@ -3,8 +3,8 @@ import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import * as yaml from "js-yaml";
-import { createRouter } from "@dojops/api";
 import { ALL_SPECIALIST_CONFIGS, getInstallCommand } from "@dojops/core";
+import type { SpecialistConfig } from "@dojops/core";
 import {
   discoverCustomAgents,
   GeneratedAgentSchema,
@@ -95,29 +95,34 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Agent name required.");
   }
 
-  const provider = ctx.getProvider();
   const projectRoot = findProjectRoot() ?? undefined;
-  const { router, customAgentNames } = createRouter(provider, projectRoot);
-  const agent = router.getAgents().find((a) => a.name.toLowerCase() === name.toLowerCase());
+  const customAgents = discoverCustomAgents(projectRoot);
 
-  if (!agent) {
-    const names = router
-      .getAgents()
-      .map((a) => a.name)
-      .join(", ");
+  // Merge built-in + custom configs (same pattern as agentList, no LLM needed)
+  const configMap = new Map<string, SpecialistConfig>();
+  for (const c of ALL_SPECIALIST_CONFIGS) configMap.set(c.name, c);
+  const customAgentNames = new Set<string>();
+  for (const entry of customAgents) {
+    configMap.set(entry.config.name, entry.config);
+    customAgentNames.add(entry.config.name);
+  }
+
+  const config = [...configMap.values()].find((c) => c.name.toLowerCase() === name.toLowerCase());
+
+  if (!config) {
+    const names = [...configMap.keys()].join(", ");
     p.log.info(`Available agents: ${names}`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Agent "${name}" not found.`);
   }
 
-  const isCustom = customAgentNames.has(agent.name);
-  const deps = agent.toolDependencies;
-  const preflight = deps.length > 0 ? runPreflight(agent.name, deps) : null;
+  const isCustom = customAgentNames.has(config.name);
+  const deps = config.toolDependencies ?? [];
+  const preflight = deps.length > 0 ? runPreflight(config.name, deps) : null;
 
   // Find source path for custom agents
   let sourcePath: string | undefined;
   if (isCustom) {
-    const customAgents = discoverCustomAgents(projectRoot);
-    const entry = customAgents.find((a) => a.config.name === agent.name);
+    const entry = customAgents.find((a) => a.config.name === config.name);
     if (entry) sourcePath = entry.agentDir;
   }
 
@@ -125,9 +130,9 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     console.log(
       JSON.stringify(
         {
-          name: agent.name,
-          domain: agent.domain,
-          description: agent.description ?? null,
+          name: config.name,
+          domain: config.domain,
+          description: config.description ?? null,
           type: isCustom ? "custom" : "built-in",
           source: sourcePath ?? null,
           toolDependencies:
@@ -149,9 +154,9 @@ function agentInfo(args: string[], ctx: CLIContext): void {
   }
 
   const lines = [
-    `${pc.bold("Name:")}        ${agent.name}`,
-    `${pc.bold("Domain:")}      ${agent.domain}`,
-    `${pc.bold("Description:")} ${agent.description ?? pc.dim("(none)")}`,
+    `${pc.bold("Name:")}        ${config.name}`,
+    `${pc.bold("Domain:")}      ${config.domain}`,
+    `${pc.bold("Description:")} ${config.description ?? pc.dim("(none)")}`,
     `${pc.bold("Type:")}        ${isCustom ? pc.yellow("custom") : pc.dim("built-in")}`,
   ];
 
@@ -171,7 +176,7 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     }
   }
 
-  p.note(lines.join("\n"), `Agent: ${agent.name}`);
+  p.note(lines.join("\n"), `Agent: ${config.name}`);
 }
 
 async function agentCreate(args: string[], ctx: CLIContext): Promise<void> {

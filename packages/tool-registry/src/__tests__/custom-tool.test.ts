@@ -53,12 +53,16 @@ const testInputSchema = {
 
 describe("CustomTool", () => {
   let tmpDir: string;
+  let origCwd: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-custom-tool-test-"));
+    origCwd = process.cwd();
+    process.chdir(tmpDir);
   });
 
   afterEach(() => {
+    process.chdir(origCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -151,9 +155,9 @@ describe("CustomTool", () => {
 
   it("execute writes files to disk", async () => {
     const provider = createMockProvider();
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
     const manifest = createTestManifest();
-    const tool = new CustomTool(manifest, provider, outputDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.execute({ outputPath: outputDir, description: "test" });
 
@@ -166,7 +170,7 @@ describe("CustomTool", () => {
 
   it("execute creates backup on update", async () => {
     const provider = createMockProvider();
-    const outputDir = path.join(tmpDir, "output");
+    const outputDir = "output";
     fs.mkdirSync(outputDir, { recursive: true });
     const filePath = path.join(outputDir, "config.yaml");
     fs.writeFileSync(filePath, "old: content", "utf-8");
@@ -180,7 +184,7 @@ describe("CustomTool", () => {
       detector: { path: "{outputPath}/config.yaml" },
     });
 
-    const tool = new CustomTool(manifest, provider, outputDir, testSource, testInputSchema);
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
 
     const result = await tool.execute({
       outputPath: outputDir,
@@ -315,5 +319,41 @@ describe("verify() permission enforcement", () => {
     const result = await tool.verify({});
     expect(result.passed).toBe(false);
     expect(result.issues[0].message).toContain("not in the allowed binaries whitelist");
+  });
+});
+
+describe("CustomTool — absolute path guard (H5 fix)", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-h5-test-"));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("rejects absolute path produced by template substitution", async () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest({
+      files: [{ path: "{outputPath}/config.yaml", serializer: "yaml" }],
+    });
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    // Input that produces an absolute path: /etc/config.yaml
+    const result = await tool.execute({ outputPath: "/etc", description: "test" });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("absolute path");
+  });
+
+  it("allows relative paths after template substitution", async () => {
+    const provider = createMockProvider();
+    const manifest = createTestManifest({
+      files: [{ path: "{outputPath}/config.yaml", serializer: "yaml" }],
+    });
+    const tool = new CustomTool(manifest, provider, tmpDir, testSource, testInputSchema);
+
+    const result = await tool.execute({ outputPath: "output", description: "test" });
+    expect(result.success).toBe(true);
   });
 });

@@ -28,6 +28,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const depsOnly = hasFlag(args, "--deps");
   const iacOnly = hasFlag(args, "--iac");
   const sbomMode = hasFlag(args, "--sbom");
+  const licenseOnly = hasFlag(args, "--license");
   const fixMode = hasFlag(args, "--fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const targetDir = extractFlagValue(args, "--target");
@@ -38,6 +39,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   else if (depsOnly) scanType = "deps";
   else if (iacOnly) scanType = "iac";
   else if (sbomMode) scanType = "sbom";
+  else if (licenseOnly) scanType = "license";
 
   // Find or init project (use --target if specified)
   let root: string;

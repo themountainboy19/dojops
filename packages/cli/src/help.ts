@@ -82,6 +82,14 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--task=ID")}              Execute only a single task from the plan`);
   console.log();
   console.log(pc.bold("SCAN OPTIONS"));
+  console.log(
+    `  ${pc.cyan("--security")}         Security scans only (trivy, gitleaks, hadolint, checkov)`,
+  );
+  console.log(`  ${pc.cyan("--deps")}             Dependency scans only (npm-audit, pip-audit)`);
+  console.log(`  ${pc.cyan("--iac")}              IaC scans only (checkov, hadolint, shellcheck)`);
+  console.log(`  ${pc.cyan("--sbom")}             Generate Software Bill of Materials`);
+  console.log(`  ${pc.cyan("--license")}          License compliance scan only`);
+  console.log(`  ${pc.cyan("--fix")}              Auto-remediate HIGH/CRITICAL findings`);
   console.log(`  ${pc.cyan("--target=<dir>")}     Target directory for scanning`);
   console.log();
   console.log(pc.bold("CHAT OPTIONS"));

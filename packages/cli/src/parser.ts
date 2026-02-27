@@ -143,6 +143,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "use",
     "profile",
     "verify",
+    "validate",
     "install",
     "remove",
     "clean",

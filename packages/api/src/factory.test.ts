@@ -141,4 +141,47 @@ describe("factory", () => {
       expect(typeof analyzer.analyze).toBe("function");
     });
   });
+
+  describe("allowMissing option (C3 fix)", () => {
+    it("returns NoopProvider when allowMissing=true and key is missing", () => {
+      delete process.env.OPENAI_API_KEY;
+      const provider = createProvider({ provider: "openai", allowMissing: true });
+      expect(provider.name).toBe("noop");
+    });
+
+    it("NoopProvider.generate() throws descriptive error", async () => {
+      delete process.env.OPENAI_API_KEY;
+      const provider = createProvider({ provider: "openai", allowMissing: true });
+      await expect(provider.generate({ prompt: "test" })).rejects.toThrow(/API key not configured/);
+    });
+
+    it("returns NoopProvider for anthropic when allowMissing=true", () => {
+      delete process.env.ANTHROPIC_API_KEY;
+      const provider = createProvider({ provider: "anthropic", allowMissing: true });
+      expect(provider.name).toBe("noop");
+    });
+
+    it("returns NoopProvider for deepseek when allowMissing=true", () => {
+      delete process.env.DEEPSEEK_API_KEY;
+      const provider = createProvider({ provider: "deepseek", allowMissing: true });
+      expect(provider.name).toBe("noop");
+    });
+
+    it("returns NoopProvider for gemini when allowMissing=true", () => {
+      delete process.env.GEMINI_API_KEY;
+      const provider = createProvider({ provider: "gemini", allowMissing: true });
+      expect(provider.name).toBe("noop");
+    });
+
+    it("still creates real provider when key is present", () => {
+      process.env.OPENAI_API_KEY = "test-key";
+      const provider = createProvider({ provider: "openai", allowMissing: true });
+      expect(provider.name).toBe("openai");
+    });
+
+    it("ollama ignores allowMissing (never needs key)", () => {
+      const provider = createProvider({ provider: "ollama", allowMissing: true });
+      expect(provider.name).toBe("ollama");
+    });
+  });
 });

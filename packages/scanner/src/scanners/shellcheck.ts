@@ -19,18 +19,36 @@ interface ShellCheckResult {
 }
 
 /**
+ * Check if a binary at the given path is a Node.js/npm script wrapper
+ * (not a real binary). Reads the first line and checks for node shebang.
+ */
+function isNodeWrapper(binPath: string): boolean {
+  try {
+    const fd = fs.openSync(binPath, "r");
+    const buf = Buffer.alloc(128);
+    fs.readSync(fd, buf, 0, 128, 0);
+    fs.closeSync(fd);
+    const head = buf.toString("utf-8").split("\n")[0];
+    return /node|env\s+node/.test(head);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Resolve the shellcheck binary path.
  * Priority: sandbox (~/.dojops/tools/bin) → well-known system paths → PATH fallback.
+ * Skips Node.js/npm wrapper scripts to avoid running the wrong binary.
  */
 function resolveShellcheck(): string {
   // 1. Sandbox install
   const sandboxBin = path.join(os.homedir(), ".dojops", "tools", "bin", "shellcheck");
-  if (fs.existsSync(sandboxBin)) return sandboxBin;
+  if (fs.existsSync(sandboxBin) && !isNodeWrapper(sandboxBin)) return sandboxBin;
 
   // 2. Well-known system paths (avoids npm wrapper issues)
   const systemPaths = ["/usr/bin/shellcheck", "/usr/local/bin/shellcheck"];
   for (const sp of systemPaths) {
-    if (fs.existsSync(sp)) return sp;
+    if (fs.existsSync(sp) && !isNodeWrapper(sp)) return sp;
   }
 
   // 3. Fall back to bare name (resolved via PATH)

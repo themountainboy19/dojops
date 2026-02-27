@@ -31,6 +31,26 @@ function listChildDirs(root: string): string[] {
   }
 }
 
+/**
+ * Match a file indicator against a directory. Supports glob patterns like "*.ext".
+ * Returns the matched filename or null.
+ */
+function matchFileIndicator(dir: string, indicator: string): string | null {
+  if (indicator.startsWith("*")) {
+    // Glob pattern: match any file with the given extension
+    const ext = indicator.slice(1); // e.g. ".csproj"
+    try {
+      const entries = fs.readdirSync(dir);
+      const match = entries.find((f) => f.endsWith(ext));
+      return match ?? null;
+    } catch {
+      return null;
+    }
+  }
+  // Exact match
+  return fs.existsSync(path.join(dir, indicator)) ? indicator : null;
+}
+
 // ── Language detection ───────────────────────────────────────────────
 
 const LANGUAGE_INDICATORS: Array<{
@@ -39,6 +59,7 @@ const LANGUAGE_INDICATORS: Array<{
   confidence: number;
 }> = [
   { name: "node", files: ["package.json"], confidence: 0.9 },
+  { name: "typescript", files: ["tsconfig.json"], confidence: 0.85 },
   {
     name: "python",
     files: ["requirements.txt", "pyproject.toml", "setup.py", "setup.cfg"],
@@ -48,6 +69,11 @@ const LANGUAGE_INDICATORS: Array<{
   { name: "rust", files: ["Cargo.toml"], confidence: 0.95 },
   { name: "java", files: ["pom.xml", "build.gradle", "build.gradle.kts"], confidence: 0.9 },
   { name: "ruby", files: ["Gemfile"], confidence: 0.9 },
+  { name: "php", files: ["composer.json"], confidence: 0.9 },
+  { name: "dotnet", files: ["*.csproj", "*.sln", "global.json"], confidence: 0.9 },
+  { name: "elixir", files: ["mix.exs"], confidence: 0.95 },
+  { name: "dart", files: ["pubspec.yaml"], confidence: 0.95 },
+  { name: "swift", files: ["Package.swift"], confidence: 0.95 },
 ];
 
 /**
@@ -65,8 +91,9 @@ export function detectLanguages(root: string): LanguageDetection[] {
       const key = `${lang.name}:${dir}`;
       if (seen.has(key)) continue;
       for (const file of lang.files) {
-        if (fs.existsSync(path.join(absDir, file))) {
-          const indicator = dir ? `${dir}/${file}` : file;
+        const matched = matchFileIndicator(absDir, file);
+        if (matched) {
+          const indicator = dir ? `${dir}/${matched}` : matched;
           // Subdirectory detections get slightly lower confidence
           const confidence = dir ? lang.confidence * 0.9 : lang.confidence;
           results.push({ name: lang.name, confidence, indicator });
@@ -290,6 +317,22 @@ const TF_PROVIDER_PATTERNS: Array<{ pattern: RegExp; name: string }> = [
   { pattern: /provider\s+"aws"/, name: "aws" },
   { pattern: /provider\s+"google"/, name: "gcp" },
   { pattern: /provider\s+"azurerm"/, name: "azure" },
+  { pattern: /provider\s+"vultr"/, name: "vultr" },
+  { pattern: /provider\s+"digitalocean"/, name: "digitalocean" },
+  { pattern: /provider\s+"hcloud"/, name: "hetzner" },
+  { pattern: /provider\s+"linode"/, name: "linode" },
+  { pattern: /provider\s+"cloudflare"/, name: "cloudflare" },
+  { pattern: /provider\s+"oci"/, name: "oracle" },
+  { pattern: /provider\s+"alicloud"/, name: "alibaba" },
+  { pattern: /provider\s+"kubernetes"/, name: "kubernetes" },
+  { pattern: /provider\s+"helm"/, name: "helm" },
+  { pattern: /provider\s+"docker"/, name: "docker" },
+  { pattern: /provider\s+"github"/, name: "github" },
+  { pattern: /provider\s+"gitlab"/, name: "gitlab" },
+  { pattern: /provider\s+"datadog"/, name: "datadog" },
+  { pattern: /provider\s+"grafana"/, name: "grafana" },
+  { pattern: /provider\s+"vault"/, name: "vault" },
+  { pattern: /provider\s+"consul"/, name: "consul" },
 ];
 
 /** Directories whose mere existence strongly suggests Kubernetes manifests. */
@@ -323,35 +366,53 @@ function dirContainsK8sManifests(dirPath: string): boolean {
   return false;
 }
 
+/** Scan a directory for .tf files and extract provider names. */
+function scanTfDir(dir: string, tfProviders: string[]): boolean {
+  try {
+    const entries = fs.readdirSync(dir);
+    const tfFiles = entries.filter((f) => f.endsWith(".tf"));
+    if (tfFiles.length === 0) return false;
+    for (const tf of tfFiles) {
+      try {
+        const content = fs.readFileSync(path.join(dir, tf), "utf-8");
+        for (const { pattern, name } of TF_PROVIDER_PATTERNS) {
+          if (pattern.test(content) && !tfProviders.includes(name)) {
+            tfProviders.push(name);
+          }
+        }
+      } catch {
+        // Unreadable file
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function detectInfra(root: string): InfraDetection {
   // Terraform
-  let hasTerraform = false;
   let hasState = false;
   const tfProviders: string[] = [];
 
+  let hasTerraform = scanTfDir(root, tfProviders);
+
   try {
     const entries = fs.readdirSync(root);
-    const tfFiles = entries.filter((f) => f.endsWith(".tf"));
-    hasTerraform = tfFiles.length > 0;
-
-    if (hasTerraform) {
-      for (const tf of tfFiles) {
-        try {
-          const content = fs.readFileSync(path.join(root, tf), "utf-8");
-          for (const { pattern, name } of TF_PROVIDER_PATTERNS) {
-            if (pattern.test(content) && !tfProviders.includes(name)) {
-              tfProviders.push(name);
-            }
-          }
-        } catch {
-          // Unreadable file
-        }
-      }
-    }
-
     hasState = entries.some((f) => f === "terraform.tfstate" || f === ".terraform");
   } catch {
     // Root unreadable
+  }
+
+  // Fallback: scan common subdirectories for .tf files
+  if (!hasTerraform) {
+    for (const child of listChildDirs(root)) {
+      const childPath = path.join(root, child);
+      if (scanTfDir(childPath, tfProviders)) {
+        hasTerraform = true;
+        break;
+      }
+    }
   }
 
   // Kubernetes — strong dirs always count, weak dirs need content verification
@@ -363,17 +424,36 @@ export function detectInfra(root: string): InfraDetection {
     });
   }
 
-  // Helm
-  const hasHelm =
+  // Helm — check root, then subdirectories
+  let hasHelm =
     fs.existsSync(path.join(root, "Chart.yaml")) || fs.existsSync(path.join(root, "charts"));
+  if (!hasHelm) {
+    hasHelm = listChildDirs(root).some(
+      (d) =>
+        fs.existsSync(path.join(root, d, "Chart.yaml")) ||
+        fs.existsSync(path.join(root, d, "charts")),
+    );
+  }
 
-  // Ansible
-  const hasAnsible = ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f)));
+  // Ansible — check root, then subdirectories
+  let hasAnsible = ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, f)));
+  if (!hasAnsible) {
+    hasAnsible = listChildDirs(root).some((d) =>
+      ANSIBLE_INDICATORS.some((f) => fs.existsSync(path.join(root, d, f))),
+    );
+  }
 
-  // Kustomize
-  const hasKustomize =
+  // Kustomize — check root, then subdirectories
+  let hasKustomize =
     fs.existsSync(path.join(root, "kustomization.yaml")) ||
     fs.existsSync(path.join(root, "kustomization.yml"));
+  if (!hasKustomize) {
+    hasKustomize = listChildDirs(root).some(
+      (d) =>
+        fs.existsSync(path.join(root, d, "kustomization.yaml")) ||
+        fs.existsSync(path.join(root, d, "kustomization.yml")),
+    );
+  }
 
   // Vagrant
   const hasVagrant = fs.existsSync(path.join(root, "Vagrantfile"));
@@ -401,7 +481,7 @@ export function detectInfra(root: string): InfraDetection {
     }
   }
 
-  // Packer
+  // Packer — check root, then subdirectories
   let hasPacker = false;
   try {
     const entries = fs.readdirSync(root);
@@ -410,6 +490,19 @@ export function detectInfra(root: string): InfraDetection {
       entries.includes("packer.json");
   } catch {
     /* unreadable */
+  }
+  if (!hasPacker) {
+    hasPacker = listChildDirs(root).some((d) => {
+      try {
+        const entries = fs.readdirSync(path.join(root, d));
+        return (
+          entries.some((f) => f.endsWith(".pkr.hcl") || f.endsWith(".pkr.json")) ||
+          entries.includes("packer.json")
+        );
+      } catch {
+        return false;
+      }
+    });
   }
 
   return {
@@ -430,11 +523,21 @@ export function detectInfra(root: string): InfraDetection {
 // ── Monitoring detection ─────────────────────────────────────────────
 
 export function detectMonitoring(root: string): MonitoringDetection {
-  const hasPrometheus =
+  let hasPrometheus =
     fs.existsSync(path.join(root, "prometheus.yml")) ||
     fs.existsSync(path.join(root, "prometheus.yaml"));
+  if (!hasPrometheus) {
+    hasPrometheus = listChildDirs(root).some(
+      (d) =>
+        fs.existsSync(path.join(root, d, "prometheus.yml")) ||
+        fs.existsSync(path.join(root, d, "prometheus.yaml")),
+    );
+  }
 
-  const hasNginx = fs.existsSync(path.join(root, "nginx.conf"));
+  let hasNginx = fs.existsSync(path.join(root, "nginx.conf"));
+  if (!hasNginx) {
+    hasNginx = listChildDirs(root).some((d) => fs.existsSync(path.join(root, d, "nginx.conf")));
+  }
 
   let hasSystemd = false;
   try {
@@ -442,6 +545,15 @@ export function detectMonitoring(root: string): MonitoringDetection {
     hasSystemd = entries.some((f) => f.endsWith(".service"));
   } catch {
     // Root unreadable
+  }
+  if (!hasSystemd) {
+    hasSystemd = listChildDirs(root).some((d) => {
+      try {
+        return fs.readdirSync(path.join(root, d)).some((f) => f.endsWith(".service"));
+      } catch {
+        return false;
+      }
+    });
   }
 
   const hasHaproxy = fs.existsSync(path.join(root, "haproxy.cfg"));
@@ -476,28 +588,35 @@ export function detectScripts(root: string): ScriptsDetection {
   const shellScripts: string[] = [];
   const pythonScripts: string[] = [];
 
-  // Scan root for .sh and .py files
-  try {
-    const entries = fs.readdirSync(root);
-    for (const entry of entries) {
-      if (entry.endsWith(".sh")) shellScripts.push(entry);
-      if (entry.endsWith(".py")) pythonScripts.push(entry);
+  function scanForScripts(dir: string, prefix: string): void {
+    try {
+      const entries = fs.readdirSync(dir);
+      for (const entry of entries) {
+        const relPath = prefix ? `${prefix}/${entry}` : entry;
+        if (entry.endsWith(".sh")) shellScripts.push(relPath);
+        if (entry.endsWith(".py")) pythonScripts.push(relPath);
+      }
+    } catch {
+      // Unreadable
     }
-  } catch {
-    // Root unreadable
   }
+
+  // Scan root for .sh and .py files
+  scanForScripts(root, "");
 
   // Scan scripts/ directory
   const scriptsDir = path.join(root, "scripts");
   if (fs.existsSync(scriptsDir)) {
-    try {
-      const entries = fs.readdirSync(scriptsDir);
-      for (const entry of entries) {
-        if (entry.endsWith(".sh")) shellScripts.push(`scripts/${entry}`);
-        if (entry.endsWith(".py")) pythonScripts.push(`scripts/${entry}`);
-      }
-    } catch {
-      // Unreadable
+    scanForScripts(scriptsDir, "scripts");
+  }
+
+  // Scan child directories and their scripts/ subdirectories
+  for (const child of listChildDirs(root)) {
+    const childPath = path.join(root, child);
+    scanForScripts(childPath, child);
+    const childScripts = path.join(childPath, "scripts");
+    if (fs.existsSync(childScripts)) {
+      scanForScripts(childScripts, `${child}/scripts`);
     }
   }
 

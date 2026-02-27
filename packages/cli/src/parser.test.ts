@@ -157,3 +157,23 @@ describe("stripFlags", () => {
     expect(result).toEqual(["Create CI for Node"]);
   });
 });
+
+describe("parseCommandPath — validate subcommand (C2 fix)", () => {
+  it("parses 'tools validate my-tool' correctly", () => {
+    const result = parseCommandPath(["tools", "validate", "my-tool"]);
+    expect(result.command).toEqual(["tools", "validate"]);
+    expect(result.positional).toEqual(["my-tool"]);
+  });
+
+  it("parses 'tools list' correctly", () => {
+    const result = parseCommandPath(["tools", "list"]);
+    expect(result.command).toEqual(["tools", "list"]);
+    expect(result.positional).toEqual([]);
+  });
+
+  it("does not treat unknown words as subcommands", () => {
+    const result = parseCommandPath(["tools", "typo"]);
+    expect(result.command).toEqual(["tools"]);
+    expect(result.positional).toEqual(["typo"]);
+  });
+});

@@ -281,6 +281,11 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       );
     }
 
+    // Reject absolute paths produced by template substitution
+    if (path.isAbsolute(resolved)) {
+      throw new Error(`Template substitution produced an absolute path "${resolved}"`);
+    }
+
     // Validate no path traversal in resolved path
     if (resolved.split(/[/\\]/).includes("..")) {
       throw new Error(`Path traversal detected in resolved file path "${resolved}"`);

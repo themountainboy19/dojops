@@ -357,6 +357,30 @@ describe("audit hash chain", () => {
     expect(result.valid).toBe(true);
     expect(result.totalEntries).toBe(2);
   });
+
+  it("detects hash-less entry after chain has started (H2 fix)", () => {
+    initProject(tmpDir);
+
+    // Write two valid chained entries
+    appendAudit(tmpDir, makeEntry("cmd1"));
+    appendAudit(tmpDir, makeEntry("cmd2"));
+
+    // Inject a hash-less entry mid-chain
+    const auditPath = path.join(tmpDir, ".dojops", "history", "audit.jsonl");
+    const legacyEntry = {
+      timestamp: new Date().toISOString(),
+      user: "test",
+      command: "injected-legacy",
+      action: "test",
+      status: "success",
+      durationMs: 10,
+    };
+    fs.appendFileSync(auditPath, JSON.stringify(legacyEntry) + "\n");
+
+    const result = verifyAuditIntegrity(tmpDir);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.reason.includes("Hash fields missing"))).toBe(true);
+  });
 });
 
 describe("plan with PARTIAL status", () => {

@@ -226,9 +226,23 @@ async function main() {
     printBanner();
   }
 
+  // Known parent commands that have subcommands (used for better error messages)
+  const NESTED_COMMAND_PARENTS = new Set([
+    "debug",
+    "analyze",
+    "agents",
+    "history",
+    "tools",
+    "toolchain",
+  ]);
+
   try {
     if (resolved) {
       await resolved.handler(resolved.remaining, ctx);
+    } else if (command.length > 0 && NESTED_COMMAND_PARENTS.has(command[0])) {
+      // Known parent without valid subcommand — show per-command help
+      printCommandHelp(command[0]);
+      process.exit(ExitCode.VALIDATION_ERROR);
     } else {
       // Warn if first arg looks like a mistyped command (single lowercase word, no spaces)
       const firstArg = remapped[0];
