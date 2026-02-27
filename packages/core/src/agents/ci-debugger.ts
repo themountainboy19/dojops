@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
+import { wrapAsData } from "../llm/sanitizer";
+
+const MAX_INPUT_BYTES = 256 * 1024;
 
 export const CIDiagnosisSchema = z.object({
   errorType: z.enum([
@@ -56,9 +59,18 @@ export class CIDebugger {
   constructor(private provider: LLMProvider) {}
 
   async diagnose(logContent: string): Promise<CIDiagnosis> {
+    let content = logContent;
+    const byteLength = Buffer.byteLength(content);
+    if (byteLength > MAX_INPUT_BYTES) {
+      const truncated = byteLength - MAX_INPUT_BYTES;
+      const tail = Buffer.from(content).subarray(-MAX_INPUT_BYTES).toString("utf-8");
+      content = `[...truncated ${truncated} bytes]\n${tail}`;
+    }
+
+    const wrappedLog = wrapAsData(content, "ci-log");
     const response = await this.provider.generate({
       system: CI_DEBUGGER_SYSTEM_PROMPT,
-      prompt: `Analyze this CI log and diagnose the failure:\n\n${logContent}`,
+      prompt: `Analyze this CI log and diagnose the failure:\n\n${wrappedLog}`,
       schema: CIDiagnosisSchema,
     });
 
@@ -75,12 +87,19 @@ export class CIDebugger {
       diagnosis: CIDiagnosis;
     }[]
   > {
-    const results = await Promise.all(
-      logs.map(async (log) => {
-        const diagnosis = await this.diagnose(log.content);
-        return { name: log.name, diagnosis };
-      }),
-    );
+    // Process in chunks of 3 to avoid overwhelming the LLM provider
+    const CONCURRENCY = 3;
+    const results: { name: string; diagnosis: CIDiagnosis }[] = [];
+    for (let i = 0; i < logs.length; i += CONCURRENCY) {
+      const chunk = logs.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.all(
+        chunk.map(async (log) => {
+          const diagnosis = await this.diagnose(log.content);
+          return { name: log.name, diagnosis };
+        }),
+      );
+      results.push(...chunkResults);
+    }
     return results;
   }
 }

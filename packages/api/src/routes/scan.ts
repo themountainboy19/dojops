@@ -7,13 +7,24 @@ import { HistoryStore } from "../store";
 import { ScanRequestSchema } from "../schemas";
 import { validateBody } from "../middleware";
 
+let scanInProgress = false;
+
 export function createScanRouter(store: HistoryStore, rootDir?: string): Router {
   const router = Router();
 
   router.post("/", validateBody(ScanRequestSchema), async (req, res, next) => {
+    if (scanInProgress) {
+      res.status(429).json({ error: "Scan already in progress" });
+      return;
+    }
+    scanInProgress = true;
     const start = Date.now();
     try {
-      const { target, scanType } = req.body as { target?: string; scanType: ScanType };
+      const { target, scanType, context } = req.body as {
+        target?: string;
+        scanType: ScanType;
+        context?: Record<string, unknown>;
+      };
       const projectPath = target ?? process.cwd();
       let realResolved: string;
       let realRoot: string;
@@ -29,7 +40,7 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
         return;
       }
 
-      const report = await runScan(projectPath, scanType);
+      const report = await runScan(projectPath, scanType, context as Parameters<typeof runScan>[2]);
 
       const entry = store.add({
         type: "scan",
@@ -50,6 +61,8 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
         error: err instanceof Error ? err.message : String(err),
       });
       next(err);
+    } finally {
+      scanInProgress = false;
     }
   });
 

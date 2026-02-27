@@ -334,15 +334,27 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       })),
     };
 
+    const taskTimers = new Map<string, number>();
     const executor = new PlannerExecutor(tools, {
       taskStart(id, desc) {
         p.log.step(`Running ${pc.blue(id)}: ${desc}`);
+        taskTimers.set(id, Date.now());
+        if (ctx.globalOpts.verbose) {
+          const task = graph.tasks.find((t) => t.id === id);
+          p.log.info(
+            `  Tool: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
+          );
+        }
       },
       taskEnd(id, status, error) {
+        const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
         if (error) {
           p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
         } else {
           p.log.success(`${pc.blue(id)}: ${statusText(status)}`);
+        }
+        if (ctx.globalOpts.verbose) {
+          p.log.info(`  Completed in ${elapsed}ms`);
         }
       },
     });
@@ -434,7 +446,12 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         `${icon} ${pc.blue(execResult.taskId)} ${statusText(execResult.status)} (approval: ${approval})`,
       );
 
-      // Render verification issues if present
+      // Render verification results
+      if (ctx.globalOpts.verbose && execResult.verification) {
+        p.log.info(
+          `  Verification: ${execResult.verification.passed ? pc.green("passed") : pc.red("failed")} (${execResult.verification.issues.length} issue(s))`,
+        );
+      }
       if (execResult.verification?.issues.length) {
         for (const issue of execResult.verification.issues) {
           const line = issue.line ? `:${issue.line}` : "";
@@ -493,6 +510,18 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
       p.log.warn(pc.bold("Plan partially applied. Use `dojops apply --resume` to continue."));
     } else {
       p.log.error(pc.bold("Plan application failed."));
+    }
+
+    // Token budget display (verbose mode)
+    if (ctx.globalOpts.verbose) {
+      const tokenUsage = safeExecutor.getTokenUsage();
+      if (tokenUsage.total > 0) {
+        p.log.info(
+          `Token usage: ${tokenUsage.prompt.toLocaleString()} prompt + ` +
+            `${tokenUsage.completion.toLocaleString()} completion = ` +
+            `${tokenUsage.total.toLocaleString()} total`,
+        );
+      }
     }
 
     // Post-apply: install packages if requested and plan succeeded

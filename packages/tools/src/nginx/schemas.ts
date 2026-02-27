@@ -13,6 +13,8 @@ export const NginxInputSchema = z.object({
     .describe("Upstream server groups"),
   sslEnabled: z.boolean().default(false),
   outputPath: z.string().describe("Directory to write the nginx config to"),
+  fullConfig: z.boolean().optional(),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

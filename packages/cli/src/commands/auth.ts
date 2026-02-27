@@ -70,6 +70,9 @@ async function authLogin(args: string[]): Promise<void> {
     ...(config.defaultProvider === provider ? [`${pc.bold("Default:")}  ${pc.cyan("yes")}`] : []),
   ];
   p.note(noteLines.join("\n"), "Saved");
+  p.log.warn(
+    `Token stored in plaintext at ${getConfigPath()}. Ensure this file has restricted permissions.`,
+  );
   p.log.info(pc.dim('You can now run: dojops "your prompt here"'));
 }
 

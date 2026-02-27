@@ -78,16 +78,24 @@ export class ChatSession {
     };
     this.state.messages.push(userMsg);
 
-    // Check if summarization is needed
+    // Check if summarization is needed — wrapped in try/catch so a
+    // summarization failure never loses the user message already pushed above.
     if (
       this.state.mode === "INTERACTIVE" &&
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
-      const oldMessages = this.state.messages.slice(
-        0,
-        this.state.messages.length - this.memoryManager["maxMessages"],
-      );
-      this.state.summary = await this.summarizer.summarize(oldMessages);
+      try {
+        const oldMessages = this.state.messages.slice(
+          0,
+          this.state.messages.length - this.memoryManager["maxMessages"],
+        );
+        this.state.summary = await this.summarizer.summarize(oldMessages);
+      } catch (err) {
+        console.warn(
+          "Session summarization failed, continuing without summary:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     }
 
     // Route to agent
@@ -124,6 +132,14 @@ export class ChatSession {
     );
     this.state.metadata.lastAgentUsed = agent.name;
     this.state.updatedAt = new Date().toISOString();
+
+    // Warn when session approaches typical context limit (85% of 128K tokens)
+    const TOKEN_LIMIT_THRESHOLD = 108_000; // ~85% of 128K
+    if (this.state.metadata.totalTokensEstimate > TOKEN_LIMIT_THRESHOLD) {
+      console.warn(
+        `Session approaching token limit: ~${this.state.metadata.totalTokensEstimate} tokens`,
+      );
+    }
 
     return { content: response.content, agent: agent.name };
   }

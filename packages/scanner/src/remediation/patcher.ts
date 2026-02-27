@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { atomicWriteFileSync } from "@dojops/sdk";
+import { atomicWriteFileSync, backupFile } from "@dojops/sdk";
 import { RemediationPlan, PatchResult } from "../types";
 
 export function applyFixes(plan: RemediationPlan, projectPath: string): PatchResult {
@@ -21,6 +21,9 @@ export function applyFixes(plan: RemediationPlan, projectPath: string): PatchRes
         errors.push(`${fix.findingId}: File not found — ${fix.file}`);
         continue;
       }
+
+      // Create backup before any modification
+      backupFile(filePath);
 
       const content = fs.readFileSync(filePath, "utf-8");
 

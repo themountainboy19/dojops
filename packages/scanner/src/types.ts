@@ -3,7 +3,7 @@ import { z } from "zod";
 // ── Enums ──────────────────────────────────────────────────────────
 
 export type ScanSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-export type ScanCategory = "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS";
+export type ScanCategory = "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS" | "LICENSE";
 export type ScanType = "all" | "security" | "deps" | "iac" | "sbom";
 
 // ── Finding ────────────────────────────────────────────────────────
@@ -18,6 +18,10 @@ export interface ScanFinding {
   message: string;
   recommendation?: string;
   autoFixAvailable: boolean;
+  cve?: string;
+  cvss?: number;
+  cwe?: string;
+  fixVersion?: string;
 }
 
 // ── Report ─────────────────────────────────────────────────────────
@@ -41,6 +45,8 @@ export interface ScanReport {
   sbomOutputs?: string[];
   sbomHash?: string;
   sbomPath?: string;
+  errors?: string[];
+  policyResult?: { passed: boolean; violations: string[] };
 }
 
 // ── Scanner result ─────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { ChatMessage, LLMProvider, LLMRequest, LLMResponse } from "../llm/provider";
+import { sanitizeUserInput } from "../llm/sanitizer";
+import { validateRequestSize } from "../llm/input-validator";
 import { ToolDependency } from "./tool-deps";
 
 export interface SpecialistConfig {
@@ -37,20 +39,31 @@ export class SpecialistAgent {
   }
 
   async run(request: Omit<LLMRequest, "system">): Promise<LLMResponse> {
-    return this.provider.generate({
+    const fullRequest = {
       ...request,
+      prompt: sanitizeUserInput(request.prompt),
       system: this.config.systemPrompt,
-    });
+    };
+
+    const validation = validateRequestSize(fullRequest);
+    if (validation.warning) {
+      console.warn(`[${this.config.name}] ${validation.warning}`);
+    }
+
+    return this.provider.generate(fullRequest);
   }
 
   async runWithHistory(
     messages: ChatMessage[],
     opts?: Omit<LLMRequest, "system" | "prompt" | "messages">,
   ): Promise<LLMResponse> {
+    const sanitizedMessages = messages.map((m) =>
+      m.role === "user" ? { ...m, content: sanitizeUserInput(m.content) } : m,
+    );
     return this.provider.generate({
       ...opts,
       prompt: "",
-      messages,
+      messages: sanitizedMessages,
       system: this.config.systemPrompt,
     });
   }

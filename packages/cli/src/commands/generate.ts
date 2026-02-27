@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
+import { sanitizeUserInput } from "@dojops/core";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -49,6 +50,11 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
         ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
         : "Using default agent.",
     );
+    if (ctx.globalOpts.verbose) {
+      p.log.info(
+        `Agent: ${pc.bold(route.agent.name)} (confidence: ${route.confidence.toFixed(2)}, domain: ${route.agent.domain})`,
+      );
+    }
   }
 
   // Pre-flight: check tool dependencies before running LLM
@@ -89,11 +95,24 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   const s2 = p.spinner();
   s2.start("Thinking...");
-  const result = await route.agent.run({ prompt: augmentedPrompt });
+  const genStart = Date.now();
+  const result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
+  const genDuration = Date.now() - genStart;
   s2.stop("Done.");
+
+  if (ctx.globalOpts.verbose) {
+    p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);
+  }
 
   // MF-8: --write flag — write output to file
   if (writePath) {
+    // Create .bak backup if file already exists
+    if (fs.existsSync(writePath)) {
+      fs.copyFileSync(writePath, writePath + ".bak");
+      if (ctx.globalOpts.verbose) {
+        p.log.info(`Backup created: ${writePath}.bak`);
+      }
+    }
     fs.writeFileSync(writePath, result.content, "utf-8");
     if (ctx.globalOpts.output === "json") {
       console.log(

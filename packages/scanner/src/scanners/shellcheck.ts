@@ -1,10 +1,10 @@
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
 import { listSubDirs } from "../discovery";
+import { execFileAsync } from "../exec-async";
 
 interface ShellCheckResult {
   file: string;
@@ -55,11 +55,11 @@ export async function scanShellcheck(projectPath: string): Promise<ScannerResult
   for (const script of scripts) {
     let rawOutput: string;
     try {
-      rawOutput = execFileSync(shellcheckBin, ["--format", "json", script], {
+      const result = await execFileAsync(shellcheckBin, ["--format", "json", script], {
         encoding: "utf-8",
         timeout: 30_000,
-        stdio: "pipe",
       });
+      rawOutput = result.stdout;
     } catch (err: unknown) {
       if (isENOENT(err)) {
         return {

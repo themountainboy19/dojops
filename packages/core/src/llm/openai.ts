@@ -50,6 +50,11 @@ export class OpenAIProvider implements LLMProvider {
     if (!choice) {
       throw new Error(`OpenAI returned empty choices array (model: ${this.model})`);
     }
+
+    if (req.schema && choice.finish_reason === "length") {
+      throw new Error("LLM response truncated (finish_reason=length); output may be incomplete");
+    }
+
     const content = choice.message.content ?? "";
 
     const usage: LLMUsage | undefined = completion.usage

@@ -1,14 +1,14 @@
-import { execFileSync } from "node:child_process";
 import { ScannerResult } from "../types";
+import { execFileAsync } from "../exec-async";
 
 export async function scanTrivySbom(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
-    rawOutput = execFileSync("trivy", ["fs", "--format", "cyclonedx", projectPath], {
+    const result = await execFileAsync("trivy", ["fs", "--format", "cyclonedx", projectPath], {
       encoding: "utf-8",
       timeout: 180_000,
-      stdio: "pipe",
     });
+    rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
       return {

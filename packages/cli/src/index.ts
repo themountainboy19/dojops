@@ -45,6 +45,7 @@ import {
 import { scanCommand } from "./commands/scan";
 import { chatCommand } from "./commands/chat";
 import { checkCommand } from "./commands/check";
+import { verifyCommand } from "./commands/verify";
 import { prependToolsBinToPath } from "./tool-sandbox";
 
 registerCommand("init", initCommand);
@@ -58,6 +59,7 @@ registerCommand("doctor", statusCommand); // backward compat alias
 registerCommand("scan", scanCommand);
 registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
+registerCommand("verify", verifyCommand);
 
 // Nested: inspect <sub>, agents <sub>, history <sub>
 // Agents/history handlers use an internal dispatcher that expects args[0] to be the subcommand.
@@ -70,6 +72,7 @@ registerSubcommand("agents", "remove", (args, ctx) => agentsCommand(["remove", .
 registerSubcommand("history", "list", (args, ctx) => historyCommand(["list", ...args], ctx));
 registerSubcommand("history", "show", (args, ctx) => historyCommand(["show", ...args], ctx));
 registerSubcommand("history", "verify", (args, ctx) => historyCommand(["verify", ...args], ctx));
+registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", ...args], ctx));
 
 // Nested: tools <sub>
 registerSubcommand("tools", "list", toolsListCommand);
@@ -84,6 +87,16 @@ registerSubcommand("tools", "plugins", toolsPluginsCommand);
 async function main() {
   // Prepend sandbox tools to PATH so they are found by all commands
   prependToolsBinToPath();
+
+  // CI auto-detection: force non-interactive mode and suppress banner in CI environments
+  const isCI = !!(
+    process.env.CI ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.GITLAB_CI ||
+    process.env.JENKINS_URL ||
+    process.env.CIRCLECI ||
+    process.env.TF_BUILD
+  );
 
   const rawArgs = process.argv.slice(2);
 
@@ -101,6 +114,11 @@ async function main() {
 
   // Parse global options first
   const { globalOpts, remaining } = parseGlobalOptions(rawArgs);
+
+  // In CI, force non-interactive mode
+  if (isCI) {
+    globalOpts.nonInteractive = true;
+  }
 
   // Handle --no-color
   if (globalOpts.noColor) {
@@ -164,13 +182,14 @@ async function main() {
     "scan",
     "chat",
     "check",
+    "verify",
     "agents",
     "history",
     "serve",
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 
-  if (!isQuiet && !globalOpts.quiet && globalOpts.output !== "json") {
+  if (!isQuiet && !isCI && !globalOpts.quiet && globalOpts.output !== "json") {
     printBanner();
   }
 

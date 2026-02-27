@@ -4,6 +4,7 @@ export const DockerfileInputSchema = z.object({
   projectPath: z.string().describe("Root directory of the project to generate a Dockerfile for"),
   baseImage: z.string().optional().describe("Base image override (e.g. 'node:20-alpine')"),
   outputPath: z.string().describe("Directory to write the Dockerfile to"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

@@ -18,6 +18,9 @@ import {
   generateDeploymentTemplate,
   generateServiceTemplate,
   generateHelpersTemplate,
+  generateIngressTemplate,
+  generateServiceAccountTemplate,
+  generateHPATemplate,
 } from "./generator";
 
 export class HelmTool extends BaseTool<HelmInput> {
@@ -47,16 +50,28 @@ export class HelmTool extends BaseTool<HelmInput> {
       const serviceTpl = generateServiceTemplate(input.chartName);
       const helpersTpl = generateHelpersTemplate(input.chartName);
 
+      const templates: Record<string, string> = {
+        deployment: deploymentTpl,
+        service: serviceTpl,
+        helpers: helpersTpl,
+      };
+
+      if (chartResponse.ingress?.enabled) {
+        templates.ingress = generateIngressTemplate(input.chartName);
+      }
+      if (chartResponse.serviceAccount?.create) {
+        templates.serviceaccount = generateServiceAccountTemplate(input.chartName);
+      }
+      if (chartResponse.autoscaling?.enabled) {
+        templates.hpa = generateHPATemplate(input.chartName);
+      }
+
       return {
         success: true,
         data: {
           chartYaml,
           valuesYaml,
-          templates: {
-            deployment: deploymentTpl,
-            service: serviceTpl,
-            helpers: helpersTpl,
-          },
+          templates,
           notes: chartResponse.notes,
           isUpdate,
         },
@@ -85,36 +100,49 @@ export class HelmTool extends BaseTool<HelmInput> {
     const data = result.data as {
       chartYaml: string;
       valuesYaml: string;
-      templates: { deployment: string; service: string; helpers: string };
+      templates: Record<string, string>;
       isUpdate: boolean;
     };
 
     const chartDir = path.join(input.outputPath, input.chartName);
     const templatesDir = path.join(chartDir, "templates");
 
+    // Map template keys to filenames
+    const templateFileMap: Record<string, string> = {
+      deployment: "deployment.yaml",
+      service: "service.yaml",
+      helpers: "_helpers.tpl",
+      ingress: "ingress.yaml",
+      serviceaccount: "serviceaccount.yaml",
+      hpa: "hpa.yaml",
+    };
+
     if (data.isUpdate) {
       backupFile(path.join(chartDir, "Chart.yaml"));
       backupFile(path.join(chartDir, "values.yaml"));
-      backupFile(path.join(templatesDir, "deployment.yaml"));
-      backupFile(path.join(templatesDir, "service.yaml"));
-      backupFile(path.join(templatesDir, "_helpers.tpl"));
+      for (const key of Object.keys(data.templates)) {
+        const fileName = templateFileMap[key] ?? `${key}.yaml`;
+        backupFile(path.join(templatesDir, fileName));
+      }
     }
 
     fs.mkdirSync(templatesDir, { recursive: true });
 
     const chartYamlPath = path.join(chartDir, "Chart.yaml");
     const valuesYamlPath = path.join(chartDir, "values.yaml");
-    const deploymentPath = path.join(templatesDir, "deployment.yaml");
-    const servicePath = path.join(templatesDir, "service.yaml");
-    const helpersPath = path.join(templatesDir, "_helpers.tpl");
 
     atomicWriteFileSync(chartYamlPath, data.chartYaml);
     atomicWriteFileSync(valuesYamlPath, data.valuesYaml);
-    atomicWriteFileSync(deploymentPath, data.templates.deployment);
-    atomicWriteFileSync(servicePath, data.templates.service);
-    atomicWriteFileSync(helpersPath, data.templates.helpers);
 
-    const filesWritten = [chartYamlPath, valuesYamlPath, deploymentPath, servicePath, helpersPath];
+    const filesWritten = [chartYamlPath, valuesYamlPath];
+
+    for (const [key, content] of Object.entries(data.templates)) {
+      const fileName = templateFileMap[key] ?? `${key}.yaml`;
+      const filePath = path.join(templatesDir, fileName);
+      atomicWriteFileSync(filePath, content);
+      filesWritten.push(filePath);
+    }
+
     return { ...result, filesWritten, filesModified: data.isUpdate ? filesWritten : [] };
   }
 }

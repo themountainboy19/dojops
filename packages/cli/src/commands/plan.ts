@@ -9,6 +9,7 @@ import { statusIcon, statusText, formatOutput, getOutputFileName } from "../form
 import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
 import { classifyPlanRisk } from "../risk-classifier";
+import * as yaml from "js-yaml";
 import crypto from "node:crypto";
 import {
   findProjectRoot,
@@ -54,6 +55,9 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const isJson = ctx.globalOpts.output === "json";
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
+  if (ctx.globalOpts.verbose) {
+    p.log.info(`Decomposing goal: "${prompt}" using ${tools.length} available tools`);
+  }
   let graph;
   try {
     graph = await decompose(prompt, provider, tools, {
@@ -64,6 +68,13 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
   }
   if (!isJson) s.stop("Tasks decomposed.");
+
+  if (ctx.globalOpts.verbose) {
+    p.log.info(`Decomposed into ${graph.tasks.length} task(s)`);
+    for (const task of graph.tasks) {
+      p.log.info(`  ${pc.blue(task.id)} -> tool: ${pc.bold(task.tool)}`);
+    }
+  }
 
   // Enrich tasks with plugin metadata
   for (const task of graph.tasks) {
@@ -292,6 +303,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     if (isJson) {
       console.log(JSON.stringify({ planId, graph, success: planResult.success }, null, 2));
+    } else if (ctx.globalOpts.output === "yaml") {
+      console.log(
+        yaml.dump({ planId, graph, success: planResult.success }, { lineWidth: 120, noRefs: true }),
+      );
     }
   } else {
     const executor = new PlannerExecutor(tools, {
@@ -367,6 +382,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     if (isJson) {
       console.log(JSON.stringify({ planId, graph, success: result.success }, null, 2));
+    } else if (ctx.globalOpts.output === "yaml") {
+      console.log(
+        yaml.dump({ planId, graph, success: result.success }, { lineWidth: 120, noRefs: true }),
+      );
     }
 
     appendAudit(root, {

@@ -4,6 +4,7 @@ export const GitLabCIInputSchema = z.object({
   projectPath: z.string().describe("Root directory of the project to generate GitLab CI for"),
   defaultBranch: z.string().default("main"),
   nodeVersion: z.string().default("20"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

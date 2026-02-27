@@ -1,6 +1,6 @@
-import { execFileSync } from "node:child_process";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
+import { execFileAsync } from "../exec-async";
 
 interface CheckovFailedCheck {
   check_id: string;
@@ -22,15 +22,15 @@ interface CheckovOutput {
 export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
-    rawOutput = execFileSync(
+    const result = await execFileAsync(
       "checkov",
       ["-d", projectPath, "--output", "json", "--quiet", "--compact"],
       {
         encoding: "utf-8",
         timeout: 180_000,
-        stdio: "pipe",
       },
     );
+    rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
       return {

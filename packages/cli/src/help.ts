@@ -22,8 +22,10 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("analyze diff")}       Analyze infrastructure diff for risk`);
   console.log(`  ${pc.cyan("inspect")}            Inspect config and session state`);
   console.log(`  ${pc.cyan("agents")}             Manage specialist agents (built-in + custom)`);
+  console.log(`  ${pc.cyan("verify")}             Verify a configuration file`);
   console.log(`  ${pc.cyan("history")}            View execution history`);
   console.log(`  ${pc.cyan("history verify")}     Verify audit log hash chain integrity`);
+  console.log(`  ${pc.cyan("history audit")}      View audit log entries`);
   console.log(`  ${pc.cyan("config")}             Configure provider, model, tokens`);
   console.log(`  ${pc.cyan("auth")}               Authenticate with LLM provider`);
   console.log(`  ${pc.cyan("serve")}              Start API server + dashboard`);
@@ -52,6 +54,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--debug")}            Debug-level output`);
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
   console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
+  console.log(`  ${pc.cyan("--timeout=<ms>")}     Global timeout for operations`);
   console.log(`  ${pc.cyan("--no-color")}         Disable color output`);
   console.log(`  ${pc.cyan("--non-interactive")}  Disable interactive prompts`);
   console.log(`  ${pc.cyan("--help, -h")}         Show this help message`);
@@ -75,6 +78,14 @@ export function printHelp(): void {
     `  ${pc.cyan("--replay")}               Deterministic mode: temp=0, validate provider/model/prompts`,
   );
   console.log(`  ${pc.cyan("--task=ID")}              Execute only a single task from the plan`);
+  console.log();
+  console.log(pc.bold("SCAN OPTIONS"));
+  console.log(`  ${pc.cyan("--target=<dir>")}     Target directory for scanning`);
+  console.log();
+  console.log(pc.bold("CHAT OPTIONS"));
+  console.log(
+    `  ${pc.cyan("--message=<text>")}   Single chat message (non-interactive) ${pc.dim("(alias: -m)")}`,
+  );
   console.log();
   console.log(pc.bold("SERVE OPTIONS"));
   console.log(`  ${pc.cyan("--port=N")}           API server port ${pc.dim("(default: 3000)")}`);
@@ -107,6 +118,9 @@ export function printHelp(): void {
   console.log(`  ${pc.dim("$")} dojops doctor`);
   console.log(`  ${pc.dim("$")} dojops agents list`);
   console.log(`  ${pc.dim("$")} dojops history list`);
+  console.log(`  ${pc.dim("$")} dojops history audit --planId plan-abc123`);
+  console.log(`  ${pc.dim("$")} dojops verify main.tf`);
+  console.log(`  ${pc.dim("$")} dojops verify .github/workflows/ci.yml`);
   console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
   console.log(`  ${pc.dim("$")} dojops plan "Create CI" --output json`);
   console.log(`  ${pc.dim("$")} dojops config profile create staging`);
@@ -118,6 +132,11 @@ export function printHelp(): void {
   console.log(
     `  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token`,
   );
+  console.log();
+  console.log(pc.bold("CI ENVIRONMENTS"));
+  console.log(`  Automatically detected via $CI, $GITHUB_ACTIONS, $GITLAB_CI, $JENKINS_URL,`);
+  console.log(`  $CIRCLECI, $TF_BUILD. In CI mode: non-interactive prompts are forced,`);
+  console.log(`  banner is suppressed, and scan findings emit GitHub Actions annotations.`);
   console.log();
   console.log(pc.bold("MODELS"));
   console.log(`  ${pc.dim("OpenAI:")}    gpt-4o, gpt-4o-mini`);
@@ -349,18 +368,27 @@ export function printCommandHelp(command: string): void {
     case "history":
       console.log(`\n${pc.bold("dojops history")} — View execution history and audit logs`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops history [list|show <plan-id>|verify]`);
+      console.log(`  ${pc.dim("$")} dojops history [list|show <plan-id>|verify|audit]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all plans with status ${pc.dim("(default)")}`,
       );
       console.log(`  ${pc.cyan("show <plan-id>")}    Show plan details and execution results`);
       console.log(`  ${pc.cyan("verify")}            Verify audit log hash chain integrity`);
+      console.log(`  ${pc.cyan("audit")}             View audit log entries`);
+      console.log(`\n${pc.bold("AUDIT OPTIONS")}`);
+      console.log(`  ${pc.cyan("--planId=ID")}       Filter audit entries by plan ID`);
+      console.log(
+        `  ${pc.cyan("--status=STATUS")}   Filter by status (success, failure, cancelled)`,
+      );
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops history`);
       console.log(`  ${pc.dim("$")} dojops history list`);
       console.log(`  ${pc.dim("$")} dojops history show plan-abc123`);
       console.log(`  ${pc.dim("$")} dojops history verify`);
+      console.log(`  ${pc.dim("$")} dojops history audit`);
+      console.log(`  ${pc.dim("$")} dojops history audit --planId plan-abc123`);
+      console.log(`  ${pc.dim("$")} dojops history audit --status failure`);
       console.log();
       break;
 
@@ -380,6 +408,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("profile use")}      Switch to a named profile`);
       console.log(`  ${pc.cyan("profile list")}     List all profiles`);
       console.log(`  ${pc.cyan("profile delete")}   Remove a named profile`);
+      console.log(`  ${pc.cyan("reset")}            Reset configuration to defaults`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Without arguments, launches an interactive configuration wizard.`);
       console.log(`  With flags, applies settings directly and exits.`);
@@ -678,6 +707,29 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops check`);
       console.log(`  ${pc.dim("$")} dojops check --output json`);
+      console.log();
+      break;
+
+    case "verify":
+      console.log(`\n${pc.bold("dojops verify")} — Verify a configuration file`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops verify <file>`);
+      console.log(`\n${pc.bold("SUPPORTED FILE TYPES")}`);
+      console.log(`  ${pc.cyan(".tf")}                  Terraform (terraform validate)`);
+      console.log(`  ${pc.cyan("Dockerfile")}           Docker (hadolint)`);
+      console.log(`  ${pc.cyan(".yaml/.yml")}           Auto-detected:`);
+      console.log(`    - Kubernetes (apiVersion + kind)     kubectl dry-run`);
+      console.log(`    - GitHub Actions (on + jobs)         structural lint`);
+      console.log(`    - GitLab CI (.gitlab-ci.yml)         structural lint`);
+      console.log(`    - Docker Compose (services)          structural lint`);
+      console.log(`    - Helm (Chart.yaml, values.yaml)     structural lint`);
+      console.log(`    - Prometheus (global + scrape)        structural lint`);
+      console.log(`    - Ansible (hosts + tasks)            structural lint`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops verify main.tf`);
+      console.log(`  ${pc.dim("$")} dojops verify Dockerfile`);
+      console.log(`  ${pc.dim("$")} dojops verify k8s/deployment.yaml`);
+      console.log(`  ${pc.dim("$")} dojops verify .github/workflows/ci.yml`);
       console.log();
       break;
 

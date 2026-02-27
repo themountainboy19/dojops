@@ -1,6 +1,17 @@
 import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { parseAndValidate } from "../llm/json-validator";
+import { wrapAsData } from "../llm/sanitizer";
+
+const MAX_INPUT_BYTES = 256 * 1024;
+
+function truncateInput(input: string): string {
+  const byteLength = Buffer.byteLength(input);
+  if (byteLength <= MAX_INPUT_BYTES) return input;
+  const truncated = byteLength - MAX_INPUT_BYTES;
+  const tail = Buffer.from(input).subarray(-MAX_INPUT_BYTES).toString("utf-8");
+  return `[...truncated ${truncated} bytes]\n${tail}`;
+}
 
 export const ResourceChangeSchema = z.object({
   resource: z.string(),
@@ -58,9 +69,11 @@ export class InfraDiffAnalyzer {
   constructor(private provider: LLMProvider) {}
 
   async analyze(diffContent: string): Promise<InfraDiffAnalysis> {
+    const content = truncateInput(diffContent);
+    const wrappedDiff = wrapAsData(content, "infra-diff");
     const response = await this.provider.generate({
       system: INFRA_DIFF_SYSTEM_PROMPT,
-      prompt: `Analyze this infrastructure diff and provide an impact assessment:\n\n${diffContent}`,
+      prompt: `Analyze this infrastructure diff and provide an impact assessment:\n\n${wrappedDiff}`,
       schema: InfraDiffAnalysisSchema,
     });
 
@@ -72,9 +85,11 @@ export class InfraDiffAnalyzer {
   }
 
   async compare(before: string, after: string): Promise<InfraDiffAnalysis> {
+    const wrappedBefore = wrapAsData(truncateInput(before), "infra-before");
+    const wrappedAfter = wrapAsData(truncateInput(after), "infra-after");
     const response = await this.provider.generate({
       system: INFRA_DIFF_SYSTEM_PROMPT,
-      prompt: `Compare these two infrastructure configurations and analyze the differences:\n\n--- BEFORE ---\n${before}\n\n--- AFTER ---\n${after}`,
+      prompt: `Compare these two infrastructure configurations and analyze the differences:\n\n--- BEFORE ---\n${wrappedBefore}\n\n--- AFTER ---\n${wrappedAfter}`,
       schema: InfraDiffAnalysisSchema,
     });
 

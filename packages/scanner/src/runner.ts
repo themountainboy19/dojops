@@ -9,11 +9,13 @@ import { scanHadolint } from "./scanners/hadolint";
 import { scanGitleaks } from "./scanners/gitleaks";
 import { scanShellcheck } from "./scanners/shellcheck";
 import { scanTrivySbom } from "./scanners/trivy-sbom";
+import { scanTrivyLicense } from "./scanners/trivy-license";
+import { loadScanPolicy, evaluatePolicy } from "./scan-policy";
 
 interface ScannerEntry {
   name: string;
   fn: (projectPath: string) => Promise<ScannerResult>;
-  categories: Array<"deps" | "security" | "iac" | "sbom">;
+  categories: Array<"deps" | "security" | "iac" | "sbom" | "license">;
   /** Check if this scanner is applicable given the repo context */
   applicable: (ctx?: RepoContext) => boolean;
 }
@@ -83,6 +85,12 @@ const SCANNERS: ScannerEntry[] = [
     categories: ["sbom"],
     applicable: () => true,
   },
+  {
+    name: "trivy-license",
+    fn: scanTrivyLicense,
+    categories: ["license"],
+    applicable: () => true,
+  },
 ];
 
 export async function runScan(
@@ -97,7 +105,7 @@ export async function runScan(
     // Filter by scan type
     if (
       scanType !== "all" &&
-      !s.categories.includes(scanType as "deps" | "security" | "iac" | "sbom")
+      !s.categories.includes(scanType as "deps" | "security" | "iac" | "sbom" | "license")
     ) {
       return false;
     }
@@ -107,22 +115,25 @@ export async function runScan(
 
   // Run all selected scanners concurrently (allSettled to avoid one failure killing the scan)
   const settled = await Promise.allSettled(selected.map((s) => s.fn(projectPath)));
-  const results: ScannerResult[] = settled.map((outcome, i) => {
-    if (outcome.status === "fulfilled") return outcome.value;
-    return {
-      tool: selected[i].name,
-      findings: [
-        {
-          id: `${selected[i].name}-crash`,
-          tool: selected[i].name,
-          severity: "LOW" as const,
-          category: "SECURITY" as const,
-          message: `Scanner crashed: ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}`,
-          autoFixAvailable: false,
-        },
-      ],
-    };
-  });
+  const errors: string[] = [];
+  const results: ScannerResult[] = [];
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+    } else {
+      const reason =
+        outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+      errors.push(`${selected[i].name} crashed: ${reason}`);
+      // Push an empty result so the scanner is still tracked as skipped
+      results.push({
+        tool: selected[i].name,
+        findings: [],
+        skipped: true,
+        skipReason: `Scanner crashed: ${reason}`,
+      });
+    }
+  }
 
   // Collect findings and track scanner status
   const allFindings: ScanFinding[] = [];
@@ -143,25 +154,89 @@ export async function runScan(
     }
   }
 
-  // Compute summary
-  const summary = {
-    total: allFindings.length,
-    critical: allFindings.filter((f) => f.severity === "CRITICAL").length,
-    high: allFindings.filter((f) => f.severity === "HIGH").length,
-    medium: allFindings.filter((f) => f.severity === "MEDIUM").length,
-    low: allFindings.filter((f) => f.severity === "LOW").length,
+  // Deduplicate findings that share the same CVE
+  const dedupedFindings = deduplicateByCve(allFindings);
+
+  // Recompute summary after deduplication
+  const dedupedSummary = {
+    total: dedupedFindings.length,
+    critical: dedupedFindings.filter((f) => f.severity === "CRITICAL").length,
+    high: dedupedFindings.filter((f) => f.severity === "HIGH").length,
+    medium: dedupedFindings.filter((f) => f.severity === "MEDIUM").length,
+    low: dedupedFindings.filter((f) => f.severity === "LOW").length,
   };
 
-  return {
+  const report: ScanReport = {
     id: `scan-${crypto.randomUUID().slice(0, 8)}`,
     projectPath,
     timestamp: new Date().toISOString(),
     scanType,
-    findings: allFindings,
-    summary,
+    findings: dedupedFindings,
+    summary: dedupedSummary,
     scannersRun,
     scannersSkipped,
     durationMs: Date.now() - startTime,
     ...(sbomOutputs.length > 0 ? { sbomOutputs } : {}),
+    ...(errors.length > 0 ? { errors } : {}),
   };
+
+  // Evaluate scan policy if present
+  const policy = loadScanPolicy(projectPath);
+  if (policy) {
+    report.policyResult = evaluatePolicy(report, policy);
+  }
+
+  return report;
+}
+
+const SEVERITY_RANK: Record<string, number> = {
+  CRITICAL: 4,
+  HIGH: 3,
+  MEDIUM: 2,
+  LOW: 1,
+};
+
+/**
+ * Deduplicate findings that share the same CVE identifier.
+ * For duplicates, keeps the finding with the highest severity.
+ * Findings without a `cve` field are always kept.
+ */
+export function deduplicateByCve(findings: ScanFinding[]): ScanFinding[] {
+  const noCve: ScanFinding[] = [];
+  const byCve = new Map<string, ScanFinding>();
+
+  for (const f of findings) {
+    if (!f.cve) {
+      noCve.push(f);
+      continue;
+    }
+    const existing = byCve.get(f.cve);
+    if (!existing) {
+      byCve.set(f.cve, f);
+    } else {
+      // Keep the one with the higher severity
+      if ((SEVERITY_RANK[f.severity] ?? 0) > (SEVERITY_RANK[existing.severity] ?? 0)) {
+        byCve.set(f.cve, f);
+      }
+    }
+  }
+
+  return [...noCve, ...byCve.values()];
+}
+
+/**
+ * Compare two scan reports and identify new and resolved findings.
+ * Comparison is done by finding `id` field.
+ */
+export function compareScanReports(
+  current: ScanReport,
+  previous: ScanReport,
+): { newFindings: ScanFinding[]; resolvedFindings: ScanFinding[] } {
+  const previousIds = new Set(previous.findings.map((f) => f.id));
+  const currentIds = new Set(current.findings.map((f) => f.id));
+
+  const newFindings = current.findings.filter((f) => !previousIds.has(f.id));
+  const resolvedFindings = previous.findings.filter((f) => !currentIds.has(f.id));
+
+  return { newFindings, resolvedFindings };
 }

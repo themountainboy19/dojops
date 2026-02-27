@@ -1,13 +1,16 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
+import { extractFlagValue } from "../parser";
 import {
   findProjectRoot,
   listPlans,
   loadPlan,
   listExecutions,
   verifyAuditIntegrity,
+  readAudit,
 } from "../state";
+import type { AuditEntry } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
 export async function historyCommand(args: string[], ctx: CLIContext): Promise<void> {
@@ -18,22 +21,56 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
       return historyShow(args.slice(1), ctx);
     case "verify":
       return historyVerify(ctx);
+    case "audit":
+      return historyAudit(args.slice(1), ctx);
     case "list":
     default:
-      return historyList(ctx);
+      return historyList(args.slice(sub === "list" ? 1 : 0), ctx);
   }
 }
 
-function historyList(ctx: CLIContext): void {
+function historyList(args: string[], ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
     p.log.info("No .dojops/ project found. Run `dojops init` first.");
     return;
   }
 
-  const plans = listPlans(root);
+  // Parse filter flags
+  const statusFilter = extractFlagValue(args, "--status");
+  const sinceFilter = extractFlagValue(args, "--since");
+  const limitFilter = extractFlagValue(args, "--limit");
+
+  let plans = listPlans(root);
   if (plans.length === 0) {
     p.log.info("No plans found.");
+    return;
+  }
+
+  // Apply --status filter (PENDING, APPLIED, DENIED, PARTIAL)
+  if (statusFilter) {
+    const upper = statusFilter.toUpperCase();
+    plans = plans.filter((plan) => plan.approvalStatus === upper);
+  }
+
+  // Apply --since filter (ISO date string)
+  if (sinceFilter) {
+    const sinceDate = new Date(sinceFilter);
+    if (!isNaN(sinceDate.getTime())) {
+      plans = plans.filter((plan) => new Date(plan.createdAt).getTime() >= sinceDate.getTime());
+    }
+  }
+
+  // Apply --limit filter (after other filters)
+  if (limitFilter) {
+    const limit = parseInt(limitFilter, 10);
+    if (!isNaN(limit) && limit > 0) {
+      plans = plans.slice(0, limit);
+    }
+  }
+
+  if (plans.length === 0) {
+    p.log.info("No plans match the given filters.");
     return;
   }
 
@@ -51,6 +88,18 @@ function historyList(ctx: CLIContext): void {
         2,
       ),
     );
+    return;
+  }
+
+  if (ctx.globalOpts.output === "yaml") {
+    console.log("---");
+    for (const plan of plans) {
+      console.log(`- id: ${plan.id}`);
+      console.log(`  goal: "${plan.goal.replace(/"/g, '\\"')}"`);
+      console.log(`  status: ${plan.approvalStatus}`);
+      console.log(`  createdAt: ${plan.createdAt}`);
+      console.log(`  tasks: ${plan.tasks.length}`);
+    }
     return;
   }
 
@@ -144,6 +193,49 @@ function historyShow(args: string[], ctx: CLIContext): void {
     });
     p.note(execLines.join("\n"), "Execution History");
   }
+}
+
+function historyAudit(args: string[], ctx: CLIContext): void {
+  const root = findProjectRoot();
+  if (!root) {
+    p.log.info("No .dojops/ project found. Run `dojops init` first.");
+    return;
+  }
+
+  const planIdFilter = extractFlagValue(args, "--planId") ?? extractFlagValue(args, "--plan-id");
+  const statusFilter = extractFlagValue(args, "--status");
+
+  const entries = readAudit(root, {
+    planId: planIdFilter,
+    status: statusFilter,
+  });
+
+  if (entries.length === 0) {
+    p.log.info("No audit entries found.");
+    return;
+  }
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify(entries, null, 2));
+    return;
+  }
+
+  const lines = entries.map((entry: AuditEntry) => {
+    const statusColor =
+      entry.status === "success"
+        ? pc.green(entry.status)
+        : entry.status === "failure"
+          ? pc.red(entry.status)
+          : pc.yellow(entry.status);
+    const seq =
+      entry.seq != null ? pc.dim(`#${String(entry.seq).padStart(4, " ")}`) : pc.dim("#   ?");
+    const ts = new Date(entry.timestamp).toLocaleString();
+    const planInfo = entry.planId ? ` ${pc.cyan(entry.planId)}` : "";
+    const duration = pc.dim(`(${entry.durationMs}ms)`);
+    return `  ${seq}  ${statusColor.padEnd(20)}  ${pc.bold(entry.command)}/${entry.action}${planInfo}  ${ts}  ${duration}`;
+  });
+
+  p.note(lines.join("\n"), `Audit Log (${entries.length} entries)`);
 }
 
 function historyVerify(ctx: CLIContext): void {

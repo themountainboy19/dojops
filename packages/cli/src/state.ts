@@ -343,34 +343,88 @@ function computeAuditHash(entry: AuditEntry): string {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
+function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): number {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return fs.openSync(lockPath, "wx");
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "EEXIST") {
+        // Lock held by another process — check if stale (> 10s)
+        try {
+          const stat = fs.statSync(lockPath);
+          if (Date.now() - stat.mtimeMs > 10_000) {
+            // Stale lock — remove and retry
+            try {
+              fs.unlinkSync(lockPath);
+            } catch {
+              // Another process may have already cleaned it up
+            }
+            continue;
+          }
+        } catch {
+          // stat failed — file may already be gone, retry
+          continue;
+        }
+        // Active lock — wait and retry
+        const waitUntil = Date.now() + delayMs * Math.pow(2, attempt);
+        while (Date.now() < waitUntil) {
+          /* busy-wait */
+        }
+        continue;
+      }
+      throw err;
+    }
+  }
+  return -1;
+}
+
 export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  let previousHash = "genesis";
-  let seq = 1;
+  const lockPath = file + ".lock";
+  const lockFd = acquireAuditLock(lockPath);
 
-  if (fs.existsSync(file)) {
-    const content = fs.readFileSync(file, "utf-8").trimEnd();
-    if (content.length > 0) {
-      const lines = content.split("\n");
-      const lastLine = lines[lines.length - 1];
-      try {
-        const lastEntry = JSON.parse(lastLine) as AuditEntry;
-        previousHash = lastEntry.hash ?? "genesis";
-        seq = (lastEntry.seq ?? 0) + 1;
-      } catch {
-        // Corrupt last line — reset chain
+  try {
+    let previousHash = "genesis";
+    let seq = 1;
+
+    if (fs.existsSync(file)) {
+      const content = fs.readFileSync(file, "utf-8").trimEnd();
+      if (content.length > 0) {
+        const lines = content.split("\n");
+        const lastLine = lines[lines.length - 1];
+        try {
+          const lastEntry = JSON.parse(lastLine) as AuditEntry;
+          previousHash = lastEntry.hash ?? "genesis";
+          seq = (lastEntry.seq ?? 0) + 1;
+        } catch {
+          // Corrupt last line — reset chain
+        }
       }
     }
+
+    entry.seq = seq;
+    entry.previousHash = previousHash;
+    entry.hash = computeAuditHash(entry);
+
+    fs.appendFileSync(file, JSON.stringify(entry) + "\n");
+  } finally {
+    if (lockFd >= 0) {
+      try {
+        fs.closeSync(lockFd);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      fs.unlinkSync(lockPath);
+    } catch {
+      // Already removed — no-op
+    }
   }
-
-  entry.seq = seq;
-  entry.previousHash = previousHash;
-  entry.hash = computeAuditHash(entry);
-
-  fs.appendFileSync(file, JSON.stringify(entry) + "\n");
 }
 
 export function readAudit(

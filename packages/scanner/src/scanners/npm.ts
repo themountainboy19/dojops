@@ -1,8 +1,9 @@
-import { execFileSync } from "node:child_process";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
+import { execFileAsync } from "../exec-async";
 
 interface NpmVulnerability {
   severity: string;
@@ -14,14 +15,31 @@ interface NpmAuditOutput {
   vulnerabilities?: Record<string, NpmVulnerability>;
 }
 
+type PackageManager = "npm" | "yarn" | "pnpm";
+
+/**
+ * Detect which package manager is used in a directory.
+ * Priority: pnpm-lock.yaml > yarn.lock > package-lock.json
+ */
+function detectPackageManager(dir: string): PackageManager | null {
+  if (fs.existsSync(path.join(dir, "pnpm-lock.yaml"))) return "pnpm";
+  if (fs.existsSync(path.join(dir, "yarn.lock"))) return "yarn";
+  if (fs.existsSync(path.join(dir, "package-lock.json"))) return "npm";
+  return null;
+}
+
 export async function scanNpm(projectPath: string): Promise<ScannerResult> {
-  const projectDirs = discoverProjectDirs(projectPath, ["package-lock.json"]);
+  const projectDirs = discoverProjectDirs(projectPath, [
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+  ]);
   if (projectDirs.length === 0) {
     return {
       tool: "npm-audit",
       findings: [],
       skipped: true,
-      skipReason: "No package-lock.json found",
+      skipReason: "No package-lock.json, yarn.lock, or pnpm-lock.yaml found",
     };
   }
 
@@ -29,10 +47,13 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
   let combinedRawOutput = "";
 
   for (const dir of projectDirs) {
-    const result = await auditDir(dir, projectPath);
+    const pm = detectPackageManager(dir);
+    if (!pm) continue;
+
+    const result = await auditDir(dir, projectPath, pm);
     if (result.skipped) {
-      // If npm itself isn't found, bail out entirely
-      if (result.skipReason === "npm not found") {
+      // If the tool itself isn't found, bail out entirely
+      if (result.skipReason?.endsWith("not found")) {
         return result;
       }
       continue;
@@ -44,27 +65,28 @@ export async function scanNpm(projectPath: string): Promise<ScannerResult> {
   return { tool: "npm-audit", findings: allFindings, rawOutput: combinedRawOutput || undefined };
 }
 
-async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
+async function auditDir(dir: string, rootPath: string, pm: PackageManager): Promise<ScannerResult> {
   const subProject = dir === rootPath ? undefined : path.relative(rootPath, dir);
 
   let rawOutput: string;
   try {
-    rawOutput = execFileSync("npm", ["audit", "--json"], {
+    const { cmd, args } = getAuditCommand(pm);
+    const result = await execFileAsync(cmd, args, {
       encoding: "utf-8",
       timeout: 60_000,
-      stdio: "pipe",
       cwd: dir,
     });
+    rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
       return {
         tool: "npm-audit",
         findings: [],
         skipped: true,
-        skipReason: "npm not found",
+        skipReason: `${pm} not found`,
       };
     }
-    // npm audit exits non-zero when vulnerabilities are found but still outputs JSON
+    // audit commands exit non-zero when vulnerabilities are found but still output JSON
     const execErr = err as { stdout?: string; stderr?: string };
     rawOutput = execErr.stdout ?? "";
     if (!rawOutput) {
@@ -72,53 +94,176 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
         tool: "npm-audit",
         findings: [],
         skipped: true,
-        skipReason: `npm audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
+        skipReason: `${pm} audit failed${subProject ? ` (${subProject})` : ""}: ${execErr.stderr ?? "unknown error"}`,
       };
     }
   }
 
   const findings: ScanFinding[] = [];
+  const lockFile = getLockFile(pm);
 
   try {
-    const audit: NpmAuditOutput = JSON.parse(rawOutput);
-    if (audit.vulnerabilities) {
-      for (const [name, vuln] of Object.entries(audit.vulnerabilities)) {
-        const severity = mapSeverity(vuln.severity);
-        const viaMessages = vuln.via
-          .map((v) => (typeof v === "string" ? v : (v.title ?? "")))
-          .filter(Boolean)
-          .join("; ");
-
-        const prefix = subProject ? `${subProject}: ` : "";
-        findings.push({
-          id: `npm-${crypto.randomUUID().slice(0, 8)}`,
-          tool: "npm-audit",
-          severity,
-          category: "DEPENDENCY",
-          file: subProject ? `${subProject}/package-lock.json` : "package-lock.json",
-          message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
-          recommendation: vuln.fixAvailable
-            ? typeof vuln.fixAvailable === "object"
-              ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`
-              : "Run npm audit fix"
-            : "No automatic fix available — review manually",
-          autoFixAvailable: !!vuln.fixAvailable,
-        });
-      }
+    switch (pm) {
+      case "npm":
+        parseNpmAudit(rawOutput, findings, subProject, lockFile);
+        break;
+      case "yarn":
+        parseYarnAudit(rawOutput, findings, subProject, lockFile);
+        break;
+      case "pnpm":
+        parsePnpmAudit(rawOutput, findings, subProject, lockFile);
+        break;
     }
   } catch {
     findings.push({
-      id: "npm-audit-parse-error",
+      id: `${pm}-audit-parse-error`,
       tool: "npm-audit",
       severity: "MEDIUM",
       category: "SECURITY",
-      message:
-        "Failed to parse npm-audit output. The tool may have produced unexpected output format.",
+      message: `Failed to parse ${pm} audit output. The tool may have produced unexpected output format.`,
       autoFixAvailable: false,
     });
   }
 
   return { tool: "npm-audit", findings, rawOutput };
+}
+
+function getAuditCommand(pm: PackageManager): { cmd: string; args: string[] } {
+  switch (pm) {
+    case "yarn":
+      return { cmd: "yarn", args: ["audit", "--json"] };
+    case "pnpm":
+      return { cmd: "pnpm", args: ["audit", "--json"] };
+    case "npm":
+    default:
+      return { cmd: "npm", args: ["audit", "--json"] };
+  }
+}
+
+function getLockFile(pm: PackageManager): string {
+  switch (pm) {
+    case "yarn":
+      return "yarn.lock";
+    case "pnpm":
+      return "pnpm-lock.yaml";
+    case "npm":
+    default:
+      return "package-lock.json";
+  }
+}
+
+function parseNpmAudit(
+  rawOutput: string,
+  findings: ScanFinding[],
+  subProject: string | undefined,
+  lockFile: string,
+): void {
+  const audit: NpmAuditOutput = JSON.parse(rawOutput);
+  if (audit.vulnerabilities) {
+    for (const [name, vuln] of Object.entries(audit.vulnerabilities)) {
+      const severity = mapSeverity(vuln.severity);
+      const viaMessages = vuln.via
+        .map((v) => (typeof v === "string" ? v : (v.title ?? "")))
+        .filter(Boolean)
+        .join("; ");
+
+      const prefix = subProject ? `${subProject}: ` : "";
+      findings.push({
+        id: `npm-${crypto.randomUUID().slice(0, 8)}`,
+        tool: "npm-audit",
+        severity,
+        category: "DEPENDENCY",
+        file: subProject ? `${subProject}/${lockFile}` : lockFile,
+        message: `${prefix}${name}: ${viaMessages || vuln.severity} vulnerability`,
+        recommendation: vuln.fixAvailable
+          ? typeof vuln.fixAvailable === "object"
+            ? `Update to ${vuln.fixAvailable.name}@${vuln.fixAvailable.version}`
+            : "Run npm audit fix"
+          : "No automatic fix available — review manually",
+        autoFixAvailable: !!vuln.fixAvailable,
+      });
+    }
+  }
+}
+
+/**
+ * Parse yarn audit JSON output.
+ * Yarn classic outputs NDJSON (one JSON object per line) with type "auditAdvisory".
+ */
+function parseYarnAudit(
+  rawOutput: string,
+  findings: ScanFinding[],
+  subProject: string | undefined,
+  lockFile: string,
+): void {
+  const lines = rawOutput.split("\n").filter((l) => l.trim());
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      if (entry.type !== "auditAdvisory" || !entry.data?.advisory) continue;
+      const advisory = entry.data.advisory;
+      const prefix = subProject ? `${subProject}: ` : "";
+      findings.push({
+        id: `yarn-${crypto.randomUUID().slice(0, 8)}`,
+        tool: "npm-audit",
+        severity: mapSeverity(advisory.severity ?? "moderate"),
+        category: "DEPENDENCY",
+        file: subProject ? `${subProject}/${lockFile}` : lockFile,
+        message: `${prefix}${advisory.module_name}: ${advisory.title ?? advisory.severity ?? "vulnerability"}`,
+        recommendation: advisory.patched_versions
+          ? `Update to ${advisory.module_name}@${advisory.patched_versions}`
+          : "No automatic fix available — review manually",
+        autoFixAvailable: !!advisory.patched_versions,
+        cve: advisory.cves?.[0] || undefined,
+      });
+    } catch {
+      // Skip unparseable lines (e.g., summary lines)
+    }
+  }
+}
+
+/**
+ * Parse pnpm audit JSON output.
+ * pnpm audit --json outputs a structure similar to npm: { advisories: { [id]: advisory } }
+ */
+function parsePnpmAudit(
+  rawOutput: string,
+  findings: ScanFinding[],
+  subProject: string | undefined,
+  lockFile: string,
+): void {
+  const audit = JSON.parse(rawOutput);
+  // pnpm audit may use `advisories` (older) or `vulnerabilities` (newer, npm-compatible)
+  const advisories: Record<string, unknown> = audit.advisories ?? {};
+  for (const advisory of Object.values(advisories) as Array<Record<string, unknown>>) {
+    const prefix = subProject ? `${subProject}: ` : "";
+    const moduleName = String(advisory.module_name ?? advisory.name ?? "unknown");
+    const severity = mapSeverity(String(advisory.severity ?? "moderate"));
+    const title = String(advisory.title ?? advisory.overview ?? "vulnerability");
+    const patchedVersions = advisory.patched_versions
+      ? String(advisory.patched_versions)
+      : undefined;
+    const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
+
+    findings.push({
+      id: `pnpm-${crypto.randomUUID().slice(0, 8)}`,
+      tool: "npm-audit",
+      severity,
+      category: "DEPENDENCY",
+      file: subProject ? `${subProject}/${lockFile}` : lockFile,
+      message: `${prefix}${moduleName}: ${title}`,
+      recommendation: patchedVersions
+        ? `Update to ${moduleName}@${patchedVersions}`
+        : "No automatic fix available — review manually",
+      autoFixAvailable: !!patchedVersions,
+      cve: cves[0] ? String(cves[0]) : undefined,
+    });
+  }
+
+  // Also try npm-compatible vulnerabilities format
+  if (audit.vulnerabilities && !audit.advisories) {
+    parseNpmAudit(rawOutput, findings, subProject, lockFile);
+  }
 }
 
 function mapSeverity(severity: string): ScanFinding["severity"] {

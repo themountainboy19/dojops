@@ -7,6 +7,7 @@ export const SystemdInputSchema = z.object({
   workingDirectory: z.string().optional(),
   description: z.string().optional(),
   outputPath: z.string().describe("Directory to write the service unit file to"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

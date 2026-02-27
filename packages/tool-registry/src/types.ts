@@ -12,6 +12,7 @@ export interface PluginManifest {
     systemPrompt: string;
     updateMode?: boolean;
     existingDelimiter?: string;
+    userPromptTemplate?: string;
   };
   files: Array<{
     path: string;
@@ -21,7 +22,7 @@ export interface PluginManifest {
     command: string;
   };
   detector?: {
-    path: string;
+    path: string | string[];
   };
   permissions?: {
     filesystem?: "project" | "global";

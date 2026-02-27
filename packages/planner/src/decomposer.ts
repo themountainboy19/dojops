@@ -60,12 +60,25 @@ export async function decompose(
   tools: DevOpsTool[],
   options?: DecomposeOptions,
 ): Promise<TaskGraph> {
-  const toolList = tools
-    .map((t) => {
-      const schemaText = zodSchemaToText(t.inputSchema);
-      return `### ${t.name}\n${t.description}\nInput fields:\n${schemaText}`;
-    })
-    .join("\n\n");
+  // Build tool descriptions, trimming to stay within ~8000 tokens (32000 chars).
+  // If the full tool list exceeds the budget, keep only the first N tools that fit.
+  const TOKEN_CHAR_BUDGET = 32_000;
+  const toolDescriptions = tools.map((t) => {
+    const schemaText = zodSchemaToText(t.inputSchema);
+    return `### ${t.name}\n${t.description}\nInput fields:\n${schemaText}`;
+  });
+
+  let toolList = "";
+  let charCount = 0;
+  for (const desc of toolDescriptions) {
+    const addition = toolList ? "\n\n" + desc : desc;
+    if (charCount + addition.length > TOKEN_CHAR_BUDGET) {
+      // Token budget exceeded — stop adding tools to avoid oversized prompts
+      break;
+    }
+    toolList += addition;
+    charCount += addition.length;
+  }
 
   const contextSection = options?.repoContext ? buildContextSection(options.repoContext) : "";
 

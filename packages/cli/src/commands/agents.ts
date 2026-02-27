@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import * as yaml from "js-yaml";
 import { createRouter } from "@dojops/api";
 import { ALL_SPECIALIST_CONFIGS, getInstallCommand } from "@dojops/core";
 import {
@@ -60,6 +61,21 @@ function agentList(ctx: CLIContext): void {
         })),
         null,
         2,
+      ),
+    );
+    return;
+  }
+
+  if (ctx.globalOpts.output === "yaml") {
+    console.log(
+      yaml.dump(
+        agents.map((a) => ({
+          name: a.name,
+          domain: a.domain,
+          description: a.description ?? null,
+          type: customNames.has(a.name) ? "custom" : "built-in",
+        })),
+        { lineWidth: 120, noRefs: true },
       ),
     );
     return;

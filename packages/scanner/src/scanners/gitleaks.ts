@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
+import { execFileAsync } from "../exec-async";
 
 interface GitleaksResult {
   RuleID: string;
@@ -23,7 +23,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
   const reportFile = path.join(os.tmpdir(), `gitleaks-${crypto.randomUUID().slice(0, 8)}.json`);
   let rawOutput: string;
   try {
-    execFileSync(
+    await execFileAsync(
       "gitleaks",
       [
         "detect",
@@ -38,7 +38,6 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
       {
         encoding: "utf-8",
         timeout: 120_000,
-        stdio: "pipe",
       },
     );
     rawOutput = readAndCleanup(reportFile);
@@ -53,11 +52,12 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
       };
     }
     // gitleaks exits with code 1 when leaks are found
-    const execErr = err as { stdout?: string; stderr?: string; status?: number };
+    const execErr = err as { stdout?: string; stderr?: string; status?: number; code?: number };
     rawOutput = readAndCleanup(reportFile);
     if (!rawOutput) {
       // Exit code 1 with no stdout means no leaks (or error)
-      if (execErr.status === 1 && !execErr.stderr) {
+      const exitCode = execErr.status ?? execErr.code;
+      if (exitCode === 1 && !execErr.stderr) {
         return { tool: "gitleaks", findings: [] };
       }
       return {

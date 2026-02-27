@@ -1,6 +1,21 @@
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import { TerraformConfig, TerraformConfigSchema } from "./schemas";
 
+/**
+ * Attributes that should use HCL assignment syntax (`key = { ... }`)
+ * rather than block syntax (`key { ... }`). These are maps/objects that
+ * represent key-value assignments, not nested sub-resource blocks.
+ */
+const MAP_ATTRIBUTES = new Set([
+  "tags",
+  "labels",
+  "annotations",
+  "metadata",
+  "variables",
+  "environment",
+  "default_tags",
+]);
+
 export async function generateTerraformConfig(
   provider: string,
   resources: string,
@@ -115,11 +130,63 @@ export function configToHcl(config: TerraformConfig): string {
     lines.push(``);
   }
 
+  if (config.locals && config.locals.length > 0) {
+    lines.push(`locals {`);
+    for (const local of config.locals) {
+      lines.push(`  ${local.name} = ${hclValue(local.value)}`);
+    }
+    lines.push(`}`);
+    lines.push(``);
+  }
+
+  if (config.dataSources) {
+    for (const ds of config.dataSources) {
+      lines.push(`data "${ds.type}" "${ds.name}" {`);
+      for (const [k, v] of Object.entries(ds.config)) {
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          if (MAP_ATTRIBUTES.has(k)) {
+            lines.push(`  ${k} = ${hclMap(v as Record<string, unknown>, 2)}`);
+          } else {
+            lines.push(`  ${k} ${hclBlock(v as Record<string, unknown>, 2)}`);
+          }
+        } else {
+          lines.push(`  ${k} = ${hclValue(v)}`);
+        }
+      }
+      lines.push(`}`);
+      lines.push(``);
+    }
+  }
+
+  if (config.modules) {
+    for (const mod of config.modules) {
+      lines.push(`module "${mod.name}" {`);
+      lines.push(`  source = "${escapeHclString(mod.source)}"`);
+      for (const [k, v] of Object.entries(mod.config)) {
+        if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+          if (MAP_ATTRIBUTES.has(k)) {
+            lines.push(`  ${k} = ${hclMap(v as Record<string, unknown>, 2)}`);
+          } else {
+            lines.push(`  ${k} ${hclBlock(v as Record<string, unknown>, 2)}`);
+          }
+        } else {
+          lines.push(`  ${k} = ${hclValue(v)}`);
+        }
+      }
+      lines.push(`}`);
+      lines.push(``);
+    }
+  }
+
   for (const resource of config.resources) {
     lines.push(`resource "${resource.type}" "${resource.name}" {`);
     for (const [k, v] of Object.entries(resource.config)) {
       if (typeof v === "object" && v !== null && !Array.isArray(v)) {
-        lines.push(`  ${k} ${hclBlock(v as Record<string, unknown>, 2)}`);
+        if (MAP_ATTRIBUTES.has(k)) {
+          lines.push(`  ${k} = ${hclMap(v as Record<string, unknown>, 2)}`);
+        } else {
+          lines.push(`  ${k} ${hclBlock(v as Record<string, unknown>, 2)}`);
+        }
       } else {
         lines.push(`  ${k} = ${hclValue(v)}`);
       }
@@ -175,10 +242,30 @@ function hclBlock(obj: Record<string, unknown>, indent: number): string {
   const lines: string[] = ["{"];
   for (const [key, val] of Object.entries(obj)) {
     if (typeof val === "object" && val !== null && !Array.isArray(val)) {
-      lines.push(`${pad}  ${key} ${hclBlock(val as Record<string, unknown>, indent + 2)}`);
+      if (MAP_ATTRIBUTES.has(key)) {
+        lines.push(`${pad}  ${key} = ${hclMap(val as Record<string, unknown>, indent + 2)}`);
+      } else {
+        lines.push(`${pad}  ${key} ${hclBlock(val as Record<string, unknown>, indent + 2)}`);
+      }
     } else {
       lines.push(`${pad}  ${key} = ${hclValue(val)}`);
     }
+  }
+  lines.push(`${pad}}`);
+  return lines.join("\n");
+}
+
+/**
+ * Serializes an object as an HCL map using assignment syntax: `{ key = value, ... }`.
+ * Used for attributes like tags, labels, annotations, etc. that are maps rather than blocks.
+ */
+function hclMap(obj: Record<string, unknown>, indent: number): string {
+  const pad = " ".repeat(indent);
+  const entries = Object.entries(obj);
+  if (entries.length === 0) return "{}";
+  const lines: string[] = ["{"];
+  for (const [key, val] of entries) {
+    lines.push(`${pad}  ${key} = ${hclValue(val)}`);
   }
   lines.push(`${pad}}`);
   return lines.join("\n");

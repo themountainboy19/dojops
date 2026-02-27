@@ -5,8 +5,9 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
 import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
+import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
-import { hasFlag } from "../parser";
+import { hasFlag, extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import {
   findProjectRoot,
@@ -17,6 +18,7 @@ import {
   listScanReports,
   dojopsDir,
 } from "../state";
+import { emitGitHubAnnotations } from "../ci-annotations";
 
 export async function scanCommand(args: string[], ctx: CLIContext): Promise<void> {
   const startTime = Date.now();
@@ -28,6 +30,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const sbomMode = hasFlag(args, "--sbom");
   const fixMode = hasFlag(args, "--fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
+  const targetDir = extractFlagValue(args, "--target");
 
   // Determine scan type
   let scanType: ScanType = "all";
@@ -36,11 +39,18 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   else if (iacOnly) scanType = "iac";
   else if (sbomMode) scanType = "sbom";
 
-  // Find or init project
-  let root = findProjectRoot();
-  if (!root) {
-    root = ctx.cwd;
-    initProject(root);
+  // Find or init project (use --target if specified)
+  let root: string;
+  if (targetDir) {
+    root = path.resolve(targetDir);
+    if (!fs.existsSync(root)) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Target directory not found: ${root}`);
+    }
+  } else {
+    root = findProjectRoot() ?? ctx.cwd;
+    if (!findProjectRoot()) {
+      initProject(root);
+    }
   }
 
   // Load repo context if available
@@ -63,7 +73,14 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   // JSON output mode
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(report, null, 2));
-    exitWithCode(report);
+    throwOnSeverity(report);
+    return;
+  }
+
+  // YAML output mode
+  if (ctx.globalOpts.output === "yaml") {
+    console.log(yaml.dump(report, { lineWidth: 120, noRefs: true }));
+    throwOnSeverity(report);
     return;
   }
 
@@ -104,6 +121,11 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
       }
     }
     console.log();
+  }
+
+  // Emit GitHub Actions annotations when running in CI
+  if (report.findings.length > 0) {
+    emitGitHubAnnotations(report.findings);
   }
 
   // Save scan report
@@ -232,7 +254,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     }
   }
 
-  exitWithCode(rescanReport ?? report);
+  throwOnSeverity(rescanReport ?? report);
 }
 
 function severityLabel(severity: ScanFinding["severity"]): string {
@@ -248,10 +270,10 @@ function severityLabel(severity: ScanFinding["severity"]): string {
   }
 }
 
-function exitWithCode(report: ScanReport): never {
-  // SBOM scans always exit 0 (no findings to assess)
+function throwOnSeverity(report: ScanReport): void {
+  // SBOM scans always pass (no findings to assess)
   if (report.scanType === "sbom") {
-    process.exit(ExitCode.SUCCESS);
+    return;
   }
   if (report.summary.critical > 0) {
     throw new CLIError(ExitCode.CRITICAL_VULNERABILITIES);
@@ -259,5 +281,4 @@ function exitWithCode(report: ScanReport): never {
   if (report.summary.high > 0) {
     throw new CLIError(ExitCode.SECURITY_ISSUES);
   }
-  process.exit(ExitCode.SUCCESS);
 }

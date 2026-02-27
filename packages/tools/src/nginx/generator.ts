@@ -40,7 +40,38 @@ Include appropriate proxy headers (X-Real-IP, X-Forwarded-For, Host).`;
   return parseAndValidate(response.content, NginxConfigSchema);
 }
 
-export function nginxConfigToString(config: NginxConfig): string {
+export function nginxConfigToString(config: NginxConfig, fullConfig?: boolean): string {
+  const serverBlocks = nginxServerBlocksToString(config);
+
+  if (fullConfig) {
+    const lines: string[] = [];
+    lines.push("worker_processes auto;");
+    lines.push("pid /run/nginx.pid;");
+    lines.push("");
+    lines.push("events {");
+    lines.push("    worker_connections 1024;");
+    lines.push("}");
+    lines.push("");
+    lines.push("http {");
+    lines.push("    include       /etc/nginx/mime.types;");
+    lines.push("    default_type  application/octet-stream;");
+    lines.push("    sendfile      on;");
+    lines.push("    keepalive_timeout 65;");
+    lines.push("");
+    // Indent the server blocks inside the http block
+    const indented = serverBlocks
+      .split("\n")
+      .map((line) => (line.trim() === "" ? "" : `    ${line}`))
+      .join("\n");
+    lines.push(indented);
+    lines.push("}");
+    return lines.join("\n");
+  }
+
+  return serverBlocks;
+}
+
+function nginxServerBlocksToString(config: NginxConfig): string {
   const lines: string[] = [];
 
   // Upstreams

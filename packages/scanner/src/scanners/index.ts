@@ -6,3 +6,5 @@ export { scanHadolint } from "./hadolint";
 export { scanGitleaks } from "./gitleaks";
 export { scanShellcheck } from "./shellcheck";
 export { scanTrivySbom } from "./trivy-sbom";
+export { scanTrivyImage } from "./trivy-image";
+export { scanTrivyLicense } from "./trivy-license";

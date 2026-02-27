@@ -32,6 +32,23 @@ export type DiffRequest = z.infer<typeof DiffRequestSchema>;
 export const ScanRequestSchema = z.object({
   target: z.string().max(2048, "Path too long").optional(),
   scanType: z.enum(["all", "security", "deps", "iac", "sbom"]).optional().default("all"),
+  context: z
+    .object({
+      primaryLanguage: z.string().optional(),
+      languages: z.array(z.object({ name: z.string() })).optional(),
+      packageManager: z.object({ name: z.string() }).optional(),
+      infra: z
+        .object({
+          hasTerraform: z.boolean().optional(),
+          hasKubernetes: z.boolean().optional(),
+          hasHelm: z.boolean().optional(),
+          hasAnsible: z.boolean().optional(),
+        })
+        .optional(),
+      container: z.object({ hasDockerfile: z.boolean().optional() }).optional(),
+      scripts: z.object({ shellScripts: z.array(z.string()).optional() }).optional(),
+    })
+    .optional(),
 });
 
 export type ScanRequest = z.infer<typeof ScanRequestSchema>;

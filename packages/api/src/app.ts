@@ -47,8 +47,8 @@ export function createApp(deps: AppDependencies): Express {
         directives: {
           defaultSrc: ["'self'"],
           scriptSrc: ["'self'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          fontSrc: ["'self'"],
           connectSrc: ["'self'"],
           imgSrc: ["'self'", "data:"],
         },
@@ -72,10 +72,10 @@ export function createApp(deps: AppDependencies): Express {
   const apiKey = deps.apiKey ?? process.env.DOJOPS_API_KEY;
   app.use("/api/", authMiddleware(apiKey));
 
-  // Rate limiting for API routes
+  // Rate limiting for API routes (configurable via env)
   const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    limit: 100, // 100 requests per window
+    windowMs: parseInt(process.env.DOJOPS_RATE_LIMIT_WINDOW_MS ?? String(15 * 60 * 1000), 10),
+    limit: parseInt(process.env.DOJOPS_RATE_LIMIT ?? "100", 10),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
@@ -107,6 +107,8 @@ export function createApp(deps: AppDependencies): Express {
       tools: deps.tools.map((t) => t.name),
       pluginCount: deps.pluginCount ?? 0,
       metricsEnabled,
+      memory: process.memoryUsage().heapUsed,
+      uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });
   });
@@ -119,7 +121,7 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));
   app.use("/api/history", createHistoryRouter(deps.store));
   app.use("/api/scan", createScanRouter(deps.store, deps.rootDir));
-  app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store));
+  app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir));
   if (aggregator) {
     app.use("/api/metrics", createMetricsRouter(aggregator));
   } else {

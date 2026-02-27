@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
+import { execFileAsync } from "../exec-async";
 
 const PIP_INDICATORS = ["requirements.txt", "Pipfile", "setup.py", "pyproject.toml"];
 
@@ -83,12 +83,12 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
     if (hasRequirements) {
       args.push("--requirement", path.join(dir, "requirements.txt"));
     }
-    rawOutput = execFileSync("pip-audit", args, {
+    const result = await execFileAsync("pip-audit", args, {
       encoding: "utf-8",
       timeout: 120_000,
-      stdio: "pipe",
       cwd: dir,
     });
+    rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
       return {

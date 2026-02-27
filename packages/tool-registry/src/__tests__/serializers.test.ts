@@ -34,10 +34,9 @@ describe("serialize", () => {
     expect(result).toBe("resource {}");
   });
 
-  it("throws for hcl format with structured data", () => {
-    expect(() => serialize({ key: "value" }, "hcl")).toThrow(
-      'Serializer "hcl" does not support structured data in v1',
-    );
+  it("serializes hcl format with structured data", () => {
+    const result = serialize({ key: "value" }, "hcl");
+    expect(result).toContain('key = "value"');
   });
 
   it("falls back to raw for ini format", () => {

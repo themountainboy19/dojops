@@ -1,5 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -29,12 +30,29 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
     }
   }
 
+  // Check tool names against the registry
+  const registry = createToolRegistry(ctx.getProvider(), root);
+  const unknownTools: string[] = [];
+  for (const task of plan.tasks) {
+    if (task.tool && !registry.has(task.tool)) {
+      unknownTools.push(task.tool);
+    }
+  }
+  if (unknownTools.length > 0) {
+    const unique = [...new Set(unknownTools)];
+    p.log.warn(
+      `Unknown tool(s) not in registry: ${unique.map((t) => pc.bold(t)).join(", ")}. ` +
+        `These may be custom or plugin tools not currently loaded.`,
+    );
+  }
+
   if (ctx.globalOpts.output === "json") {
     const results = plan.tasks.map((t) => ({
       id: t.id,
       tool: t.tool,
       valid: true,
       errors: [] as string[],
+      inRegistry: registry.has(t.tool),
     }));
     console.log(JSON.stringify({ planId: plan.id, results }));
     return;

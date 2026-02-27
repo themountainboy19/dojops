@@ -93,10 +93,15 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
 
       // If updateMode is enabled and detector path exists, read existing content
       if (this.manifest.generator.updateMode && this.manifest.detector?.path) {
-        const detectorPath = this.resolveFilePath(this.manifest.detector.path, input);
-        const content = readExistingConfig(detectorPath);
-        if (content) {
-          existingContent = content;
+        const rawPath = this.manifest.detector.path;
+        const paths = Array.isArray(rawPath) ? rawPath : [rawPath];
+        for (const p of paths) {
+          const detectorPath = this.resolveFilePath(p, input);
+          const content = readExistingConfig(detectorPath);
+          if (content) {
+            existingContent = content;
+            break;
+          }
         }
       }
 
@@ -241,6 +246,17 @@ export class PluginTool implements DevOpsTool<Record<string, unknown>> {
   }
 
   private buildUserPrompt(input: Record<string, unknown>): string {
+    const template = this.manifest.generator.userPromptTemplate;
+    if (template) {
+      let result = template;
+      for (const [key, value] of Object.entries(input)) {
+        if (key === "existingContent") continue;
+        const replacement = typeof value === "string" ? value : JSON.stringify(value);
+        result = result.replaceAll(`{${key}}`, replacement);
+      }
+      return result;
+    }
+
     const parts: string[] = [];
     for (const [key, value] of Object.entries(input)) {
       if (key === "existingContent") continue;

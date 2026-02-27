@@ -29,6 +29,42 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./terraform/verifier": {
+      "types": "./dist/terraform/verifier.d.ts",
+      "default": "./dist/terraform/verifier.js"
+    },
+    "./dockerfile/verifier": {
+      "types": "./dist/dockerfile/verifier.d.ts",
+      "default": "./dist/dockerfile/verifier.js"
+    },
+    "./kubernetes/verifier": {
+      "types": "./dist/kubernetes/verifier.d.ts",
+      "default": "./dist/kubernetes/verifier.js"
+    },
+    "./github/verifier": {
+      "types": "./dist/github/verifier.d.ts",
+      "default": "./dist/github/verifier.js"
+    },
+    "./gitlab-ci/verifier": {
+      "types": "./dist/gitlab-ci/verifier.d.ts",
+      "default": "./dist/gitlab-ci/verifier.js"
+    },
+    "./docker-compose/verifier": {
+      "types": "./dist/docker-compose/verifier.d.ts",
+      "default": "./dist/docker-compose/verifier.js"
+    },
+    "./helm/verifier": {
+      "types": "./dist/helm/verifier.d.ts",
+      "default": "./dist/helm/verifier.js"
+    },
+    "./prometheus/verifier": {
+      "types": "./dist/prometheus/verifier.d.ts",
+      "default": "./dist/prometheus/verifier.js"
+    },
+    "./ansible/verifier": {
+      "types": "./dist/ansible/verifier.d.ts",
+      "default": "./dist/ansible/verifier.js"
     }
   },
   "files": [

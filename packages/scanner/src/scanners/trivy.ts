@@ -1,6 +1,11 @@
-import { execFileSync } from "node:child_process";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity, ScanCategory } from "../types";
+import { execFileAsync } from "../exec-async";
+
+interface TrivyCVSS {
+  V3Score?: number;
+  V2Score?: number;
+}
 
 interface TrivyVulnerability {
   VulnerabilityID: string;
@@ -10,6 +15,7 @@ interface TrivyVulnerability {
   Severity: string;
   Title?: string;
   Description?: string;
+  CVSS?: Record<string, TrivyCVSS>;
 }
 
 interface TrivyMisconfiguration {
@@ -44,15 +50,15 @@ interface TrivyOutput {
 export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
   let rawOutput: string;
   try {
-    rawOutput = execFileSync(
+    const result = await execFileAsync(
       "trivy",
       ["fs", "--format", "json", "--scanners", "vuln,secret,misconfig", projectPath],
       {
         encoding: "utf-8",
         timeout: 180_000,
-        stdio: "pipe",
       },
     );
+    rawOutput = result.stdout;
   } catch (err: unknown) {
     if (isENOENT(err)) {
       return {
@@ -94,6 +100,9 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
                 ? `Update to ${vuln.PkgName}@${vuln.FixedVersion}`
                 : "No fix version available",
               autoFixAvailable: !!vuln.FixedVersion,
+              cve: vuln.VulnerabilityID.startsWith("CVE-") ? vuln.VulnerabilityID : undefined,
+              cvss: extractCvssScore(vuln.CVSS),
+              fixVersion: vuln.FixedVersion || undefined,
             });
           }
         }
@@ -144,6 +153,18 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
   }
 
   return { tool: "trivy", findings, rawOutput };
+}
+
+function extractCvssScore(cvss?: Record<string, TrivyCVSS>): number | undefined {
+  if (!cvss) return undefined;
+  let best: number | undefined;
+  for (const entry of Object.values(cvss)) {
+    const score = entry.V3Score ?? entry.V2Score;
+    if (score !== undefined && (best === undefined || score > best)) {
+      best = score;
+    }
+  }
+  return best;
 }
 
 function mapSeverity(severity: string): ScanSeverity {

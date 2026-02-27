@@ -12,9 +12,18 @@ export function createHistoryRouter(store: HistoryStore): Router {
     const type = rawType && ALLOWED_TYPES.has(rawType) ? rawType : undefined;
     const rawLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
     const limit = rawLimit && rawLimit > 0 ? Math.min(rawLimit, MAX_LIMIT) : undefined;
+    const rawOffset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+    const offset = rawOffset > 0 ? rawOffset : 0;
 
-    const entries = store.getAll({ type, limit });
-    res.json({ entries, count: entries.length });
+    let entries = store.getAll({ type, limit: undefined });
+
+    // Apply offset then limit via slice
+    if (offset > 0 || limit) {
+      const end = limit ? offset + limit : undefined;
+      entries = entries.slice(offset, end);
+    }
+
+    res.json({ entries, count: entries.length, offset });
   });
 
   router.get("/:id", (req, res) => {

@@ -11,7 +11,12 @@ import {
 import { verifyPrometheusConfig } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { PrometheusInputSchema, PrometheusInput } from "./schemas";
-import { generatePrometheusConfig, prometheusToYaml, alertRulesToYaml } from "./generator";
+import {
+  generatePrometheusConfig,
+  prometheusToYaml,
+  alertRulesToYaml,
+  alertmanagerToYaml,
+} from "./generator";
 
 export class PrometheusTool extends BaseTool<PrometheusInput> {
   name = "prometheus";
@@ -35,6 +40,7 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
       );
       const prometheusYaml = prometheusToYaml(config);
       const alertsYaml = alertRulesToYaml(config);
+      const alertmanagerYaml = alertmanagerToYaml(config);
 
       return {
         success: true,
@@ -42,6 +48,7 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
           config,
           prometheusYaml,
           alertsYaml,
+          alertmanagerYaml,
           isUpdate,
         },
       };
@@ -65,6 +72,7 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
     const data = result.data as {
       prometheusYaml: string;
       alertsYaml: string | null;
+      alertmanagerYaml: string | null;
       isUpdate: boolean;
     };
     const filePath = path.join(input.outputPath, "prometheus.yml");
@@ -81,6 +89,11 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
       const alertPath = path.join(input.outputPath, "alert-rules.yml");
       atomicWriteFileSync(alertPath, data.alertsYaml);
       filesWritten.push(alertPath);
+    }
+    if (data.alertmanagerYaml) {
+      const amPath = path.join(input.outputPath, "alertmanager.yml");
+      atomicWriteFileSync(amPath, data.alertmanagerYaml);
+      filesWritten.push(amPath);
     }
 
     return { ...result, filesWritten, filesModified: data.isUpdate ? [filePath] : [] };

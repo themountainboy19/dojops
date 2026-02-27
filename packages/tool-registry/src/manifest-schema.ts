@@ -14,6 +14,7 @@ const GeneratorSchema = z.object({
   systemPrompt: z.string().min(1),
   updateMode: z.boolean().optional(),
   existingDelimiter: z.string().optional(),
+  userPromptTemplate: z.string().optional(),
 });
 
 const VerificationSchema = z.object({
@@ -21,7 +22,14 @@ const VerificationSchema = z.object({
 });
 
 const DetectorSchema = z.object({
-  path: z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
+  path: z.union([
+    z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
+    z
+      .array(
+        z.string().min(1).refine(noPathTraversal, "Path must not contain '..' traversal segments"),
+      )
+      .min(1),
+  ]),
 });
 
 const PermissionsSchema = z.object({

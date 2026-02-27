@@ -1,5 +1,7 @@
 export * from "./types";
-export { runScan } from "./runner";
+export { runScan, deduplicateByCve, compareScanReports } from "./runner";
+export { loadScanPolicy, evaluatePolicy } from "./scan-policy";
+export type { ScanPolicy, ScanPolicyThresholds, PolicyResult } from "./scan-policy";
 export { planRemediation } from "./remediation/planner";
 export { applyFixes } from "./remediation/patcher";
 export { discoverProjectDirs, listSubDirs } from "./discovery";
@@ -12,4 +14,6 @@ export {
   scanGitleaks,
   scanShellcheck,
   scanTrivySbom,
+  scanTrivyImage,
+  scanTrivyLicense,
 } from "./scanners";

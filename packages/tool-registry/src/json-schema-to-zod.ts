@@ -121,9 +121,8 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       const compositionKeys = ["allOf", "anyOf", "oneOf", "$ref"] as const;
       for (const key of compositionKeys) {
         if (key in schema) {
-          throw new Error(
-            `jsonSchemaToZod: "${key}" is not supported in plugin schemas. Only primitive types and object/array are supported.`,
-          );
+          console.warn("jsonSchemaToZod: unsupported feature: " + key);
+          return z.unknown();
         }
       }
       return z.unknown();

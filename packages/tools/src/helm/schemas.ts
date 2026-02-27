@@ -7,6 +7,7 @@ export const HelmInputSchema = z.object({
   outputPath: z.string().describe("Directory to write the Helm chart to (e.g. './charts/my-app')"),
   image: z.string(),
   port: z.number().int().positive(),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()
@@ -42,6 +43,48 @@ export type HelmValues = z.infer<typeof HelmValuesSchema>;
 export const HelmChartResponseSchema = z.object({
   values: HelmValuesSchema,
   notes: z.string().optional(),
+  ingress: z
+    .object({
+      enabled: z.boolean(),
+      className: z.string().optional(),
+      hosts: z
+        .array(
+          z.object({
+            host: z.string(),
+            paths: z.array(
+              z.object({
+                path: z.string(),
+                pathType: z.string().default("ImplementationSpecific"),
+              }),
+            ),
+          }),
+        )
+        .default([]),
+      tls: z
+        .array(
+          z.object({
+            secretName: z.string(),
+            hosts: z.array(z.string()),
+          }),
+        )
+        .default([]),
+    })
+    .optional(),
+  serviceAccount: z
+    .object({
+      create: z.boolean().default(true),
+      name: z.string().optional(),
+      annotations: z.record(z.string()).default({}),
+    })
+    .optional(),
+  autoscaling: z
+    .object({
+      enabled: z.boolean().default(false),
+      minReplicas: z.number().default(1),
+      maxReplicas: z.number().default(10),
+      targetCPUUtilization: z.number().optional(),
+    })
+    .optional(),
 });
 
 export type HelmChartResponse = z.infer<typeof HelmChartResponseSchema>;

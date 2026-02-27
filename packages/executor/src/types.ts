@@ -11,6 +11,9 @@ export const ExecutionPolicySchema = z.object({
   /** @advisory Names of env vars to pass through. Use `filterEnvVars(policy)` to apply manually. */
   allowEnvVars: z.array(z.string()).default([]),
   timeoutMs: z.number().positive().default(30_000),
+  generateTimeoutMs: z.number().positive().optional(),
+  verifyTimeoutMs: z.number().positive().optional(),
+  executeTimeoutMs: z.number().positive().optional(),
   maxFileSizeBytes: z.number().positive().default(1_048_576),
   requireApproval: z.boolean().default(false),
   skipVerification: z.boolean().default(false),
@@ -60,4 +63,5 @@ export interface AuditEntry {
   pluginSource?: "global" | "project";
   pluginVersion?: string;
   pluginHash?: string;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }

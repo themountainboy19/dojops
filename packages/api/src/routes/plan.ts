@@ -23,32 +23,43 @@ export function createPlanRouter(
 
       let result;
       if (execute) {
-        const executor = new PlannerExecutor(tools);
-        const planResult = await executor.execute(graph);
+        const timeoutMs = parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
 
-        if (autoApprove) {
-          const safeExecutor = new SafeExecutor({
-            policy: {
-              allowWrite: true,
-              requireApproval: false,
-              timeoutMs: 60_000,
-              enforceDevOpsAllowlist: true,
-            },
-            approvalHandler: new AutoApproveHandler(),
-          });
+        const executePlan = async () => {
+          const executor = new PlannerExecutor(tools);
+          const planResult = await executor.execute(graph);
 
-          const toolMap = new Map(tools.map((t) => [t.name, t]));
-          for (const taskResult of planResult.results) {
-            if (taskResult.status !== "completed") continue;
-            const taskNode = graph.tasks.find((t) => t.id === taskResult.taskId);
-            if (!taskNode) continue;
-            const tool = toolMap.get(taskNode.tool);
-            if (!tool?.execute) continue;
-            await safeExecutor.executeTask(taskResult.taskId, tool, taskNode.input);
+          if (autoApprove) {
+            const safeExecutor = new SafeExecutor({
+              policy: {
+                allowWrite: true,
+                requireApproval: false,
+                timeoutMs: 60_000,
+                enforceDevOpsAllowlist: true,
+              },
+              approvalHandler: new AutoApproveHandler(),
+            });
+
+            const toolMap = new Map(tools.map((t) => [t.name, t]));
+            for (const taskResult of planResult.results) {
+              if (taskResult.status !== "completed") continue;
+              const taskNode = graph.tasks.find((t) => t.id === taskResult.taskId);
+              if (!taskNode) continue;
+              const tool = toolMap.get(taskNode.tool);
+              if (!tool?.execute) continue;
+              await safeExecutor.executeTask(taskResult.taskId, tool, taskNode.input);
+            }
           }
-        }
 
-        result = planResult;
+          return planResult;
+        };
+
+        result = await Promise.race([
+          executePlan(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Plan execution timeout")), timeoutMs),
+          ),
+        ]);
       }
 
       const response = {

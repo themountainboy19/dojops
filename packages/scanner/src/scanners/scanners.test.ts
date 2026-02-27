@@ -1,14 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import * as child_process from "node:child_process";
 import * as fs from "node:fs";
+import * as execAsyncMod from "../exec-async";
 
-vi.mock("node:child_process");
+vi.mock("../exec-async");
 vi.mock("node:fs");
 
-const mockExecFileSync = vi.mocked(child_process.execFileSync);
+const mockExecFileAsync = vi.mocked(execAsyncMod.execFileAsync);
 const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
+
+/**
+ * Helper: configure mockExecFileAsync to resolve with stdout.
+ */
+function mockExecFileSuccess(stdout: string): void {
+  mockExecFileAsync.mockResolvedValue({ stdout, stderr: "" });
+}
+
+/**
+ * Helper: configure mockExecFileAsync to reject with an error.
+ */
+function mockExecFileError(err: Error & { stdout?: string; stderr?: string; code?: string }): void {
+  mockExecFileAsync.mockRejectedValue(err);
+}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -28,12 +42,14 @@ describe("scanNpm", () => {
 
   it("skips when npm not found (ENOENT)", async () => {
     const { scanNpm } = await import("./npm");
-    mockExistsSync.mockReturnValue(true);
+    mockExistsSync.mockImplementation((p) => {
+      const s = String(p);
+      // Only package-lock.json exists
+      return s.endsWith("package-lock.json");
+    });
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanNpm("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("npm not found");
@@ -41,8 +57,8 @@ describe("scanNpm", () => {
 
   it("parses npm audit JSON output", async () => {
     const { scanNpm } = await import("./npm");
-    mockExistsSync.mockReturnValue(true);
-    mockExecFileSync.mockReturnValue(
+    mockExistsSync.mockImplementation((p) => String(p).endsWith("package-lock.json"));
+    mockExecFileSuccess(
       JSON.stringify({
         vulnerabilities: {
           lodash: {
@@ -70,7 +86,7 @@ describe("scanNpm", () => {
 
   it("handles npm audit non-zero exit with JSON stdout", async () => {
     const { scanNpm } = await import("./npm");
-    mockExistsSync.mockReturnValue(true);
+    mockExistsSync.mockImplementation((p) => String(p).endsWith("package-lock.json"));
     const err = Object.assign(new Error("exit 1"), {
       stdout: JSON.stringify({
         vulnerabilities: {
@@ -84,9 +100,7 @@ describe("scanNpm", () => {
       stderr: "",
       status: 1,
     });
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
 
     const result = await scanNpm("/project");
     expect(result.findings).toHaveLength(1);
@@ -117,7 +131,7 @@ describe("scanNpm", () => {
       return [] as unknown as fs.Dirent[];
     });
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify({
         vulnerabilities: {
           lodash: {
@@ -136,7 +150,7 @@ describe("scanNpm", () => {
     expect(result.findings[1].file).toBe("frontend/package-lock.json");
     expect(result.findings[1].message).toContain("frontend:");
     // npm audit should be called twice (once per sub-project)
-    expect(mockExecFileSync).toHaveBeenCalledTimes(2);
+    expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -158,9 +172,7 @@ describe("scanPip", () => {
     });
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanPip("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("pip-audit not found");
@@ -171,7 +183,7 @@ describe("scanPip", () => {
     mockExistsSync.mockImplementation((p) => {
       return String(p).includes("requirements.txt");
     });
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           name: "django",
@@ -215,7 +227,7 @@ describe("scanPip", () => {
       return [] as unknown as fs.Dirent[];
     });
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           name: "flask",
@@ -235,7 +247,7 @@ describe("scanPip", () => {
     expect(result.findings[0].file).toBe("api/requirements.txt");
     expect(result.findings[0].message).toContain("api:");
     expect(result.findings[1].file).toBe("worker/pyproject.toml");
-    expect(mockExecFileSync).toHaveBeenCalledTimes(2);
+    expect(mockExecFileAsync).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -246,9 +258,7 @@ describe("scanTrivy", () => {
     const { scanTrivy } = await import("./trivy");
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanTrivy("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("trivy not found");
@@ -256,7 +266,7 @@ describe("scanTrivy", () => {
 
   it("parses trivy JSON with vulnerabilities and misconfigurations", async () => {
     const { scanTrivy } = await import("./trivy");
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify({
         Results: [
           {
@@ -318,9 +328,7 @@ describe("scanCheckov", () => {
     const { scanCheckov } = await import("./checkov");
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanCheckov("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("checkov not found");
@@ -328,7 +336,7 @@ describe("scanCheckov", () => {
 
   it("parses checkov JSON with failed checks", async () => {
     const { scanCheckov } = await import("./checkov");
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify({
         results: {
           failed_checks: [
@@ -355,7 +363,7 @@ describe("scanCheckov", () => {
 
   it("handles array output (multiple frameworks)", async () => {
     const { scanCheckov } = await import("./checkov");
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           results: {
@@ -410,9 +418,7 @@ describe("scanHadolint", () => {
     });
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanHadolint("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("hadolint not found");
@@ -423,7 +429,7 @@ describe("scanHadolint", () => {
     mockExistsSync.mockImplementation((p) => {
       return String(p).endsWith("Dockerfile");
     });
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           line: 3,
@@ -472,7 +478,7 @@ describe("scanHadolint", () => {
       return [] as unknown as fs.Dirent[];
     });
 
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           line: 1,
@@ -499,9 +505,7 @@ describe("scanGitleaks", () => {
     const { scanGitleaks } = await import("./gitleaks");
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanGitleaks("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("gitleaks not found");
@@ -536,9 +540,7 @@ describe("scanGitleaks", () => {
     execErr.status = 1;
     execErr.stdout = "";
     execErr.stderr = "";
-    mockExecFileSync.mockImplementation(() => {
-      throw execErr;
-    });
+    mockExecFileError(execErr as Error & { stdout?: string; stderr?: string; code?: string });
     mockReadFileSync.mockReturnValue(jsonOutput);
 
     const result = await scanGitleaks("/project");
@@ -550,7 +552,7 @@ describe("scanGitleaks", () => {
 
   it("returns empty findings on clean scan (exit 0, no report file)", async () => {
     const { scanGitleaks } = await import("./gitleaks");
-    mockExecFileSync.mockReturnValue("");
+    mockExecFileSuccess("");
     // readFileSync throws because temp file doesn't exist (no leaks → no report written)
     mockReadFileSync.mockImplementation(() => {
       throw new Error("ENOENT");
@@ -585,9 +587,7 @@ describe("scanShellcheck", () => {
     mockExistsSync.mockReturnValue(false);
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanShellcheck("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("shellcheck not found");
@@ -601,7 +601,7 @@ describe("scanShellcheck", () => {
       return [] as unknown as fs.Dirent[];
     });
     mockExistsSync.mockReturnValue(false);
-    mockExecFileSync.mockReturnValue(
+    mockExecFileSuccess(
       JSON.stringify([
         {
           file: "/project/deploy.sh",
@@ -639,9 +639,7 @@ describe("scanTrivySbom", () => {
     const { scanTrivySbom } = await import("./trivy-sbom");
     const err = new Error("ENOENT") as NodeJS.ErrnoException;
     err.code = "ENOENT";
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
     const result = await scanTrivySbom("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("trivy not found");
@@ -654,7 +652,7 @@ describe("scanTrivySbom", () => {
       specVersion: "1.4",
       components: [{ type: "library", name: "lodash", version: "4.17.21" }],
     });
-    mockExecFileSync.mockReturnValue(cyclonedxJson);
+    mockExecFileSuccess(cyclonedxJson);
 
     const result = await scanTrivySbom("/project");
     expect(result.findings).toHaveLength(0);
@@ -671,9 +669,7 @@ describe("scanTrivySbom", () => {
       stderr: "",
       status: 1,
     });
-    mockExecFileSync.mockImplementation(() => {
-      throw err;
-    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
 
     const result = await scanTrivySbom("/project");
     expect(result.sbomOutput).toBe(cyclonedxJson);

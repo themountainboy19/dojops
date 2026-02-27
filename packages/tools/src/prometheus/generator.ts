@@ -45,6 +45,20 @@ export function prometheusToYaml(config: PrometheusResponse): string {
     doc.rule_files = ["alert-rules.yml"];
   }
 
+  if (config.alertmanager) {
+    doc.alerting = {
+      alertmanagers: [
+        {
+          static_configs: [
+            {
+              targets: ["localhost:9093"],
+            },
+          ],
+        },
+      ],
+    };
+  }
+
   doc.scrape_configs = config.scrape_configs;
 
   return yaml.dump(doc, YAML_DUMP_OPTIONS);
@@ -59,6 +73,30 @@ export function alertRulesToYaml(config: PrometheusResponse): string | null {
       rules: group.rules,
     })),
   };
+
+  return yaml.dump(doc, YAML_DUMP_OPTIONS);
+}
+
+export function alertmanagerToYaml(config: PrometheusResponse): string | null {
+  if (!config.alertmanager) return null;
+
+  const am = config.alertmanager;
+  const doc: Record<string, unknown> = {
+    global: {},
+    route: {
+      receiver: am.route.receiver,
+      ...(am.route.group_by ? { group_by: am.route.group_by } : {}),
+      ...(am.route.group_wait ? { group_wait: am.route.group_wait } : {}),
+      ...(am.route.group_interval ? { group_interval: am.route.group_interval } : {}),
+      ...(am.route.repeat_interval ? { repeat_interval: am.route.repeat_interval } : {}),
+      ...(am.route.routes && am.route.routes.length > 0 ? { routes: am.route.routes } : {}),
+    },
+    receivers: am.receivers,
+  };
+
+  if (am.inhibit_rules && am.inhibit_rules.length > 0) {
+    doc.inhibit_rules = am.inhibit_rules;
+  }
 
   return yaml.dump(doc, YAML_DUMP_OPTIONS);
 }

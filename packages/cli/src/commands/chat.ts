@@ -13,12 +13,16 @@ import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
+import { planCommand } from "./plan";
+import { applyCommand } from "./apply";
+import { scanCommand } from "./scan";
 
 export async function chatCommand(args: string[], ctx: CLIContext): Promise<void> {
   const sessionName = extractFlagValue(args, "--session");
   const resumeFlag = hasFlag(args, "--resume");
   const deterministic = hasFlag(args, "--deterministic");
   const agentFlag = extractFlagValue(args, "--agent");
+  const messageFlag = extractFlagValue(args, "--message") ?? extractFlagValue(args, "-m");
 
   const rootDir = findProjectRoot(ctx.cwd);
   if (!rootDir) {
@@ -74,6 +78,27 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   // Inject project context
   const contextInfo = buildSessionContext(rootDir);
+
+  // Single-message mode: --message / -m flag
+  if (messageFlag) {
+    const s = p.spinner();
+    s.start("Thinking...");
+    try {
+      const result = await session.send(messageFlag);
+      s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+
+      if (ctx.globalOpts.output === "json") {
+        console.log(JSON.stringify({ agent: result.agent, content: result.content }));
+      } else {
+        p.log.message(result.content);
+      }
+    } catch (err) {
+      s.stop("Error");
+      p.log.error(err instanceof Error ? err.message : String(err));
+    }
+    saveChatSession(rootDir, session.getState());
+    return;
+  }
 
   // Welcome message
   const sessionState = session.getState();
@@ -170,14 +195,31 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
     try {
       const result = await session.send(trimmed);
 
-      // Check for bridge command
+      // Check for bridge command — execute actual command handlers
       if (result.agent === "bridge" && result.content.startsWith("__bridge__:")) {
         s.stop("Delegating to command...");
         const [, command, cmdArgs] = result.content.split(":");
         p.log.info(
           `Bridging to ${pc.cyan(`dojops ${command}`)}${cmdArgs ? ` with: ${cmdArgs}` : ""}`,
         );
-        p.log.info(pc.dim(`Run: dojops ${command} ${cmdArgs ?? ""}`.trim()));
+
+        try {
+          if (command === "plan" && cmdArgs) {
+            await planCommand([cmdArgs], ctx);
+          } else if (command === "apply") {
+            await applyCommand(cmdArgs ? [cmdArgs] : ["--yes"], ctx);
+          } else if (command === "scan") {
+            await scanCommand(cmdArgs ? [cmdArgs] : [], ctx);
+          } else {
+            p.log.info(pc.dim(`Run: dojops ${command} ${cmdArgs ?? ""}`.trim()));
+          }
+        } catch (err) {
+          if (err instanceof CLIError) {
+            if (err.message) p.log.error(err.message);
+          } else {
+            p.log.error(err instanceof Error ? err.message : String(err));
+          }
+        }
         continue;
       }
 

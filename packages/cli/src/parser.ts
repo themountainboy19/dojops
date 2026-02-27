@@ -60,6 +60,21 @@ export function parseGlobalOptions(args: string[]): ParsedGlobalOptions {
       globalOpts.agent = args[++i];
     } else if (arg.startsWith("--agent=")) {
       globalOpts.agent = arg.slice("--agent=".length);
+    } else if (arg === "--timeout" && i + 1 < args.length) {
+      const t = parseInt(args[++i], 10);
+      if (isNaN(t) || t <= 0)
+        throw new Error(
+          `Invalid --timeout value: "${args[i]}". Must be a positive integer (milliseconds).`,
+        );
+      globalOpts.timeout = t;
+    } else if (arg.startsWith("--timeout=")) {
+      const raw = arg.slice("--timeout=".length);
+      const t = parseInt(raw, 10);
+      if (isNaN(t) || t <= 0)
+        throw new Error(
+          `Invalid --timeout value: "${raw}". Must be a positive integer (milliseconds).`,
+        );
+      globalOpts.timeout = t;
     } else if (arg === "--output" && i + 1 < args.length) {
       const fmt = args[++i];
       if (!["table", "json", "yaml"].includes(fmt))
@@ -107,6 +122,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "scan",
     "chat",
     "check",
+    "verify",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([
@@ -132,6 +148,10 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "agents",
     "session",
     "plugins",
+    "audit",
+    "reset",
+    "delete",
+    "logout",
   ]);
 
   const command: string[] = [];

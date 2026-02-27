@@ -13,6 +13,7 @@ export class SafeExecutor {
   private policy: ExecutionPolicy;
   private approvalHandler: ApprovalHandler;
   private auditLog: AuditEntry[] = [];
+  private tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
   constructor(options: SafeExecutorOptions = {}) {
     this.policy = { ...DEFAULT_POLICY, ...options.policy };
@@ -41,7 +42,10 @@ export class SafeExecutor {
 
     let generateOutput: ToolOutput;
     try {
-      generateOutput = await withTimeout(tool.generate(input as never), this.policy.timeoutMs);
+      generateOutput = await withTimeout(
+        tool.generate(input as never),
+        this.policy.generateTimeoutMs ?? this.policy.timeoutMs,
+      );
     } catch (err) {
       const status =
         err instanceof PolicyViolationError && err.rule === "timeoutMs"
@@ -54,11 +58,19 @@ export class SafeExecutor {
       });
     }
 
+    // Accumulate token usage from generate output
+    if (generateOutput.usage) {
+      this.tokenUsage.prompt += generateOutput.usage.promptTokens;
+      this.tokenUsage.completion += generateOutput.usage.completionTokens;
+      this.tokenUsage.total += generateOutput.usage.totalTokens;
+    }
+
     if (!generateOutput.success) {
       return this.buildResult(taskId, tool.name, "failed", startTime, {
         error: generateOutput.error,
         output: generateOutput.data,
         filesWritten,
+        usage: generateOutput.usage,
         metadata: meta,
       });
     }
@@ -67,7 +79,10 @@ export class SafeExecutor {
     let verification: VerificationResult | undefined;
     if (tool.verify && !this.policy.skipVerification) {
       try {
-        verification = await withTimeout(tool.verify(generateOutput.data), this.policy.timeoutMs);
+        verification = await withTimeout(
+          tool.verify(generateOutput.data),
+          this.policy.verifyTimeoutMs ?? this.policy.timeoutMs,
+        );
 
         if (!verification.passed) {
           const errorMessages = verification.issues
@@ -79,6 +94,7 @@ export class SafeExecutor {
             output: generateOutput.data,
             verification,
             filesWritten,
+            usage: generateOutput.usage,
             metadata: meta,
           });
         }
@@ -98,6 +114,7 @@ export class SafeExecutor {
           output: generateOutput.data,
           verification,
           filesWritten,
+          usage: generateOutput.usage,
           metadata: meta,
         });
       }
@@ -109,6 +126,7 @@ export class SafeExecutor {
         approval: "skipped",
         verification,
         filesWritten,
+        usage: generateOutput.usage,
         metadata: meta,
       });
     }
@@ -130,6 +148,7 @@ export class SafeExecutor {
           approval,
           verification,
           filesWritten,
+          usage: generateOutput.usage,
           metadata: meta,
         });
       }
@@ -138,7 +157,10 @@ export class SafeExecutor {
     }
 
     try {
-      const executeOutput = await withTimeout(tool.execute(input as never), this.policy.timeoutMs);
+      const executeOutput = await withTimeout(
+        tool.execute(input as never),
+        this.policy.executeTimeoutMs ?? this.policy.timeoutMs,
+      );
 
       // Extract file metadata from tool output
       if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
@@ -152,6 +174,7 @@ export class SafeExecutor {
           verification,
           filesWritten,
           filesModified,
+          usage: generateOutput.usage,
           metadata: meta,
         });
       }
@@ -162,6 +185,7 @@ export class SafeExecutor {
         verification,
         filesWritten,
         filesModified,
+        usage: generateOutput.usage,
         metadata: meta,
       });
     } catch (err) {
@@ -174,6 +198,7 @@ export class SafeExecutor {
         approval,
         verification,
         filesWritten,
+        usage: generateOutput.usage,
         metadata: meta,
       });
     }
@@ -181,6 +206,10 @@ export class SafeExecutor {
 
   getAuditLog(): AuditEntry[] {
     return [...this.auditLog];
+  }
+
+  getTokenUsage(): { prompt: number; completion: number; total: number } {
+    return { ...this.tokenUsage };
   }
 
   private buildResult(
@@ -195,6 +224,7 @@ export class SafeExecutor {
       verification?: VerificationResult;
       filesWritten: string[];
       filesModified?: string[];
+      usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
       metadata?: Record<string, unknown>;
     },
   ): ExecutionResult {
@@ -214,6 +244,11 @@ export class SafeExecutor {
       filesModified: details.filesModified ?? [],
       durationMs,
     };
+
+    // Enrich audit entry with token usage if available
+    if (details.usage) {
+      auditEntry.usage = details.usage;
+    }
 
     // Enrich audit entry with plugin metadata if provided
     const meta = details.metadata;

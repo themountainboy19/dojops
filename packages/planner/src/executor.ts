@@ -20,7 +20,10 @@ function resolveInputRefs(
     if (typeof value === "string" && value.startsWith("$ref:")) {
       const refId = value.slice(5);
       const refResult = results.get(refId);
-      resolved[key] = refResult?.output;
+      if (refResult === undefined) {
+        throw new Error(`$ref references unknown task: ${refId}`);
+      }
+      resolved[key] = refResult.output;
     } else {
       resolved[key] = value;
     }
@@ -77,6 +80,19 @@ function topologicalSort(tasks: TaskNode[]): TaskNode[] {
 
 export interface PlannerExecuteOptions {
   completedTaskIds?: Set<string>;
+  /** Maximum number of tasks to execute in parallel within a wave (default: 3) */
+  maxConcurrency?: number;
+}
+
+async function executeInChunks<T>(
+  items: T[],
+  maxConcurrency: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  for (let i = 0; i < items.length; i += maxConcurrency) {
+    const chunk = items.slice(i, i + maxConcurrency);
+    await Promise.all(chunk.map(fn));
+  }
 }
 
 export class PlannerExecutor {
@@ -97,6 +113,7 @@ export class PlannerExecutor {
     const results = new Map<string, TaskResult>();
     const failed = new Set<string>();
     const completedTaskIds = options?.completedTaskIds ?? new Set<string>();
+    const maxConcurrency = options?.maxConcurrency ?? 3;
 
     // Build in-degree map for wave-based parallel execution
     const inDegree = new Map<string, number>();
@@ -124,7 +141,7 @@ export class PlannerExecutor {
       const wave = [...ready];
       ready.clear();
 
-      const wavePromises = wave.map(async (taskId) => {
+      await executeInChunks(wave, maxConcurrency, async (taskId) => {
         const task = taskMap.get(taskId)!;
         processed.add(taskId);
 
@@ -212,8 +229,6 @@ export class PlannerExecutor {
           this.logger.taskEnd(task.id, "failed", error);
         }
       });
-
-      await Promise.all(wavePromises);
 
       // After wave completes, find newly ready tasks
       for (const completedId of wave) {

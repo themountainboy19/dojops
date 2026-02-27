@@ -10,6 +10,7 @@ import {
   SpecialistConfig,
   CIDebugger,
   InfraDiffAnalyzer,
+  withRetry,
 } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { createToolRegistry, ToolRegistry, discoverCustomAgents } from "@dojops/tool-registry";
@@ -27,7 +28,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   const model = options?.model ?? process.env.DOJOPS_MODEL;
 
   if (providerName === "ollama") {
-    return new OllamaProvider(undefined, model);
+    return withRetry(new OllamaProvider(undefined, model));
   } else if (providerName === "anthropic") {
     const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!key) {
@@ -35,7 +36,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
         "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: dojops login --token <KEY> --provider anthropic",
       );
     }
-    return new AnthropicProvider(key, model);
+    return withRetry(new AnthropicProvider(key, model));
   } else if (providerName === "deepseek") {
     const key = options?.apiKey ?? process.env.DEEPSEEK_API_KEY;
     if (!key) {
@@ -43,7 +44,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
         "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: dojops login --token <KEY> --provider deepseek",
       );
     }
-    return new DeepSeekProvider(key, model);
+    return withRetry(new DeepSeekProvider(key, model));
   } else if (providerName === "gemini") {
     const key = options?.apiKey ?? process.env.GEMINI_API_KEY;
     if (!key) {
@@ -51,7 +52,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
         "Gemini API key is required. Set GEMINI_API_KEY or run: dojops login --token <KEY> --provider gemini",
       );
     }
-    return new GeminiProvider(key, model);
+    return withRetry(new GeminiProvider(key, model));
   } else {
     const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {
@@ -59,7 +60,7 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
         "OpenAI API key is required. Set OPENAI_API_KEY or run: dojops login --token <KEY> --provider openai",
       );
     }
-    return new OpenAIProvider(key, model);
+    return withRetry(new OpenAIProvider(key, model));
   }
 }
 

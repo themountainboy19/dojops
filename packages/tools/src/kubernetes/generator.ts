@@ -13,6 +13,17 @@ export async function generateKubernetesManifest(
   existingContent?: string,
 ): Promise<KubernetesManifest> {
   const isUpdate = !!existingContent;
+  const resourceTypesNote = `
+You may also include optional resource types in the response:
+- "statefulSet": { "name", "replicas", "serviceName", "containers", "volumeClaimTemplates" }
+- "daemonSet": { "name", "containers", "labels" }
+- "cronJob": { "name", "schedule", "containers", "restartPolicy", "concurrencyPolicy" }
+- "pvcs": [{ "name", "accessModes", "storageClassName", "storage" }]
+- "rbac": { "role": { "name", "rules" }, "binding": { "name", "subjects" } }
+- "networkPolicy": { "name", "podSelector", "policyTypes", "ingress", "egress" }
+- "pdb": { "name", "minAvailable" or "maxUnavailable", "selector" }
+Only include these if relevant to the request.`;
+
   const system = isUpdate
     ? `You are a Kubernetes expert. Update the existing Kubernetes deployment and service configuration as structured JSON.
 Preserve existing structure and settings. Only add/modify what is requested.
@@ -37,6 +48,7 @@ You MUST respond with a JSON object matching this exact structure:
     "ports": [{ "port": ${port}, "targetPort": ${port}, "protocol": "TCP" }]
   }
 }
+${resourceTypesNote}
 
 IMPORTANT:
 - Do NOT use standard Kubernetes manifest format (no apiVersion, kind, metadata)
@@ -65,6 +77,7 @@ You MUST respond with a JSON object matching this exact structure:
     "ports": [{ "port": ${port}, "targetPort": ${port}, "protocol": "TCP" }]
   }
 }
+${resourceTypesNote}
 
 IMPORTANT:
 - Do NOT use standard Kubernetes manifest format (no apiVersion, kind, metadata)
@@ -216,6 +229,212 @@ export function manifestToYaml(
             minReplicas: hpa.minReplicas,
             maxReplicas: hpa.maxReplicas,
             ...(hpa.metrics.length > 0 ? { metrics: hpa.metrics } : {}),
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // StatefulSet
+  if (manifest.statefulSet) {
+    const ss = manifest.statefulSet;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "apps/v1",
+          kind: "StatefulSet",
+          metadata: { name: ss.name, namespace, labels: { app: ss.name } },
+          spec: {
+            replicas: ss.replicas,
+            serviceName: ss.serviceName,
+            selector: { matchLabels: { app: ss.name } },
+            template: {
+              metadata: { labels: { app: ss.name } },
+              spec: {
+                containers: ss.containers.map((c) => ({
+                  name: c.name,
+                  image: c.image,
+                  ports: c.ports,
+                  ...(c.env.length > 0 ? { env: c.env } : {}),
+                  ...(c.resources ? { resources: c.resources } : {}),
+                })),
+              },
+            },
+            ...(ss.volumeClaimTemplates.length > 0
+              ? {
+                  volumeClaimTemplates: ss.volumeClaimTemplates.map((vct) => ({
+                    metadata: { name: vct.name },
+                    spec: {
+                      accessModes: vct.accessModes,
+                      ...(vct.storageClassName ? { storageClassName: vct.storageClassName } : {}),
+                      resources: { requests: { storage: vct.storage } },
+                    },
+                  })),
+                }
+              : {}),
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // DaemonSet
+  if (manifest.daemonSet) {
+    const ds = manifest.daemonSet;
+    const dsLabels = { app: ds.name, ...ds.labels };
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "apps/v1",
+          kind: "DaemonSet",
+          metadata: { name: ds.name, namespace, labels: dsLabels },
+          spec: {
+            selector: { matchLabels: { app: ds.name } },
+            template: {
+              metadata: { labels: { app: ds.name } },
+              spec: {
+                containers: ds.containers.map((c) => ({
+                  name: c.name,
+                  image: c.image,
+                  ports: c.ports,
+                  ...(c.env.length > 0 ? { env: c.env } : {}),
+                  ...(c.resources ? { resources: c.resources } : {}),
+                })),
+              },
+            },
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // CronJob
+  if (manifest.cronJob) {
+    const cj = manifest.cronJob;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "batch/v1",
+          kind: "CronJob",
+          metadata: { name: cj.name, namespace },
+          spec: {
+            schedule: cj.schedule,
+            concurrencyPolicy: cj.concurrencyPolicy,
+            jobTemplate: {
+              spec: {
+                template: {
+                  spec: {
+                    restartPolicy: cj.restartPolicy,
+                    containers: cj.containers.map((c) => ({
+                      name: c.name,
+                      image: c.image,
+                      ports: c.ports,
+                      ...(c.env.length > 0 ? { env: c.env } : {}),
+                      ...(c.resources ? { resources: c.resources } : {}),
+                    })),
+                  },
+                },
+              },
+            },
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // PVCs
+  for (const pvc of manifest.pvcs ?? []) {
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "v1",
+          kind: "PersistentVolumeClaim",
+          metadata: { name: pvc.name, namespace },
+          spec: {
+            accessModes: pvc.accessModes,
+            ...(pvc.storageClassName ? { storageClassName: pvc.storageClassName } : {}),
+            resources: { requests: { storage: pvc.storage } },
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // RBAC
+  if (manifest.rbac) {
+    const rbac = manifest.rbac;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "rbac.authorization.k8s.io/v1",
+          kind: "Role",
+          metadata: { name: rbac.role.name, namespace },
+          rules: rbac.role.rules,
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "rbac.authorization.k8s.io/v1",
+          kind: "RoleBinding",
+          metadata: { name: rbac.binding.name, namespace },
+          roleRef: {
+            apiGroup: "rbac.authorization.k8s.io",
+            kind: "Role",
+            name: rbac.role.name,
+          },
+          subjects: rbac.binding.subjects,
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // NetworkPolicy
+  if (manifest.networkPolicy) {
+    const np = manifest.networkPolicy;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "networking.k8s.io/v1",
+          kind: "NetworkPolicy",
+          metadata: { name: np.name, namespace },
+          spec: {
+            podSelector: {
+              matchLabels: np.podSelector,
+            },
+            policyTypes: np.policyTypes,
+            ...(np.ingress ? { ingress: np.ingress } : {}),
+            ...(np.egress ? { egress: np.egress } : {}),
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // PodDisruptionBudget
+  if (manifest.pdb) {
+    const pdb = manifest.pdb;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "policy/v1",
+          kind: "PodDisruptionBudget",
+          metadata: { name: pdb.name, namespace },
+          spec: {
+            ...(pdb.minAvailable !== undefined ? { minAvailable: pdb.minAvailable } : {}),
+            ...(pdb.maxUnavailable !== undefined ? { maxUnavailable: pdb.maxUnavailable } : {}),
+            selector: {
+              matchLabels: pdb.selector,
+            },
           },
         },
         YAML_DUMP_OPTIONS,

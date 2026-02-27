@@ -3,6 +3,7 @@ import { z } from "zod";
 export const MakefileInputSchema = z.object({
   projectPath: z.string().describe("Root directory of the project to generate a Makefile for"),
   targets: z.string().optional().describe("Description of make targets to include"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

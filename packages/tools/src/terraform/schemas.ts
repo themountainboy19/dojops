@@ -9,6 +9,7 @@ export const TerraformInputSchema = z.object({
   provider: TerraformProviderEnum,
   resources: z.string().describe("Description of infrastructure resources to provision"),
   backendType: z.enum(["local", "s3", "gcs", "azurerm"]).default("local"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()
@@ -30,6 +31,23 @@ export const TerraformResourceSchema = z.object({
   type: z.string(),
   name: z.string(),
   config: z.record(z.unknown()),
+});
+
+export const TerraformLocalSchema = z.object({
+  name: z.string(),
+  value: z.unknown(),
+});
+
+export const TerraformDataSchema = z.object({
+  type: z.string(),
+  name: z.string(),
+  config: z.record(z.unknown()),
+});
+
+export const TerraformModuleSchema = z.object({
+  name: z.string(),
+  source: z.string(),
+  config: z.record(z.unknown()).default({}),
 });
 
 export const TerraformConfigSchema = z.object({
@@ -55,6 +73,9 @@ export const TerraformConfigSchema = z.object({
       }),
     )
     .default([]),
+  locals: z.array(TerraformLocalSchema).optional(),
+  dataSources: z.array(TerraformDataSchema).optional(),
+  modules: z.array(TerraformModuleSchema).optional(),
 });
 
 export type TerraformConfig = z.infer<typeof TerraformConfigSchema>;

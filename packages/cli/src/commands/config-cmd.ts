@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {
@@ -43,6 +44,29 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     } else {
       showConfig(config);
     }
+    return;
+  }
+
+  // dojops config reset — delete configuration file
+  if (args[0] === "reset") {
+    const configPath = getConfigPath();
+    if (!fs.existsSync(configPath)) {
+      p.log.info("No configuration file to reset.");
+      return;
+    }
+
+    if (!ctx.globalOpts.nonInteractive) {
+      const confirmed = await p.confirm({
+        message: `Delete configuration at ${configPath}?`,
+      });
+      if (p.isCancel(confirmed) || !confirmed) {
+        p.log.info("Cancelled.");
+        return;
+      }
+    }
+
+    fs.unlinkSync(configPath);
+    p.log.success("Configuration reset successfully.");
     return;
   }
 

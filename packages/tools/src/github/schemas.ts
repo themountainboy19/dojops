@@ -5,6 +5,10 @@ export const WorkflowStepSchema = z.object({
   uses: z.string().optional(),
   run: z.string().optional(),
   with: z.record(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  id: z.string().optional(),
+  if: z.string().optional(),
+  "continue-on-error": z.boolean().optional(),
 });
 
 export const WorkflowJobSchema = z.object({
@@ -12,6 +16,21 @@ export const WorkflowJobSchema = z.object({
   uses: z.string().optional(),
   with: z.record(z.unknown()).optional(),
   steps: z.array(WorkflowStepSchema).optional(),
+  needs: z.union([z.string(), z.array(z.string())]).optional(),
+  environment: z
+    .union([z.string(), z.object({ name: z.string(), url: z.string().optional() })])
+    .optional(),
+  strategy: z.record(z.unknown()).optional(),
+  concurrency: z
+    .union([
+      z.string(),
+      z.object({ group: z.string(), "cancel-in-progress": z.boolean().optional() }),
+    ])
+    .optional(),
+  permissions: z.record(z.string()).optional(),
+  outputs: z.record(z.string()).optional(),
+  env: z.record(z.string()).optional(),
+  services: z.record(z.unknown()).optional(),
 });
 
 export const WorkflowSchema = z.object({
@@ -28,6 +47,7 @@ export const GitHubActionsInputSchema = z.object({
     ),
   nodeVersion: z.string().default("20"),
   defaultBranch: z.string().default("main"),
+  environment: z.string().optional(),
   existingContent: z
     .string()
     .optional()

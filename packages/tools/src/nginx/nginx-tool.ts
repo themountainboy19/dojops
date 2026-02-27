@@ -29,7 +29,7 @@ export class NginxTool extends BaseTool<NginxInput> {
 
     try {
       const config = await generateNginxConfig(input, this.provider, existingContent ?? undefined);
-      const nginxConf = nginxConfigToString(config);
+      const nginxConf = nginxConfigToString(config, input.fullConfig);
 
       return {
         success: true,
