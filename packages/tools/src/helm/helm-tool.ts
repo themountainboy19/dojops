@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifyHelmChart } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { HelmInputSchema, HelmInput } from "./schemas";
 import {
@@ -65,6 +67,15 @@ export class HelmTool extends BaseTool<HelmInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as {
+      chartYaml?: string;
+      valuesYaml?: string;
+      templates?: Record<string, string>;
+    };
+    return verifyHelmChart(d?.chartYaml ?? "", d?.valuesYaml ?? "", d?.templates ?? {});
   }
 
   async execute(input: HelmInput): Promise<ToolOutput> {

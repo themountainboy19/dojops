@@ -5,6 +5,7 @@ import { ExitCode, CLIError } from "../exit-codes";
 import {
   loadProfile,
   saveProfile,
+  deleteProfile,
   listProfiles,
   getActiveProfile,
   setActiveProfile,
@@ -42,6 +43,19 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       }
       setActiveProfile(name);
       p.log.success(`Switched to profile "${name}".`);
+      break;
+    }
+    case "delete": {
+      const name = args[1];
+      if (!name) {
+        p.log.info(`  ${pc.dim("$")} dojops config profile delete <name>`);
+        throw new CLIError(ExitCode.VALIDATION_ERROR, "Profile name required.");
+      }
+      const deleted = deleteProfile(name);
+      if (!deleted) {
+        throw new CLIError(ExitCode.VALIDATION_ERROR, `Profile "${name}" not found.`);
+      }
+      p.log.success(`Profile "${name}" deleted.`);
       break;
     }
     case "list": {

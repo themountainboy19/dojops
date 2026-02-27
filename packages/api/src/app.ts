@@ -6,7 +6,7 @@ import path from "path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import { HistoryStore } from "./store";
-import { errorHandler } from "./middleware";
+import { errorHandler, authMiddleware, requestIdMiddleware, requestLogger } from "./middleware";
 import {
   createGenerateRouter,
   createPlanRouter,
@@ -32,10 +32,14 @@ export interface AppDependencies {
   pluginCount?: number;
   customAgentNames?: Set<string>;
   corsOrigin?: string | string[];
+  apiKey?: string;
 }
 
 export function createApp(deps: AppDependencies): Express {
   const app = express();
+
+  // Request ID (before all other middleware)
+  app.use(requestIdMiddleware);
 
   app.use(
     helmet({
@@ -51,8 +55,22 @@ export function createApp(deps: AppDependencies): Express {
       },
     }),
   );
-  app.use(cors({ origin: deps.corsOrigin ?? "http://localhost:3000" }));
+
+  // CORS: support env override via DOJOPS_CORS_ORIGIN (comma-separated origins)
+  const corsOrigin =
+    deps.corsOrigin ??
+    (process.env.DOJOPS_CORS_ORIGIN
+      ? process.env.DOJOPS_CORS_ORIGIN.split(",").map((s) => s.trim())
+      : "http://localhost:3000");
+  app.use(cors({ origin: corsOrigin }));
   app.use(express.json({ limit: "1mb" }));
+
+  // Structured request logging
+  app.use(requestLogger);
+
+  // API key auth (reads from deps or env; health check is always public)
+  const apiKey = deps.apiKey ?? process.env.DOJOPS_API_KEY;
+  app.use("/api/", authMiddleware(apiKey));
 
   // Rate limiting for API routes
   const apiLimiter = rateLimit({
@@ -71,11 +89,21 @@ export function createApp(deps: AppDependencies): Express {
   const metricsEnabled = !!deps.rootDir;
   const aggregator = deps.rootDir ? new MetricsAggregator(deps.rootDir) : null;
 
-  // Health check
-  app.get("/api/health", (_req, res) => {
+  // Health check (public, no auth required)
+  app.get("/api/health", async (_req, res) => {
+    let providerStatus: "ok" | "degraded" = "ok";
+    // Lightweight provider ping: try listModels if available
+    if (deps.provider.listModels) {
+      try {
+        await deps.provider.listModels();
+      } catch {
+        providerStatus = "degraded";
+      }
+    }
     res.json({
-      status: "ok",
+      status: providerStatus === "ok" ? "ok" : "degraded",
       provider: deps.provider.name,
+      providerStatus,
       tools: deps.tools.map((t) => t.name),
       pluginCount: deps.pluginCount ?? 0,
       metricsEnabled,

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
+import { redactSecrets } from "./redact";
 
 export class OpenAIProvider implements LLMProvider {
   name = "openai";
@@ -51,12 +52,20 @@ export class OpenAIProvider implements LLMProvider {
     }
     const content = choice.message.content ?? "";
 
+    const usage: LLMUsage | undefined = completion.usage
+      ? {
+          promptTokens: completion.usage.prompt_tokens,
+          completionTokens: completion.usage.completion_tokens,
+          totalTokens: completion.usage.total_tokens,
+        }
+      : undefined;
+
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed };
+      return { content, parsed, usage };
     }
 
-    return { content };
+    return { content, usage };
   }
 
   async listModels(): Promise<string[]> {
@@ -82,12 +91,12 @@ function extractApiError(err: unknown): string {
       try {
         const body = JSON.parse(jsonMatch[0]);
         const msg = body?.error?.message;
-        if (typeof msg === "string") return msg;
+        if (typeof msg === "string") return redactSecrets(msg);
       } catch {
         // fall through
       }
     }
-    return err.message;
+    return redactSecrets(err.message);
   }
-  return String(err);
+  return redactSecrets(String(err));
 }

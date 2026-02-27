@@ -1,5 +1,5 @@
 import axios from "axios";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 
 export class OllamaProvider implements LLMProvider {
@@ -11,6 +11,17 @@ export class OllamaProvider implements LLMProvider {
     model = "llama3",
   ) {
     this.model = model;
+    // Warn about plain HTTP to non-localhost endpoints
+    try {
+      const url = new URL(this.baseUrl);
+      if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.protocol === "http:") {
+        console.error(
+          "[WARN] Ollama connection uses plain HTTP to non-localhost endpoint. Consider using HTTPS.",
+        );
+      }
+    } catch {
+      // invalid URL — will fail at request time
+    }
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
@@ -58,12 +69,15 @@ export class OllamaProvider implements LLMProvider {
       throw err;
     }
 
+    // Ollama does not provide standardized token usage across endpoints
+    const usage: LLMUsage | undefined = undefined;
+
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed };
+      return { content, parsed, usage };
     }
 
-    return { content };
+    return { content, usage };
   }
 
   async listModels(): Promise<string[]> {

@@ -20,37 +20,63 @@ export class AgentRouter {
 
   route(prompt: string): RouteResult {
     const lower = prompt.toLowerCase();
-    let bestMatch: RouteResult | null = null;
+    const scored: Array<{ agent: SpecialistAgent; confidence: number; keywords: string[] }> = [];
 
     for (const agent of this.agents) {
       const matchedKeywords = agent.keywords.filter((kw) => lower.includes(kw));
       if (matchedKeywords.length === 0) continue;
 
-      // Weighted scoring: each keyword match contributes 0.3, plus a coverage
-      // bonus (matchRatio * 0.1), capped at 1.0.
-      // 1 match ≈ 40%, 2 matches ≈ 70-80%, 3+ matches ≈ 90-100%
       const matchRatio = matchedKeywords.length / agent.keywords.length;
       const confidence = Math.min(matchedKeywords.length * 0.3 + matchRatio * 0.1, 1.0);
 
-      if (!bestMatch || confidence > bestMatch.confidence) {
-        bestMatch = {
-          agent,
-          confidence,
-          reason: `Matched keywords: ${matchedKeywords.join(", ")}`,
-        };
-      }
+      scored.push({ agent, confidence, keywords: matchedKeywords });
     }
 
-    if (bestMatch) return bestMatch;
+    // Sort by confidence descending
+    scored.sort((a, b) => b.confidence - a.confidence);
 
-    if (this.agents.length === 0) {
+    const fallback = this.agents.find((a) => a.domain === "orchestration") ?? this.agents[0];
+    if (!fallback) {
       throw new Error("AgentRouter has no agents configured");
     }
-    const fallback = this.agents.find((a) => a.domain === "orchestration") ?? this.agents[0];
+
+    if (scored.length === 0) {
+      return {
+        agent: fallback,
+        confidence: 0,
+        reason: `No domain match, routing to ${fallback.name}`,
+      };
+    }
+
+    const best = scored[0];
+
+    // Low confidence — fall through to orchestrator
+    if (best.confidence < 0.4) {
+      return {
+        agent: fallback,
+        confidence: best.confidence,
+        reason: `Low confidence match (${best.keywords.join(", ")}), routing to ${fallback.name}`,
+      };
+    }
+
+    // Multi-domain ambiguity: if top 2 agents are within 0.1 of each other,
+    // route to orchestrator for decomposition
+    if (
+      scored.length >= 2 &&
+      scored[0].confidence - scored[1].confidence < 0.1 &&
+      scored[0].agent.domain !== scored[1].agent.domain
+    ) {
+      return {
+        agent: fallback,
+        confidence: scored[0].confidence,
+        reason: `Ambiguous match between ${scored[0].agent.name} and ${scored[1].agent.name}, routing to ${fallback.name}`,
+      };
+    }
+
     return {
-      agent: fallback,
-      confidence: 0,
-      reason: `No domain match, routing to ${fallback.name}`,
+      agent: best.agent,
+      confidence: best.confidence,
+      reason: `Matched keywords: ${best.keywords.join(", ")}`,
     };
   }
 

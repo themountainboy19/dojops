@@ -118,7 +118,11 @@ export function configToHcl(config: TerraformConfig): string {
   for (const resource of config.resources) {
     lines.push(`resource "${resource.type}" "${resource.name}" {`);
     for (const [k, v] of Object.entries(resource.config)) {
-      lines.push(`  ${k} = ${hclValue(v)}`);
+      if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        lines.push(`  ${k} ${hclBlock(v as Record<string, unknown>, 2)}`);
+      } else {
+        lines.push(`  ${k} = ${hclValue(v)}`);
+      }
     }
     lines.push(`}`);
     lines.push(``);
@@ -153,5 +157,29 @@ function escapeHclString(s: string): string {
 function hclValue(v: unknown): string {
   if (typeof v === "string") return `"${escapeHclString(v)}"`;
   if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) {
+    if (v.length === 0) return "[]";
+    if (v.every((item) => typeof item !== "object" || item === null)) {
+      return `[${v.map((item) => hclValue(item)).join(", ")}]`;
+    }
+    return `[${v.map((item) => hclValue(item)).join(", ")}]`;
+  }
+  if (typeof v === "object" && v !== null) {
+    return hclBlock(v as Record<string, unknown>, 2);
+  }
   return JSON.stringify(v);
+}
+
+function hclBlock(obj: Record<string, unknown>, indent: number): string {
+  const pad = " ".repeat(indent);
+  const lines: string[] = ["{"];
+  for (const [key, val] of Object.entries(obj)) {
+    if (typeof val === "object" && val !== null && !Array.isArray(val)) {
+      lines.push(`${pad}  ${key} ${hclBlock(val as Record<string, unknown>, indent + 2)}`);
+    } else {
+      lines.push(`${pad}  ${key} = ${hclValue(val)}`);
+    }
+  }
+  lines.push(`${pad}}`);
+  return lines.join("\n");
 }

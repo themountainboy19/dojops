@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifyMakefile } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { MakefileInputSchema, MakefileInput } from "./schemas";
 import { detectMakefileContext } from "./detector";
@@ -60,6 +62,11 @@ export class MakefileTool extends BaseTool<MakefileInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { makefile?: string };
+    return verifyMakefile(d?.makefile ?? "");
   }
 
   async execute(input: MakefileInput): Promise<ToolOutput> {

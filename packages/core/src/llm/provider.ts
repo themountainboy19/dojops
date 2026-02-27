@@ -14,9 +14,16 @@ export interface LLMRequest {
   schema?: ZodTypeAny;
 }
 
+export interface LLMUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
 export interface LLMResponse {
   content: string;
   parsed?: unknown;
+  usage?: LLMUsage;
 }
 
 export interface LLMProvider {

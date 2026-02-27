@@ -39,6 +39,14 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     if (!process.env[envVar]) process.env[envVar] = apiKey;
   }
 
+  // Startup validation: warn if no API key configured for cloud providers
+  if (providerName !== "ollama" && !apiKey) {
+    p.log.warn(
+      `No API key found for ${pc.bold(providerName)}. Requests will fail until a key is configured.`,
+    );
+    p.log.info(`  ${pc.dim("$")} dojops auth login --provider ${providerName} --token <YOUR_KEY>`);
+  }
+
   const provider = createProvider({ provider: providerName, model, apiKey });
   const projectRoot = findProjectRoot() ?? undefined;
   const registry = createToolRegistry(provider, projectRoot);

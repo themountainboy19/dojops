@@ -1,0 +1,11 @@
+# Force LF line endings
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+
+# Lock files: generate only, do not diff
+pnpm-lock.yaml -diff linguist-generated

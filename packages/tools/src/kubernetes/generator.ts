@@ -129,8 +129,99 @@ export function manifestToYaml(
     },
   };
 
-  const deployYaml = yaml.dump(deployment, YAML_DUMP_OPTIONS);
-  const serviceYaml = yaml.dump(service, YAML_DUMP_OPTIONS);
+  const docs: string[] = [];
+  docs.push(yaml.dump(deployment, YAML_DUMP_OPTIONS));
+  docs.push(yaml.dump(service, YAML_DUMP_OPTIONS));
 
-  return `${deployYaml}---\n${serviceYaml}`;
+  // ConfigMaps
+  for (const cm of manifest.configMaps ?? []) {
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "v1",
+          kind: "ConfigMap",
+          metadata: { name: cm.name, namespace },
+          data: cm.data,
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // Secrets
+  for (const secret of manifest.secrets ?? []) {
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "v1",
+          kind: "Secret",
+          metadata: { name: secret.name, namespace },
+          type: secret.type,
+          data: secret.data,
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // Ingress
+  if (manifest.ingress) {
+    const ing = manifest.ingress;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "networking.k8s.io/v1",
+          kind: "Ingress",
+          metadata: {
+            name: ing.name,
+            namespace,
+            ...(Object.keys(ing.annotations).length > 0 ? { annotations: ing.annotations } : {}),
+          },
+          spec: {
+            ...(ing.className ? { ingressClassName: ing.className } : {}),
+            ...(ing.tls.length > 0 ? { tls: ing.tls } : {}),
+            rules: ing.rules.map((r) => ({
+              host: r.host,
+              http: {
+                paths: r.paths.map((p) => ({
+                  path: p.path,
+                  pathType: p.pathType,
+                  backend: {
+                    service: {
+                      name: p.serviceName,
+                      port: { number: p.servicePort },
+                    },
+                  },
+                })),
+              },
+            })),
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  // HPA
+  if (manifest.hpa) {
+    const hpa = manifest.hpa;
+    docs.push(
+      yaml.dump(
+        {
+          apiVersion: "autoscaling/v2",
+          kind: "HorizontalPodAutoscaler",
+          metadata: { name: hpa.name, namespace },
+          spec: {
+            scaleTargetRef: hpa.targetRef,
+            minReplicas: hpa.minReplicas,
+            maxReplicas: hpa.maxReplicas,
+            ...(hpa.metrics.length > 0 ? { metrics: hpa.metrics } : {}),
+          },
+        },
+        YAML_DUMP_OPTIONS,
+      ),
+    );
+  }
+
+  return docs.join("---\n");
 }

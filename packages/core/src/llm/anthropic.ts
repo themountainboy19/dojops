@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
+import { redactSecrets } from "./redact";
 
 export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
@@ -70,6 +71,14 @@ export class AnthropicProvider implements LLMProvider {
     const firstBlock = message.content[0];
     let content = firstBlock?.type === "text" ? firstBlock.text : "";
 
+    const usage: LLMUsage | undefined = message.usage
+      ? {
+          promptTokens: message.usage.input_tokens,
+          completionTokens: message.usage.output_tokens,
+          totalTokens: message.usage.input_tokens + message.usage.output_tokens,
+        }
+      : undefined;
+
     if (req.schema) {
       if (message.stop_reason === "max_tokens") {
         throw new Error(
@@ -80,10 +89,10 @@ export class AnthropicProvider implements LLMProvider {
         content = "{" + content;
       }
       const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed };
+      return { content, parsed, usage };
     }
 
-    return { content };
+    return { content, usage };
   }
 
   async listModels(): Promise<string[]> {
@@ -115,12 +124,12 @@ function extractApiError(err: unknown): string {
       try {
         const body = JSON.parse(jsonMatch[0]);
         const msg = body?.error?.message;
-        if (typeof msg === "string") return msg;
+        if (typeof msg === "string") return redactSecrets(msg);
       } catch {
         // fall through
       }
     }
-    return err.message;
+    return redactSecrets(err.message);
   }
-  return String(err);
+  return redactSecrets(String(err));
 }

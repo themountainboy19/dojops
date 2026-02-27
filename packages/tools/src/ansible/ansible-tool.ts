@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifyAnsiblePlaybook } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { AnsibleInputSchema, AnsibleInput } from "./schemas";
 import { generateAnsiblePlaybook, playbookToYaml } from "./generator";
@@ -48,6 +50,11 @@ export class AnsibleTool extends BaseTool<AnsibleInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { yaml?: string };
+    return verifyAnsiblePlaybook(d?.yaml ?? "");
   }
 
   async execute(input: AnsibleInput): Promise<ToolOutput> {

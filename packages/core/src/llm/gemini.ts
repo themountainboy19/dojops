@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
+import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
+import { redactSecrets } from "./redact";
 
 export class GeminiProvider implements LLMProvider {
   name = "gemini";
@@ -56,12 +57,29 @@ export class GeminiProvider implements LLMProvider {
       throw new Error("LLM response was blocked by safety filters.");
     }
 
+    const usageMeta = (
+      response as unknown as {
+        usageMetadata?: {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          totalTokenCount?: number;
+        };
+      }
+    ).usageMetadata;
+    const usage: LLMUsage | undefined = usageMeta
+      ? {
+          promptTokens: usageMeta.promptTokenCount ?? 0,
+          completionTokens: usageMeta.candidatesTokenCount ?? 0,
+          totalTokens: usageMeta.totalTokenCount ?? 0,
+        }
+      : undefined;
+
     if (req.schema) {
       const parsed = parseAndValidate(content, req.schema);
-      return { content, parsed };
+      return { content, parsed, usage };
     }
 
-    return { content };
+    return { content, usage };
   }
 
   async listModels(): Promise<string[]> {
@@ -87,12 +105,12 @@ function extractApiError(err: unknown): string {
       try {
         const body = JSON.parse(jsonMatch[0]);
         const msg = body?.error?.message ?? body?.message;
-        if (typeof msg === "string") return msg;
+        if (typeof msg === "string") return redactSecrets(msg);
       } catch {
         // fall through
       }
     }
-    return err.message;
+    return redactSecrets(err.message);
   }
-  return String(err);
+  return redactSecrets(String(err));
 }

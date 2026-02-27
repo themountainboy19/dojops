@@ -379,6 +379,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("profile create")}   Save current config as a named profile`);
       console.log(`  ${pc.cyan("profile use")}      Switch to a named profile`);
       console.log(`  ${pc.cyan("profile list")}     List all profiles`);
+      console.log(`  ${pc.cyan("profile delete")}   Remove a named profile`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Without arguments, launches an interactive configuration wizard.`);
       console.log(`  With flags, applies settings directly and exits.`);
@@ -398,16 +399,21 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(`  ${pc.dim("$")} dojops auth login [--token=KEY] [--provider=NAME]`);
       console.log(`  ${pc.dim("$")} dojops auth status`);
+      console.log(`  ${pc.dim("$")} dojops auth logout [--provider=NAME] [--all]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("login")}    Save API token for a provider`);
       console.log(`  ${pc.cyan("status")}   Show saved tokens and default provider`);
+      console.log(`  ${pc.cyan("logout")}   Remove saved API token`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--token=KEY")}      API key to save`);
       console.log(`  ${pc.cyan("--provider=NAME")}  Provider to authenticate with`);
+      console.log(`  ${pc.cyan("--all")}            Remove all saved tokens (logout)`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
       console.log(`  ${pc.dim("$")} dojops auth login --token=sk-...`);
       console.log(`  ${pc.dim("$")} dojops auth login --provider=anthropic --token=sk-ant-...`);
       console.log(`  ${pc.dim("$")} dojops auth status`);
+      console.log(`  ${pc.dim("$")} dojops auth logout`);
+      console.log(`  ${pc.dim("$")} dojops auth logout --all`);
       console.log();
       break;
 

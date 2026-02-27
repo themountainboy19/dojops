@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifySystemdUnit } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { SystemdInputSchema, SystemdInput } from "./schemas";
 import { generateSystemdConfig, systemdConfigToString } from "./generator";
@@ -48,6 +50,11 @@ export class SystemdTool extends BaseTool<SystemdInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { unitFile?: string };
+    return verifySystemdUnit(d?.unitFile ?? "");
   }
 
   async execute(input: SystemdInput): Promise<ToolOutput> {

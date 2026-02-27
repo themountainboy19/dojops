@@ -107,6 +107,14 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ agent: route.agent.name, content: result.content }));
+  } else if (ctx.globalOpts.output === "yaml") {
+    // Output as YAML document
+    console.log("---");
+    console.log(`agent: ${route.agent.name}`);
+    console.log("content: |");
+    for (const line of result.content.split("\n")) {
+      console.log(`  ${line}`);
+    }
   } else {
     p.log.message(result.content);
   }

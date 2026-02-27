@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifyPrometheusConfig } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { PrometheusInputSchema, PrometheusInput } from "./schemas";
 import { generatePrometheusConfig, prometheusToYaml, alertRulesToYaml } from "./generator";
@@ -49,6 +51,11 @@ export class PrometheusTool extends BaseTool<PrometheusInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { prometheusYaml?: string };
+    return verifyPrometheusConfig(d?.prometheusYaml ?? "");
   }
 
   async execute(input: PrometheusInput): Promise<ToolOutput> {

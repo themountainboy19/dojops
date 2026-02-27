@@ -3,10 +3,12 @@ import * as path from "path";
 import {
   BaseTool,
   ToolOutput,
+  VerificationResult,
   readExistingConfig,
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
+import { verifyNginxConfig } from "./verifier";
 import { LLMProvider } from "@dojops/core";
 import { NginxInputSchema, NginxInput } from "./schemas";
 import { generateNginxConfig, nginxConfigToString } from "./generator";
@@ -43,6 +45,11 @@ export class NginxTool extends BaseTool<NginxInput> {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const d = data as { nginxConf?: string };
+    return verifyNginxConfig(d?.nginxConf ?? "");
   }
 
   async execute(input: NginxInput): Promise<ToolOutput> {

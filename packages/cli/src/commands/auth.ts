@@ -14,11 +14,10 @@ export async function authCommand(args: string[], ctx: CLIContext): Promise<void
       return authLogin(args.slice(1));
     case "status":
       return authStatus();
+    case "logout":
+      return authLogout(args.slice(1), ctx);
     default:
       // If no subcommand, treat as login (dojops auth --token ...)
-      if (ctx.globalOpts.output === "json") {
-        // Support JSON output for auth status
-      }
       return authLogin(args);
   }
 }
@@ -72,6 +71,30 @@ async function authLogin(args: string[]): Promise<void> {
   ];
   p.note(noteLines.join("\n"), "Saved");
   p.log.info(pc.dim('You can now run: dojops "your prompt here"'));
+}
+
+async function authLogout(args: string[], ctx: CLIContext): Promise<void> {
+  const config = loadConfig();
+  const providerFlag = extractFlagValue(args, "--provider");
+  const all = args.includes("--all");
+
+  if (all) {
+    config.tokens = {};
+    saveConfig(config);
+    p.log.success("All tokens removed.");
+    return;
+  }
+
+  const provider = providerFlag ?? ctx.config.defaultProvider ?? "openai";
+
+  if (!config.tokens?.[provider]) {
+    p.log.info(`No token stored for ${pc.bold(provider)}.`);
+    return;
+  }
+
+  delete config.tokens[provider];
+  saveConfig(config);
+  p.log.success(`Token removed for ${pc.bold(provider)}.`);
 }
 
 async function authStatus(): Promise<void> {

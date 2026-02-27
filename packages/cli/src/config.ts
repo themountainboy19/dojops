@@ -146,6 +146,27 @@ export function saveProfile(name: string, config: DojOpsConfig): void {
   });
 }
 
+export function deleteProfile(name: string): boolean {
+  const file = path.join(profilesDir(), `${name}.json`);
+  if (!fs.existsSync(file)) return false;
+  fs.unlinkSync(file);
+  // If this was the active profile, clear it
+  const active = getActiveProfile();
+  if (active === name) {
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaFile(), "utf-8"));
+      delete meta.activeProfile;
+      fs.writeFileSync(metaFile(), JSON.stringify(meta, null, 2) + "\n", {
+        encoding: "utf-8",
+        mode: 0o600,
+      });
+    } catch {
+      // no meta file, nothing to clear
+    }
+  }
+  return true;
+}
+
 export function listProfiles(): string[] {
   const dir = profilesDir();
   if (!fs.existsSync(dir)) return [];

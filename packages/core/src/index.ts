@@ -7,5 +7,8 @@ export * from "./llm/deepseek";
 export * from "./llm/gemini";
 export * from "./llm/json-validator";
 export * from "./llm/deterministic-provider";
+export * from "./llm/retry";
+export * from "./llm/redact";
+export * from "./llm/sanitizer";
 export * from "./agents";
 export * from "./scanner";

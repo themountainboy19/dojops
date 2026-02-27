@@ -210,6 +210,21 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   // Ensure lock is released even on abrupt process.exit() calls
   process.once("exit", () => releaseLock(root));
 
+  // Graceful SIGINT/SIGTERM handling during apply
+  let interrupted = false;
+  const onSignal = (signal: string) => {
+    if (interrupted) {
+      // Second signal → force exit
+      releaseLock(root);
+      process.exit(ExitCode.GENERAL_ERROR);
+    }
+    interrupted = true;
+    p.log.warn(`\nReceived ${signal}. Finishing current task before stopping...`);
+    p.log.info("Press Ctrl+C again to force exit.");
+  };
+  process.on("SIGINT", () => onSignal("SIGINT"));
+  process.on("SIGTERM", () => onSignal("SIGTERM"));
+
   // Git dirty working tree check
   if (!force) {
     const gitStatus = checkGitDirty(root);
@@ -347,6 +362,12 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     }> = [];
 
     for (const taskResult of planResult.results) {
+      // Check if user interrupted
+      if (interrupted) {
+        p.log.warn("Apply interrupted by user. Partial results saved.");
+        break;
+      }
+
       // For resumed-completed tasks, preserve previous result
       if (completedTaskIds.has(taskResult.taskId)) {
         const prev = plan.results?.find((r) => r.taskId === taskResult.taskId);
