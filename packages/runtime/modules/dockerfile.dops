@@ -71,6 +71,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{outputPath}/Dockerfile", "{outputPath}/.dockerignore"]
+
+risk:
+  level: MEDIUM
+  rationale: "Build image changes may affect production runtime"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Dockerfile
 

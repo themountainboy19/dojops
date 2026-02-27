@@ -1,8 +1,9 @@
-import { MarkdownSections } from "./spec";
+import { DopsUpdate, MarkdownSections } from "./spec";
 
 export interface PromptContext {
   existingContent?: string;
   input?: Record<string, unknown>;
+  updateConfig?: DopsUpdate;
 }
 
 /**
@@ -22,12 +23,22 @@ export function compilePrompt(sections: MarkdownSections, context: PromptContext
   if (isUpdate && sections.updatePrompt) {
     let prompt = sections.updatePrompt;
     prompt = substituteVariables(prompt, context);
+    // Add preserve_structure instruction if configured
+    if (context.updateConfig?.strategy === "preserve_structure") {
+      prompt +=
+        "\n\nIMPORTANT: Preserve the overall structure and organization of the existing configuration.";
+    }
     parts.push(prompt);
   } else if (isUpdate) {
     // Fallback: use Prompt section + generic update suffix
     let prompt = substituteVariables(sections.prompt, context);
+    const preserveInstruction =
+      context.updateConfig?.strategy === "preserve_structure"
+        ? "Preserve the overall structure and organization of the existing configuration.\n"
+        : "";
     prompt +=
       "\n\nYou are UPDATING an existing configuration.\n" +
+      preserveInstruction +
       "Preserve ALL existing content unless explicitly asked to remove it.\n" +
       "Merge new content with existing.\n\n" +
       "--- EXISTING CONFIGURATION ---\n" +
@@ -69,9 +80,14 @@ export function compilePrompt(sections: MarkdownSections, context: PromptContext
 function substituteVariables(prompt: string, context: PromptContext): string {
   let result = prompt;
 
-  // Substitute {existingContent} if present
+  // Substitute existing content under the configured variable name
   if (context.existingContent !== undefined) {
-    result = result.replace(/\{existingContent\}/g, context.existingContent);
+    const injectAs = context.updateConfig?.injectAs ?? "existingContent";
+    result = result.replace(new RegExp(`\\{${injectAs}\\}`, "g"), context.existingContent);
+    // Always substitute {existingContent} as fallback if injectAs differs
+    if (injectAs !== "existingContent") {
+      result = result.replace(/\{existingContent\}/g, context.existingContent);
+    }
   }
 
   // Substitute {key} from input values

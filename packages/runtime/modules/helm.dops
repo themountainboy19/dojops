@@ -254,6 +254,28 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write:
+    - "{outputPath}/{chartName}/Chart.yaml"
+    - "{outputPath}/{chartName}/values.yaml"
+    - "{outputPath}/{chartName}/templates/deployment.yaml"
+    - "{outputPath}/{chartName}/templates/service.yaml"
+    - "{outputPath}/{chartName}/templates/_helpers.tpl"
+
+risk:
+  level: MEDIUM
+  rationale: "Chart changes affect Kubernetes deployments"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Helm
 

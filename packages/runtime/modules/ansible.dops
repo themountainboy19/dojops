@@ -73,6 +73,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{outputPath}/{playbookName}.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Playbook changes execute on remote hosts"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Ansible
 

@@ -70,6 +70,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{projectPath}/docker-compose.yml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Service stack changes affect running containers"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Docker Compose
 

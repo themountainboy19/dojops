@@ -20,6 +20,14 @@ export {
   PermissionsSchema,
   MetaSchema,
   OutputSchemaSchema,
+  ScopeSchema,
+  DopsScope,
+  RiskSchema,
+  DopsRisk,
+  ExecutionSchema,
+  DopsExecution,
+  UpdateSchema,
+  DopsUpdate,
 } from "./spec";
 
 // Parser
@@ -46,7 +54,13 @@ export { validateStructure } from "./structural-validator";
 export { verifyWithBinary, runVerification, BinaryVerifierInput } from "./binary-verifier";
 
 // File writer
-export { writeFiles, serializeForFile, detectExistingContent, WriteResult } from "./file-writer";
+export {
+  writeFiles,
+  serializeForFile,
+  detectExistingContent,
+  matchesScopePattern,
+  WriteResult,
+} from "./file-writer";
 
 // Parsers
 export { getParser, getAvailableParsers, SeverityMapping } from "./parsers/index";

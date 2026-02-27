@@ -266,4 +266,121 @@ test
     expect(result.valid).toBe(false);
     expect(result.errors![0]).toContain("Unknown verification parser");
   });
+
+  it("catches scope write path with path traversal", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: bad-scope
+  version: 1.0.0
+  description: "Bad scope"
+output:
+  type: object
+files:
+  - path: "out.yaml"
+scope:
+  write: ["../etc/passwd"]
+---
+## Prompt
+
+Prompt.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    const result = validateDopsModule(module);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain("Scope write path contains path traversal: '../etc/passwd'");
+  });
+
+  it("catches network required with risk declared", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: net-risk
+  version: 1.0.0
+  description: "Net risk"
+output:
+  type: object
+files:
+  - path: "out.yaml"
+risk:
+  level: LOW
+  rationale: "Test tool"
+permissions:
+  network: required
+---
+## Prompt
+
+Prompt.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    const result = validateDopsModule(module);
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain("network permission must be 'none' for v1 tools");
+  });
+
+  it("parses scope, risk, execution, update sections", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: full-sections
+  version: 1.0.0
+  description: "Tool with all new sections"
+output:
+  type: object
+files:
+  - path: "{outputPath}/out.yaml"
+scope:
+  write: ["{outputPath}/out.yaml"]
+risk:
+  level: MEDIUM
+  rationale: "Infra changes"
+execution:
+  mode: generate
+  deterministic: true
+  idempotent: true
+update:
+  strategy: preserve_structure
+  inputSource: file
+  injectAs: existingConfig
+---
+## Prompt
+
+Prompt.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    expect(module.frontmatter.scope).toBeDefined();
+    expect(module.frontmatter.scope!.write).toEqual(["{outputPath}/out.yaml"]);
+    expect(module.frontmatter.risk).toBeDefined();
+    expect(module.frontmatter.risk!.level).toBe("MEDIUM");
+    expect(module.frontmatter.risk!.rationale).toBe("Infra changes");
+    expect(module.frontmatter.execution).toBeDefined();
+    expect(module.frontmatter.execution!.mode).toBe("generate");
+    expect(module.frontmatter.execution!.deterministic).toBe(true);
+    expect(module.frontmatter.execution!.idempotent).toBe(true);
+    expect(module.frontmatter.update).toBeDefined();
+    expect(module.frontmatter.update!.strategy).toBe("preserve_structure");
+    expect(module.frontmatter.update!.injectAs).toBe("existingConfig");
+  });
+
+  it("backward compat: minimal dops still validates without new fields", () => {
+    const module = parseDopsString(MINIMAL_DOPS);
+    const result = validateDopsModule(module);
+    expect(result.valid).toBe(true);
+    expect(module.frontmatter.scope).toBeUndefined();
+    expect(module.frontmatter.risk).toBeUndefined();
+    expect(module.frontmatter.execution).toBeUndefined();
+    expect(module.frontmatter.update).toBeUndefined();
+  });
 });

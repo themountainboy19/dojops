@@ -69,6 +69,23 @@ permissions:
   filesystem: write
   child_process: none
   network: none
+
+scope:
+  write: ["{projectPath}/.github/workflows/ci.yml"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD workflow changes require PR review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # GitHub Actions
 

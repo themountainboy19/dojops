@@ -169,6 +169,116 @@ describe("DopsRuntime", () => {
     expect(runtime.keywords).toEqual(["simple", "test"]);
   });
 
+  it("returns default risk when not declared", () => {
+    const module = parseDopsString(SIMPLE_DOPS);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.risk).toEqual({
+      level: "LOW",
+      rationale: "No risk classification declared",
+    });
+  });
+
+  it("returns declared risk", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: risky-tool
+  version: 1.0.0
+  description: "Risky tool"
+output:
+  type: object
+  properties:
+    result:
+      type: string
+files:
+  - path: "out.yaml"
+risk:
+  level: HIGH
+  rationale: "Modifies production resources"
+---
+## Prompt
+
+Generate.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.risk.level).toBe("HIGH");
+    expect(runtime.risk.rationale).toBe("Modifies production resources");
+  });
+
+  it("includes riskLevel in metadata", () => {
+    const module = parseDopsString(SIMPLE_DOPS);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.metadata.riskLevel).toBe("LOW");
+  });
+
+  it("returns default executionMode when not declared", () => {
+    const module = parseDopsString(SIMPLE_DOPS);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.executionMode).toEqual({
+      mode: "generate",
+      deterministic: false,
+      idempotent: false,
+    });
+  });
+
+  it("returns declared executionMode", () => {
+    const dops = `---
+dops: v1
+meta:
+  name: exec-tool
+  version: 1.0.0
+  description: "Exec tool"
+output:
+  type: object
+  properties:
+    result:
+      type: string
+files:
+  - path: "out.yaml"
+execution:
+  mode: update
+  deterministic: true
+  idempotent: true
+---
+## Prompt
+
+Generate.
+
+## Keywords
+
+test
+`;
+    const module = parseDopsString(dops);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.executionMode.mode).toBe("update");
+    expect(runtime.isDeterministic).toBe(true);
+    expect(runtime.isIdempotent).toBe(true);
+  });
+
+  it("isDeterministic and isIdempotent default to false", () => {
+    const module = parseDopsString(SIMPLE_DOPS);
+    const provider = createMockProvider({});
+    const runtime = new DopsRuntime(module, provider);
+
+    expect(runtime.isDeterministic).toBe(false);
+    expect(runtime.isIdempotent).toBe(false);
+  });
+
   it("uses update prompt when existingContent is provided", async () => {
     const dops = `---
 dops: v1

@@ -69,6 +69,21 @@ export function validateDopsModule(module: DopsModule): DopsValidationResult {
     }
   }
 
+  // Validate scope.write paths do not contain path traversal
+  if (module.frontmatter.scope) {
+    for (const writePath of module.frontmatter.scope.write) {
+      const segments = writePath.split(/[/\\]/);
+      if (segments.includes("..")) {
+        errors.push(`Scope write path contains path traversal: '${writePath}'`);
+      }
+    }
+  }
+
+  // Validate network must be "none" when risk is declared (v1 constraint)
+  if (module.frontmatter.risk && module.frontmatter.permissions?.network === "required") {
+    errors.push("network permission must be 'none' for v1 tools");
+  }
+
   // Validate verification binary references a known parser
   if (module.frontmatter.verification?.binary) {
     const knownParsers = [

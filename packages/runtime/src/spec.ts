@@ -154,6 +154,43 @@ export const MetaSchema = z.object({
   repository: z.string().optional(),
 });
 
+// ── Scope ───────────────────────────────────────────
+
+export const ScopeSchema = z.object({
+  write: z.array(z.string().min(1)).min(1),
+});
+
+export type DopsScope = z.infer<typeof ScopeSchema>;
+
+// ── Risk ────────────────────────────────────────────
+
+export const RiskSchema = z.object({
+  level: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  rationale: z.string().min(1).max(500),
+});
+
+export type DopsRisk = z.infer<typeof RiskSchema>;
+
+// ── Execution ───────────────────────────────────────
+
+export const ExecutionSchema = z.object({
+  mode: z.enum(["generate", "update"]).default("generate"),
+  deterministic: z.boolean().default(false),
+  idempotent: z.boolean().default(false),
+});
+
+export type DopsExecution = z.infer<typeof ExecutionSchema>;
+
+// ── Update ──────────────────────────────────────────
+
+export const UpdateSchema = z.object({
+  strategy: z.enum(["replace", "preserve_structure"]).default("replace"),
+  inputSource: z.enum(["file"]).default("file"),
+  injectAs: z.string().default("existingContent"),
+});
+
+export type DopsUpdate = z.infer<typeof UpdateSchema>;
+
 // ── Frontmatter (YAML section) ───────────────────────
 
 export const DopsFrontmatterSchema = z.object({
@@ -170,6 +207,10 @@ export const DopsFrontmatterSchema = z.object({
   detection: DetectionConfigSchema.optional(),
   verification: VerificationConfigSchema.optional(),
   permissions: PermissionsSchema.optional(),
+  scope: ScopeSchema.optional(),
+  risk: RiskSchema.optional(),
+  execution: ExecutionSchema.optional(),
+  update: UpdateSchema.optional(),
 });
 
 export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;

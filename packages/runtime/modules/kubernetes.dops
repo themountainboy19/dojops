@@ -208,6 +208,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{outputPath}/{appName}.yaml"]
+
+risk:
+  level: MEDIUM
+  rationale: "Cluster configuration changes affect running services"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Kubernetes
 

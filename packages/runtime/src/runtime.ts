@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
 import { ZodTypeAny } from "zod";
-import { DopsModule, FileSpec } from "./spec";
+import { DopsExecution, DopsModule, DopsRisk, FileSpec } from "./spec";
 import { compileInputSchema, compileOutputSchema } from "./schema-compiler";
 import { compilePrompt, PromptContext } from "./prompt-compiler";
 import { validateStructure } from "./structural-validator";
@@ -20,6 +20,7 @@ export interface ToolMetadata {
   toolHash: string;
   toolSource: string;
   systemPromptHash: string;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
 }
 
 /**
@@ -86,6 +87,7 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
       const context: PromptContext = {
         existingContent,
         input,
+        updateConfig: this.module.frontmatter.update,
       };
       const systemPrompt = compilePrompt(this.module.sections, context);
 
@@ -133,8 +135,14 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
     };
 
     try {
-      // 2. Write files
-      const writeResult = writeFiles(generated, this.module.frontmatter.files, input, isUpdate);
+      // 2. Write files (with optional scope enforcement)
+      const writeResult = writeFiles(
+        generated,
+        this.module.frontmatter.files,
+        input,
+        isUpdate,
+        this.module.frontmatter.scope,
+      );
 
       return {
         success: true,
@@ -199,7 +207,35 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
       toolHash: this._moduleHash,
       toolSource: "dops",
       systemPromptHash: this._systemPromptHash,
+      riskLevel: this.risk.level,
     };
+  }
+
+  get risk(): DopsRisk {
+    return (
+      this.module.frontmatter.risk ?? {
+        level: "LOW",
+        rationale: "No risk classification declared",
+      }
+    );
+  }
+
+  get executionMode(): DopsExecution {
+    return (
+      this.module.frontmatter.execution ?? {
+        mode: "generate",
+        deterministic: false,
+        idempotent: false,
+      }
+    );
+  }
+
+  get isDeterministic(): boolean {
+    return this.executionMode.deterministic;
+  }
+
+  get isIdempotent(): boolean {
+    return this.executionMode.idempotent;
   }
 
   get keywords(): string[] {

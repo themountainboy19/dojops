@@ -72,6 +72,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{outputPath}/{serviceName}.service"]
+
+risk:
+  level: MEDIUM
+  rationale: "Service unit changes affect system processes"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Systemd
 

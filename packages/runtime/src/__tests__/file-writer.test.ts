@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { serializeForFile, detectExistingContent } from "../file-writer";
+import {
+  serializeForFile,
+  detectExistingContent,
+  writeFiles,
+  matchesScopePattern,
+} from "../file-writer";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -124,6 +129,82 @@ describe("detectExistingContent", () => {
     try {
       const content = detectExistingContent(["*.tf"], tmpDir);
       expect(content).toBeNull();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("matchesScopePattern", () => {
+  it("matches after variable expansion", () => {
+    const result = matchesScopePattern("infra/main.tf", ["{projectPath}/main.tf"], {
+      projectPath: "infra",
+    });
+    expect(result).toBe(true);
+  });
+
+  it("rejects non-matching path", () => {
+    const result = matchesScopePattern("other/secret.txt", ["{projectPath}/main.tf"], {
+      projectPath: "infra",
+    });
+    expect(result).toBe(false);
+  });
+
+  it("matches any pattern in the list", () => {
+    const result = matchesScopePattern(
+      "out/.dockerignore",
+      ["{outputPath}/Dockerfile", "{outputPath}/.dockerignore"],
+      { outputPath: "out" },
+    );
+    expect(result).toBe(true);
+  });
+});
+
+describe("writeFiles with scope enforcement", () => {
+  it("passes for in-scope paths", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-scope-"));
+    try {
+      const result = writeFiles(
+        { key: "value" },
+        [{ path: "{outputPath}/out.yaml", format: "yaml", source: "llm" as const }],
+        { outputPath: tmpDir },
+        false,
+        { write: ["{outputPath}/out.yaml"] },
+      );
+      expect(result.filesWritten).toHaveLength(1);
+      expect(fs.existsSync(path.join(tmpDir, "out.yaml"))).toBe(true);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws for out-of-scope paths", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-scope-"));
+    try {
+      expect(() =>
+        writeFiles(
+          { key: "value" },
+          [{ path: "{outputPath}/secret.txt", format: "raw", source: "llm" as const }],
+          { outputPath: tmpDir },
+          false,
+          { write: ["{outputPath}/out.yaml"] },
+        ),
+      ).toThrow("not in declared write scope");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows all paths when no scope is provided", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-scope-"));
+    try {
+      const result = writeFiles(
+        { key: "value" },
+        [{ path: "{outputPath}/anything.yaml", format: "yaml", source: "llm" as const }],
+        { outputPath: tmpDir },
+        false,
+      );
+      expect(result.filesWritten).toHaveLength(1);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

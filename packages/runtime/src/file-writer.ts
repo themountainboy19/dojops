@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { atomicWriteFileSync, backupFile, readExistingConfig } from "@dojops/sdk";
-import { FileSpec } from "./spec";
+import { DopsScope, FileSpec } from "./spec";
 import { serialize, SerializerOptions } from "./serializer";
 
 export interface WriteResult {
@@ -12,12 +12,15 @@ export interface WriteResult {
 /**
  * Write generated output to files according to file specs.
  * Handles serialization, backup, templates, and atomic writes.
+ * When `scope` is provided, enforces write boundary — only files matching
+ * a declared scope.write pattern (after variable expansion) are allowed.
  */
 export function writeFiles(
   data: unknown,
   fileSpecs: FileSpec[],
   input: Record<string, unknown>,
   isUpdate: boolean,
+  scope?: DopsScope,
 ): WriteResult {
   const filesWritten: string[] = [];
   const filesModified: string[] = [];
@@ -32,6 +35,13 @@ export function writeFiles(
     }
 
     const resolvedPath = resolveFilePath(fileSpec.path, input);
+
+    // Enforce scope write boundary
+    if (scope) {
+      if (!matchesScopePattern(resolvedPath, scope.write, input)) {
+        throw new Error(`File path '${resolvedPath}' not in declared write scope`);
+      }
+    }
 
     // Determine content
     let content: string;
@@ -186,4 +196,27 @@ function matchGlob(filename: string, pattern: string): boolean {
     return filename.endsWith(ext);
   }
   return filename === pattern;
+}
+
+/**
+ * Check if a resolved file path matches at least one scope.write pattern.
+ * Scope patterns use the same `{var}` syntax as file paths — variables
+ * are expanded before matching via simple string equality.
+ */
+export function matchesScopePattern(
+  resolvedPath: string,
+  scopePatterns: string[],
+  input: Record<string, unknown>,
+): boolean {
+  for (const pattern of scopePatterns) {
+    // Expand {var} placeholders in the scope pattern
+    let expanded = pattern;
+    for (const [key, value] of Object.entries(input)) {
+      if (typeof value === "string") {
+        expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value);
+      }
+    }
+    if (resolvedPath === expanded) return true;
+  }
+  return false;
 }

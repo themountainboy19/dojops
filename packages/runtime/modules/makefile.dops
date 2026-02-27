@@ -58,6 +58,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{projectPath}/Makefile"]
+
+risk:
+  level: LOW
+  rationale: "Build automation changes are local"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Makefile
 

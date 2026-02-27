@@ -67,6 +67,23 @@ permissions:
   filesystem: write
   child_process: none
   network: none
+
+scope:
+  write: ["{projectPath}/.gitlab-ci.yml"]
+
+risk:
+  level: LOW
+  rationale: "CI/CD pipeline changes require MR review"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # GitLab CI
 

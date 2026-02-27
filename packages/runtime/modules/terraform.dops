@@ -164,6 +164,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{projectPath}/main.tf"]
+
+risk:
+  level: MEDIUM
+  rationale: "Infrastructure changes may affect cloud resources"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Terraform
 

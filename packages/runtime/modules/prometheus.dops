@@ -84,6 +84,26 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write:
+    - "{outputPath}/prometheus.yml"
+    - "{outputPath}/alert-rules.yml"
+    - "{outputPath}/alertmanager.yml"
+
+risk:
+  level: LOW
+  rationale: "Monitoring config changes are observable"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Prometheus
 

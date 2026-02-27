@@ -68,6 +68,23 @@ permissions:
   filesystem: write
   child_process: required
   network: none
+
+scope:
+  write: ["{outputPath}/nginx.conf"]
+
+risk:
+  level: MEDIUM
+  rationale: "Web server config changes affect traffic routing"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
 ---
 # Nginx
 
