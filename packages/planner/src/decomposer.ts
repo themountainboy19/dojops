@@ -50,6 +50,21 @@ export function buildContextSection(ctx: RepoContext): string {
   parts.push(
     `\nTools automatically detect and read existing config files. For update/enhance tasks, just set the correct projectPath/outputPath — the tool handles existing file reading and preserves current configuration.`,
   );
+  parts.push(
+    `\nCanonical output paths by tool:
+- github-actions: projectPath="." (tool auto-creates .github/workflows/)
+- kubernetes: outputPath="k8s" (Kubernetes manifests go in k8s/ directory)
+- helm: outputPath="charts/<chart-name>" (Helm charts under charts/)
+- terraform: outputPath="terraform" or "." if .tf files already exist at root
+- dockerfile: outputPath="." (Dockerfile at project root)
+- docker-compose: outputPath="." (docker-compose.yml at root)
+- ansible: outputPath="ansible" (playbooks under ansible/)
+- prometheus: outputPath="monitoring" or "." if prometheus.yml exists
+- nginx: outputPath="." (nginx.conf at root or /etc/nginx/)
+- systemd: outputPath="." (service files at root)
+- makefile: outputPath="." (Makefile at root)
+- gitlab-ci: outputPath="." (.gitlab-ci.yml at root)`,
+  );
 
   return parts.join("\n");
 }
@@ -91,6 +106,8 @@ ${toolList}
 ${contextSection}
 
 IMPORTANT: Each task's "input" object MUST match the tool's input fields exactly. Use the correct field names, types, and provide all required fields. Do not invent fields that are not listed.
+
+Use canonical output paths: github-actions → projectPath="."; kubernetes → outputPath="k8s"; helm → outputPath="charts/<name>"; terraform → outputPath="terraform" (or "." if .tf already at root); dockerfile/docker-compose/makefile/gitlab-ci → outputPath="."; ansible → outputPath="ansible"; prometheus → outputPath="monitoring".
 
 Respond with a JSON object matching this structure:
 {

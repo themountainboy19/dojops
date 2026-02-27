@@ -401,6 +401,19 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     try {
       const insights = await enrichWithLLM(ctx, provider);
 
+      // Guard against blank LLM description — use fallback from scan data
+      if (!insights.projectDescription || insights.projectDescription.trim() === "") {
+        const langPart = ctx.primaryLanguage ? `${ctx.primaryLanguage} ` : "";
+        const infraParts: string[] = [];
+        if (ctx.infra.hasTerraform) infraParts.push("Terraform");
+        if (ctx.infra.hasKubernetes) infraParts.push("Kubernetes");
+        if (ctx.container.hasDockerfile) infraParts.push("Docker");
+        insights.projectDescription =
+          infraParts.length > 0
+            ? `A ${langPart}project with ${infraParts.join(", ")} infrastructure.`
+            : `A ${langPart}software project.`;
+      }
+
       // Merge insights into context and re-write
       ctx.llmInsights = insights;
       fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");

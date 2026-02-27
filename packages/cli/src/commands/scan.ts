@@ -41,34 +41,39 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
   // Find or init project (use --target if specified)
   let root: string;
+  let scanRoot: string;
   if (targetDir) {
-    root = path.resolve(targetDir);
-    if (!fs.existsSync(root)) {
-      throw new CLIError(ExitCode.VALIDATION_ERROR, `Target directory not found: ${root}`);
+    scanRoot = path.resolve(targetDir);
+    if (!fs.existsSync(scanRoot)) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Target directory not found: ${scanRoot}`);
     }
+    // Use project root for context/audit; fall back to target dir
+    root = findProjectRoot() ?? scanRoot;
   } else {
     root = findProjectRoot() ?? ctx.cwd;
+    scanRoot = root;
     if (!findProjectRoot()) {
       initProject(root);
     }
   }
 
-  // Load repo context if available
+  // Load repo context from project root (not scan target)
   const context = loadContext(root) ?? undefined;
 
   // Run scan
+  const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
   const scanSpinner = p.spinner();
-  scanSpinner.start(`Scanning project (${scanType})...`);
+  if (!isStructuredOutput) scanSpinner.start(`Scanning project (${scanType})...`);
 
   let report: ScanReport;
   try {
-    report = await runScan(root, scanType, context);
+    report = await runScan(scanRoot, scanType, context);
   } catch (err) {
-    scanSpinner.stop("Scan failed");
+    if (!isStructuredOutput) scanSpinner.stop("Scan failed");
     throw new CLIError(ExitCode.GENERAL_ERROR, err instanceof Error ? err.message : String(err));
   }
 
-  scanSpinner.stop(`Scan complete in ${report.durationMs}ms`);
+  if (!isStructuredOutput) scanSpinner.stop(`Scan complete in ${report.durationMs}ms`);
 
   // JSON output mode
   if (ctx.globalOpts.output === "json") {
@@ -238,7 +243,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
 
             // Re-run scan to show delta
             p.log.step("Re-scanning to verify fixes...");
-            rescanReport = await runScan(root, scanType, context);
+            rescanReport = await runScan(scanRoot, scanType, context);
             const delta = report.summary.total - rescanReport.summary.total;
             if (delta > 0) {
               p.log.success(`Fixed ${delta} issue(s) (${rescanReport.summary.total} remaining)`);

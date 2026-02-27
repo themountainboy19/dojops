@@ -106,7 +106,7 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
   }
 
   if (!result.passed) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Verification failed.");
+    throw new CLIError(ExitCode.VALIDATION_ERROR);
   }
 }
 

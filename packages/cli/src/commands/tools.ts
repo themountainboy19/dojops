@@ -269,11 +269,36 @@ export const toolsPluginsListCommand: CommandHandler = async (_args, ctx) => {
 export const toolsPluginsValidateCommand: CommandHandler = async (args) => {
   const pluginPath = args[0];
   if (!pluginPath) {
-    p.log.info(`  ${pc.dim("$")} dojops tools plugins validate <path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plugin path required.");
+    p.log.info(`  ${pc.dim("$")} dojops tools plugins validate <name-or-path>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Plugin name or path required.");
   }
 
-  const manifestPath = path.resolve(pluginPath, "plugin.yaml");
+  // If it looks like a plain name (no slashes), resolve from .dojops/plugins/<name>/
+  let resolvedDir: string;
+  if (!pluginPath.includes("/") && !pluginPath.includes("\\") && !pluginPath.includes(".")) {
+    const projectRoot = findProjectRoot();
+    const projectPluginDir = projectRoot
+      ? path.join(projectRoot, ".dojops", "plugins", pluginPath)
+      : path.resolve(".dojops", "plugins", pluginPath);
+    const globalPluginDir = path.join(
+      process.env.HOME ?? process.env.USERPROFILE ?? "~",
+      ".dojops",
+      "plugins",
+      pluginPath,
+    );
+
+    if (fs.existsSync(path.join(projectPluginDir, "plugin.yaml"))) {
+      resolvedDir = projectPluginDir;
+    } else if (fs.existsSync(path.join(globalPluginDir, "plugin.yaml"))) {
+      resolvedDir = globalPluginDir;
+    } else {
+      resolvedDir = projectPluginDir; // will fail below with a clear message
+    }
+  } else {
+    resolvedDir = path.resolve(pluginPath);
+  }
+
+  const manifestPath = path.join(resolvedDir, "plugin.yaml");
   if (!fs.existsSync(manifestPath)) {
     throw new CLIError(ExitCode.VALIDATION_ERROR, `No plugin.yaml found at ${manifestPath}`);
   }
@@ -289,7 +314,7 @@ export const toolsPluginsValidateCommand: CommandHandler = async (args) => {
       );
 
       // Check input schema file exists
-      const inputSchemaPath = path.resolve(pluginPath, result.manifest!.inputSchema);
+      const inputSchemaPath = path.join(resolvedDir, result.manifest!.inputSchema);
       if (!fs.existsSync(inputSchemaPath)) {
         p.log.warn(`Input schema file not found: ${inputSchemaPath}`);
       } else {

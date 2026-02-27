@@ -42,14 +42,16 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
       p.log.info(`Using agent: ${pc.bold(match.name)} (forced via --agent)`);
     }
   } else {
+    const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
     const s = p.spinner();
-    s.start("Routing to specialist agent...");
+    if (!isStructuredOutput) s.start("Routing to specialist agent...");
     route = router.route(prompt);
-    s.stop(
-      route.confidence > 0
-        ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
-        : "Using default agent.",
-    );
+    if (!isStructuredOutput)
+      s.stop(
+        route.confidence > 0
+          ? `Routed to ${pc.bold(route.agent.name)} — ${route.reason}`
+          : "Using default agent.",
+      );
     if (ctx.globalOpts.verbose) {
       p.log.info(
         `Agent: ${pc.bold(route.agent.name)} (confidence: ${route.confidence.toFixed(2)}, domain: ${route.agent.domain})`,
@@ -93,12 +95,13 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     }
   }
 
+  const isStructured = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
   const s2 = p.spinner();
-  s2.start("Thinking...");
+  if (!isStructured) s2.start("Thinking...");
   const genStart = Date.now();
   const result = await route.agent.run({ prompt: sanitizeUserInput(augmentedPrompt) });
   const genDuration = Date.now() - genStart;
-  s2.stop("Done.");
+  if (!isStructured) s2.stop("Done.");
 
   if (ctx.globalOpts.verbose) {
     p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);

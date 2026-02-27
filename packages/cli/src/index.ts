@@ -61,6 +61,16 @@ registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
 registerCommand("verify", verifyCommand);
 
+// `dojops help <command>` → show per-command help
+registerCommand("help", async (args) => {
+  const subCommand = args[0];
+  if (subCommand) {
+    printCommandHelp(subCommand);
+  } else {
+    printHelp();
+  }
+});
+
 // Nested: inspect <sub>, agents <sub>, history <sub>
 // Agents/history handlers use an internal dispatcher that expects args[0] to be the subcommand.
 // Since resolveCommand strips the subcommand from args, we wrap each registration to prepend it.
@@ -115,9 +125,17 @@ async function main() {
   // Parse global options first
   const { globalOpts, remaining } = parseGlobalOptions(rawArgs);
 
-  // In CI, force non-interactive mode
-  if (isCI) {
+  // In CI or non-TTY, force non-interactive mode and suppress color
+  if (isCI || !process.stdout.isTTY) {
     globalOpts.nonInteractive = true;
+    if (!process.stdout.isTTY) {
+      process.env.NO_COLOR = "1";
+    }
+  }
+
+  // When --non-interactive is explicitly set, suppress ANSI even on TTY
+  if (globalOpts.nonInteractive && !process.env.NO_COLOR) {
+    process.env.NO_COLOR = "1";
   }
 
   // Handle --no-color
@@ -186,6 +204,7 @@ async function main() {
     "agents",
     "history",
     "serve",
+    "help",
   ]);
   const isQuiet = command.length > 0 && quietCommands.has(command[0]);
 

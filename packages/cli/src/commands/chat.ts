@@ -81,11 +81,12 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
   // Single-message mode: --message / -m flag
   if (messageFlag) {
+    const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
     const s = p.spinner();
-    s.start("Thinking...");
+    if (!isStructuredOutput) s.start("Thinking...");
     try {
       const result = await session.send(messageFlag);
-      s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
+      if (!isStructuredOutput) s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
 
       if (ctx.globalOpts.output === "json") {
         console.log(JSON.stringify({ agent: result.agent, content: result.content }));
@@ -93,7 +94,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
         p.log.message(result.content);
       }
     } catch (err) {
-      s.stop("Error");
+      if (!isStructuredOutput) s.stop("Error");
       p.log.error(err instanceof Error ? err.message : String(err));
     }
     saveChatSession(rootDir, session.getState());

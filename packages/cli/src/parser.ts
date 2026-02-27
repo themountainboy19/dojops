@@ -123,6 +123,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "chat",
     "check",
     "verify",
+    "help",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([

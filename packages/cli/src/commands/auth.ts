@@ -11,18 +11,18 @@ export async function authCommand(args: string[], ctx: CLIContext): Promise<void
 
   switch (sub) {
     case "login":
-      return authLogin(args.slice(1));
+      return authLogin(args.slice(1), ctx);
     case "status":
       return authStatus();
     case "logout":
       return authLogout(args.slice(1), ctx);
     default:
       // If no subcommand, treat as login (dojops auth --token ...)
-      return authLogin(args);
+      return authLogin(args, ctx);
   }
 }
 
-async function authLogin(args: string[]): Promise<void> {
+async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   const token = extractFlagValue(args, "--token");
   if (!token) {
     p.log.warn('Tip: Use "dojops config" for interactive setup, or provide --token:');
@@ -33,7 +33,7 @@ async function authLogin(args: string[]): Promise<void> {
 
   const config = loadConfig();
   const providerFlag = extractFlagValue(args, "--provider");
-  const provider = providerFlag ?? config.defaultProvider ?? "openai";
+  const provider = providerFlag ?? ctx.globalOpts.provider ?? config.defaultProvider ?? "openai";
 
   try {
     validateProvider(provider);
@@ -88,7 +88,8 @@ async function authLogout(args: string[], ctx: CLIContext): Promise<void> {
     return;
   }
 
-  const provider = providerFlag ?? ctx.config.defaultProvider ?? "openai";
+  const provider =
+    providerFlag ?? ctx.globalOpts.provider ?? ctx.config.defaultProvider ?? "openai";
 
   if (!config.tokens?.[provider]) {
     p.log.info(`No token stored for ${pc.bold(provider)}.`);

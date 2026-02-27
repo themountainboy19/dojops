@@ -646,15 +646,22 @@ export function collectDevopsFiles(
   }
   if (container.composePath) files.add(container.composePath);
 
-  // Terraform
+  // Terraform (root + common subdirectories)
   if (infra.hasTerraform) {
-    try {
-      const entries = fs.readdirSync(root);
-      for (const f of entries) {
-        if (f.endsWith(".tf")) files.add(f);
+    const tfDirs = ["", "terraform", "infra", "infrastructure", "tf", "iac", "terraform-iac"];
+    for (const dir of tfDirs) {
+      const dirPath = dir ? path.join(root, dir) : root;
+      try {
+        if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) continue;
+        const entries = fs.readdirSync(dirPath);
+        for (const f of entries) {
+          if (f.endsWith(".tf") || f === "terraform.tfvars" || f === "terraform.tfvars.json") {
+            files.add(dir ? `${dir}/${f}` : f);
+          }
+        }
+      } catch {
+        // Unreadable
       }
-    } catch {
-      // Unreadable
     }
   }
 

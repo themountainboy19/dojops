@@ -176,10 +176,16 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     return;
   }
 
-  // HIGH risk gate: always require explicit confirmation even with --yes
+  // HIGH risk gate: require explicit confirmation even with --yes
   if (plan.risk === "HIGH" && !force) {
     p.log.warn(pc.bold(pc.red("This plan is classified as HIGH risk.")));
-    if (autoApprove) {
+    if (ctx.globalOpts.nonInteractive) {
+      // In non-interactive mode (CI), HIGH risk plans require --force
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        "HIGH risk plans require --force in non-interactive mode.",
+      );
+    } else if (autoApprove) {
       p.log.warn("HIGH risk plans require explicit confirmation. Use --force to bypass.");
       const highRiskConfirm = await p.confirm({
         message: "This is a HIGH risk plan. Are you sure you want to proceed?",
@@ -471,7 +477,10 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const allCompleted = newResults.every(
       (r) => r.status === "completed" && (!r.executionStatus || r.executionStatus === "completed"),
     );
-    const status = allCompleted ? "SUCCESS" : planResult.success ? "PARTIAL" : "FAILURE";
+    const someCompleted = newResults.some(
+      (r) => r.status === "completed" && (!r.executionStatus || r.executionStatus === "completed"),
+    );
+    const status = allCompleted ? "SUCCESS" : someCompleted ? "PARTIAL" : "FAILURE";
 
     // Save execution record
     saveExecution(root, {
