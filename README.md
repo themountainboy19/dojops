@@ -26,8 +26,12 @@
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
   <img src="https://img.shields.io/badge/agents-16%2B_custom-8b5cf6?style=flat-square" alt="Agents" />
-  <img src="https://img.shields.io/badge/providers-5-ef4444?style=flat-square" alt="Providers" />
+  <img src="https://img.shields.io/badge/providers-6-ef4444?style=flat-square" alt="Providers" />
   <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
+</p>
+
+<p align="center">
+  <img src="assets/demo.gif" alt="DojOps Demo" width="800" />
 </p>
 
 ---
@@ -57,7 +61,7 @@ dojops "Create a Kubernetes deployment for nginx with 3 replicas"
 Or set environment variables directly:
 
 ```bash
-export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
+export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini | github-copilot
 export OPENAI_API_KEY=sk-...        # your API key
 dojops "Create a Terraform config for S3 with versioning"
 ```

@@ -65,3 +65,6 @@ test-report.junit.xml
 
 # scripts/ directory (if you have scripts that should not be committed)
 scripts/
+
+# Tape test recordings
+demo.tape
