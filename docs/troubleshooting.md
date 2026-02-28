@@ -34,7 +34,7 @@ Common issues, debugging tips, and solutions for DojOps.
 
 **Solution:**
 
-- **Ollama:** Ensure the Ollama server is running at `localhost:11434`:
+- **Ollama:** Ensure the Ollama server is running (default `localhost:11434`, or your configured `OLLAMA_HOST`):
   ```bash
   ollama serve
   ```
@@ -63,6 +63,23 @@ Common issues, debugging tips, and solutions for DojOps.
    ```bash
    curl http://localhost:11434/api/tags
    ```
+
+**Using a remote Ollama server:**
+
+If your Ollama instance is not at `localhost:11434`, configure the host URL:
+
+```bash
+# Via interactive config
+dojops config
+
+# Via environment variable
+export OLLAMA_HOST=https://ollama.corp.internal:8443
+
+# For self-signed TLS certificates
+export OLLAMA_TLS_REJECT_UNAUTHORIZED=false
+```
+
+Run `dojops status` to verify connectivity — it will show the resolved Ollama URL.
 
 ---
 

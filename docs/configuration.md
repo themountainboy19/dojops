@@ -219,16 +219,18 @@ dojops config profile use prod   # Uses OpenAI GPT-4o
 
 ## Environment Variables Reference
 
-| Variable             | Description           | Default          |
-| -------------------- | --------------------- | ---------------- |
-| `DOJOPS_PROVIDER`    | LLM provider name     | `openai`         |
-| `DOJOPS_MODEL`       | Model override        | Provider default |
-| `DOJOPS_TEMPERATURE` | Temperature override  | Provider default |
-| `OPENAI_API_KEY`     | OpenAI API key        | --               |
-| `ANTHROPIC_API_KEY`  | Anthropic API key     | --               |
-| `DEEPSEEK_API_KEY`   | DeepSeek API key      | --               |
-| `GEMINI_API_KEY`     | Google Gemini API key | --               |
-| `DOJOPS_API_PORT`    | API server port       | `3000`           |
+| Variable                         | Description                      | Default                  |
+| -------------------------------- | -------------------------------- | ------------------------ |
+| `DOJOPS_PROVIDER`                | LLM provider name                | `openai`                 |
+| `DOJOPS_MODEL`                   | Model override                   | Provider default         |
+| `DOJOPS_TEMPERATURE`             | Temperature override             | Provider default         |
+| `OPENAI_API_KEY`                 | OpenAI API key                   | --                       |
+| `ANTHROPIC_API_KEY`              | Anthropic API key                | --                       |
+| `DEEPSEEK_API_KEY`               | DeepSeek API key                 | --                       |
+| `GEMINI_API_KEY`                 | Google Gemini API key            | --                       |
+| `DOJOPS_API_PORT`                | API server port                  | `3000`                   |
+| `OLLAMA_HOST`                    | Ollama server URL                | `http://localhost:11434` |
+| `OLLAMA_TLS_REJECT_UNAUTHORIZED` | TLS cert verification for Ollama | `true`                   |
 
 ### Ollama Setup
 
@@ -246,7 +248,20 @@ export DOJOPS_PROVIDER=ollama
 dojops "Create a Dockerfile for Node.js"
 ```
 
-Ollama must be running at `localhost:11434`.
+By default, DojOps connects to Ollama at `http://localhost:11434`. To use a remote or custom Ollama server:
+
+```bash
+# Interactive setup (prompts for URL + TLS settings)
+dojops config
+
+# Or set via environment variable
+export OLLAMA_HOST=https://ollama.corp.internal:8443
+
+# For self-signed certificates behind proxies
+export OLLAMA_TLS_REJECT_UNAUTHORIZED=false
+```
+
+The Ollama host URL is resolved with this priority: `OLLAMA_HOST` env > `~/.dojops/config.json` > `http://localhost:11434`.
 
 ---
 

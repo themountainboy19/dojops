@@ -67,11 +67,15 @@ $ dojops provider add openai --token sk-proj-xxx
   Default provider remains anthropic. Use `dojops provider default openai` to switch.
 ```
 
-**Ollama** does not require a token:
+**Ollama** does not require a token. In interactive mode, you'll be prompted for the server URL (and TLS settings for HTTPS URLs):
 
 ```bash
 dojops provider add ollama
+# Prompts: Ollama server URL: (default http://localhost:11434)
+# For HTTPS: Verify TLS certificates? (y/n)
 ```
+
+You can also set the host via the `OLLAMA_HOST` environment variable or `dojops config`.
 
 ### `provider remove <name>`
 

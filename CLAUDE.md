@@ -173,7 +173,8 @@ Set in `.env` (see `.env.example`):
 - `DOJOPS_API_PORT`: API server port (default `3000`)
 - `DOJOPS_API_KEY`: API key for server authentication (alternative to `~/.dojops/server.json`)
 - `DOJOPS_SCAN_TIMEOUT_MS`: Scan route timeout in milliseconds (default `120000`)
-- Ollama requires local server at `localhost:11434`
+- `OLLAMA_HOST`: Ollama server URL (default `http://localhost:11434`); also configurable via `dojops config`
+- `OLLAMA_TLS_REJECT_UNAUTHORIZED`: Set to `false` to skip TLS certificate verification for self-signed certs (default `true`)
 
 ## Path Aliases
 
