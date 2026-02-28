@@ -9,14 +9,16 @@ DojOps includes a web dashboard with a dark industrial terminal aesthetic for mo
 ```bash
 dojops serve                    # http://localhost:3000
 dojops serve --port=8080        # Custom port
+dojops serve credentials        # Generate API key for authentication
 ```
 
 The serve command:
 
 1. Resolves provider configuration (CLI flags > env vars > config file)
-2. Creates all required dependencies (provider, tools, router, debugger, diff analyzer)
-3. Detects project root for metrics (`.dojops/` directory)
-4. Starts the Express server with the web dashboard
+2. Loads API key from `DOJOPS_API_KEY` env var or `~/.dojops/server.json`
+3. Creates all required dependencies (provider, tools, router, debugger, diff analyzer)
+4. Detects project root for metrics (`.dojops/` directory)
+5. Starts the Express server with the web dashboard
 
 ---
 
@@ -33,6 +35,21 @@ The dashboard has 5 tabs organized in a sidebar:
 | History  | Operations | --           | Execution history with type filtering                       |
 
 A visual divider separates the metrics tabs (Overview, Security, Audit) from the operational tabs (Agents, History).
+
+---
+
+## Authentication
+
+When the server has an API key configured (via `dojops serve credentials` or `DOJOPS_API_KEY` env var), the dashboard requires authentication:
+
+1. **Login overlay** — On first load, the dashboard fetches `/api/health` to check the `authRequired` field. If `true` and no stored key exists, a login overlay is displayed
+2. **API key input** — The overlay prompts for the API key with a hint to run `dojops serve credentials`
+3. **Key validation** — On submit, the key is tested against `/api/agents`. If successful, it's stored in `sessionStorage`
+4. **Auth headers** — All subsequent API calls include the `X-API-Key` header automatically
+5. **401/403 handling** — If any API call returns 401 or 403, the stored key is cleared and the login overlay reappears
+6. **Logout** — A logout button appears in the sidebar footer when auth is active. Clicking it clears the session and shows the login overlay
+
+Without a configured API key, the dashboard works without authentication (local access only).
 
 ---
 
@@ -131,4 +148,4 @@ Metrics are disabled if no `.dojops/` project directory is found. The dashboard 
 
 - The dashboard requires a running LLM provider for generation features
 - Metrics tabs require `dojops init` to have been run (creates `.dojops/` directory)
-- No authentication required (local access only)
+- Authentication is optional — required only when an API key is configured via `dojops serve credentials` or `DOJOPS_API_KEY` env var

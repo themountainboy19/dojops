@@ -16,7 +16,25 @@ The port is configurable via `--port` flag or `DOJOPS_API_PORT` environment vari
 
 ## Authentication
 
-The API currently runs locally without authentication. All endpoints are accessible without credentials.
+The API supports optional API key authentication via `Bearer` token or `X-API-Key` header:
+
+```bash
+# Bearer token
+curl -H "Authorization: Bearer <your-api-key>" http://localhost:3000/api/agents
+
+# X-API-Key header
+curl -H "X-API-Key: <your-api-key>" http://localhost:3000/api/agents
+```
+
+**Generating credentials:**
+
+```bash
+dojops serve credentials   # Generates API key, saves to ~/.dojops/server.json
+```
+
+When an API key is configured (via `DOJOPS_API_KEY` env var or `~/.dojops/server.json`), all endpoints except the minimal `GET /api/health` response require authentication. Without a configured API key, all endpoints are accessible without credentials.
+
+Key comparison uses `crypto.timingSafeEqual` to prevent timing attacks.
 
 ---
 
@@ -26,19 +44,32 @@ The API currently runs locally without authentication. All endpoints are accessi
 
 #### `GET /api/health`
 
-Returns provider status, loaded tools, and metrics availability.
+Returns server status and auth requirement. When authenticated (or when auth is disabled), returns full diagnostic payload.
 
-**Response:**
+**Response (unauthenticated, auth enabled):**
 
 ```json
 {
   "status": "ok",
+  "authRequired": true,
+  "timestamp": "2026-01-15T10:30:00.000Z"
+}
+```
+
+**Response (authenticated or auth disabled):**
+
+```json
+{
+  "status": "ok",
+  "authRequired": false,
   "provider": "openai",
   "tools": ["github-actions", "terraform", "kubernetes", ...],
   "metricsEnabled": true,
   "timestamp": "2026-01-15T10:30:00.000Z"
 }
 ```
+
+The `authRequired` field indicates whether the server has API key authentication configured. When `authRequired` is `true`, unauthenticated callers receive only the minimal payload (status, authRequired, timestamp) to prevent information leakage.
 
 ---
 
@@ -601,13 +632,15 @@ All endpoints return errors in a consistent format:
 
 Common HTTP status codes:
 
-| Status | Meaning                         |
-| ------ | ------------------------------- |
-| 200    | Success                         |
-| 201    | Created (new chat session)      |
-| 400    | Bad request (validation failed) |
-| 404    | Not found                       |
-| 500    | Internal server error           |
+| Status | Meaning                                    |
+| ------ | ------------------------------------------ |
+| 200    | Success                                    |
+| 201    | Created (new chat session)                 |
+| 400    | Bad request (validation failed)            |
+| 401    | Unauthorized (missing or invalid API key)  |
+| 403    | Forbidden (e.g., autoApprove without auth) |
+| 404    | Not found                                  |
+| 500    | Internal server error                      |
 
 ---
 

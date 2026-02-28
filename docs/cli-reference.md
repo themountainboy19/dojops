@@ -101,6 +101,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops auth login`                 | Authenticate with LLM provider                                                  |
 | `dojops auth status`                | Show saved tokens and default provider                                          |
 | `dojops serve [--port=N]`           | Start API server + web dashboard                                                |
+| `dojops serve credentials`          | Generate API key for dashboard/API authentication                               |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
 | `dojops doctor`                     | System health diagnostics + project metrics                                     |
 
@@ -302,6 +303,10 @@ dojops history verify
 
 # Start dashboard
 dojops serve --port=8080
+
+# Generate API credentials and start with auth
+dojops serve credentials             # generates key, saves to ~/.dojops/server.json
+dojops serve                         # auto-loads key from server.json
 
 # Configuration profiles
 dojops config profile create staging

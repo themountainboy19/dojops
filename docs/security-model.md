@@ -146,6 +146,35 @@ Every operation produces a hash-chained audit entry:
 - **Hash chain** — Each entry's hash includes the previous entry's hash (SHA-256)
 - **Tamper detection** — `dojops history verify` recomputes all hashes and detects any modifications
 - **Structured entries** — Each entry includes seq, timestamp, command, tool, status, verification result
+- **Random entry IDs** — `HistoryStore` uses `crypto.randomUUID()`-based 12-char hex IDs instead of sequential counters, preventing ID prediction and reuse on restart
+
+---
+
+## API Authentication
+
+The REST API supports optional API key authentication:
+
+- **Key generation** — `dojops serve credentials` generates a `crypto.randomBytes(32)` base64url key and saves it to `~/.dojops/server.json` (mode `0o600`)
+- **Key loading** — Server loads key from `DOJOPS_API_KEY` env var or `~/.dojops/server.json` at startup
+- **Timing-safe comparison** — All key comparisons use `crypto.timingSafeEqual` to prevent timing attacks
+- **Dual header support** — Accepts `Authorization: Bearer <key>` or `X-API-Key: <key>`
+- **Health endpoint info-leak prevention** — Unauthenticated callers to `/api/health` receive only `{ status, authRequired, timestamp }`; full diagnostic payload (provider, tools, memory, uptime) requires authentication
+- **autoApprove guard** — The `POST /api/plan` endpoint's `autoApprove` flag requires server authentication to be configured (`403` if no server key exists), preventing blind auto-approval via unauthenticated API calls
+- **Dashboard login flow** — The web dashboard stores the API key in `sessionStorage`, injects `X-API-Key` headers on all API calls, and shows a login overlay on 401/403 responses
+
+---
+
+## Input Validation Hardening
+
+Several API-layer input validation measures prevent abuse:
+
+- **Session ID format** — Chat session IDs are validated against `/^chat-[a-f0-9]{8,16}$/` with a `.max(64)` Zod constraint to prevent log injection and resource abuse
+- **Log injection prevention** — Session IDs in log output are sanitized (strip `\r\n\t`, cap at 64 chars) to prevent log forging
+- **Session hydration validation** — When loading sessions from disk at startup, each session's `id` is validated against `isValidSessionId()` to prevent corrupted data from entering memory
+- **parseInt NaN guards** — History route query parameters (`limit`, `offset`) use `Number.isFinite()` guards to prevent `NaN` propagation from malformed input
+- **Scan timeout** — Scan operations are wrapped in `Promise.race` with a configurable timeout (`DOJOPS_SCAN_TIMEOUT_MS`, default 120s) to prevent unbounded execution
+- **MetricsAggregator bounds** — File reads skip files >10MB, audit entries are capped at the last 10,000 lines, and `topIssues` is capped at 100 entries to prevent memory exhaustion
+- **Atomic session persistence** — Chat session writes use atomic file operations (write `.tmp` then `fs.renameSync`) to prevent partial writes on crash
 
 ---
 

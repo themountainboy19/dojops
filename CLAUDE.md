@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (1015 tests)
+pnpm test               # Vitest across all packages (1578 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -36,6 +36,7 @@ pnpm dojops -- --plan "Create CI for Node app"
 # Run API server + dashboard
 dojops serve                         # http://localhost:3000
 dojops serve --port=8080
+dojops serve credentials             # Generate API key for dashboard auth
 pnpm dojops -- serve                 # in-repo alternative
 ```
 
@@ -63,7 +64,7 @@ pnpm dojops -- serve                 # in-repo alternative
 
 | Method | Path                    | Description                                          |
 | ------ | ----------------------- | ---------------------------------------------------- |
-| GET    | `/api/health`           | Provider status + metricsEnabled                     |
+| GET    | `/api/health`           | Auth indicator + provider status (full payload requires auth) |
 | POST   | `/api/generate`         | Agent-routed LLM generation                          |
 | POST   | `/api/plan`             | Decompose goal + optional execution                  |
 | POST   | `/api/debug-ci`         | CI log diagnosis                                     |
@@ -116,7 +117,7 @@ pnpm dojops -- serve                 # in-repo alternative
 - `ExecutionPolicy` (`packages/executor/src/types.ts`) — controls write permissions, allowed paths, denied paths, env vars, timeout, file size limits, approval requirements, `skipVerification` toggle
 - `ApprovalHandler` (`packages/executor/src/approval.ts`) — interface for approval workflows; ships with `AutoApproveHandler`, `AutoDenyHandler`, `CallbackApprovalHandler`
 - `createApp(deps)` (`packages/api/src/app.ts`) — Express app factory with dependency injection (`AppDependencies` interface, optional `rootDir` for metrics). Testable without `listen()`
-- `HistoryStore` (`packages/api/src/store.ts`) — in-memory operation history with `add/getAll/getById/clear`
+- `HistoryStore` (`packages/api/src/store.ts`) — in-memory operation history with random UUID-based IDs, O(1) `getById()` via Map index, bounded eviction
 - `MetricsAggregator` (`packages/api/src/metrics/aggregator.ts`) — reads `.dojops/` data on-demand (plans, execution logs, scan reports, audit JSONL) and computes `OverviewMetrics`, `SecurityMetrics`, `AuditMetrics` with hash-chain verification
 - Route factory functions (`packages/api/src/routes/*.ts`) — each returns an Express `Router`, receives dependencies via function params
 
@@ -144,10 +145,10 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results + custom tool metadata, `withTimeout()` for execution limits
 - `@dojops/scanner` — Security scanning engine with 8 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom), supports `--security`, `--deps`, `--iac`, `--sbom` scan modes, produces structured scan reports saved to `.dojops/scans/`, SBOM CycloneDX output saved to `.dojops/sbom/`
 - `@dojops/session` — Interactive AI chat session management with multi-turn conversation support, session persistence, agent routing within chat context
-- `@dojops/cli` — Full lifecycle: `init` (writes `context.json` + `context.md` + user review prompt), `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve`, `chat`, `check`, `scan` (`--security`, `--deps`, `--iac`, `--sbom`), `tools` (`list/validate/init`), `toolchain` (`list/install/remove/clean`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with tool version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, tool integrity validation on resume (extracted to `checkToolIntegrity()`), tool metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
-- `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore`, dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit), vanilla web dashboard (dark theme, 5 tabs: Overview, Security, Audit, Agents, History), 30s auto-refresh on metrics tabs, `supertest` integration tests
+- `@dojops/cli` — Full lifecycle: `init` (writes `context.json` + `context.md` + user review prompt), `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve` (`credentials`), `chat`, `check`, `scan` (`--security`, `--deps`, `--iac`, `--sbom`), `tools` (`list/validate/init`), `toolchain` (`list/install/remove/clean`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with tool version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, tool integrity validation on resume (extracted to `checkToolIntegrity()`), tool metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
+- `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore` (random UUID IDs, O(1) lookup), API key authentication (Bearer/X-API-Key with timing-safe compare), dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with bounded reads (10MB file cap, 10K audit line cap), vanilla web dashboard (dark theme, 5 tabs + login overlay for auth), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/TOOL_SPEC_v1.md` freezes the v1 custom tool contract (manifest schema, discovery, security constraints, compatibility promise)
-- Dev tooling — Vitest (1015 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (1578 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 
@@ -170,6 +171,8 @@ Set in `.env` (see `.env.example`):
 - `DOJOPS_MODEL`: LLM model override
 - `DOJOPS_TEMPERATURE`: LLM temperature override (0-2)
 - `DOJOPS_API_PORT`: API server port (default `3000`)
+- `DOJOPS_API_KEY`: API key for server authentication (alternative to `~/.dojops/server.json`)
+- `DOJOPS_SCAN_TIMEOUT_MS`: Scan route timeout in milliseconds (default `120000`)
 - Ollama requires local server at `localhost:11434`
 
 ## Path Aliases
