@@ -137,7 +137,7 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 
 **Implemented (Phase 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8):**
 
-- `@dojops/core` — DevOpsAgent + 5 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + temperature passthrough to all providers + `DeterministicProvider` for replay mode (forces temperature=0) + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
+- `@dojops/core` — DevOpsAgent + 6 LLM providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini, GitHub Copilot) + structured output (Zod schema on LLMRequest, JSON mode per provider, json-validator) + temperature passthrough to all providers + `DeterministicProvider` for replay mode (forces temperature=0) + dynamic model selection via `listModels()` + multi-agent system (AgentRouter, 16 SpecialistAgents) + CIDebugger + InfraDiffAnalyzer
 - `@dojops/sdk` — `BaseTool<TInput>` abstract class with Zod inputSchema validation, re-exports `z`, `VerificationResult`/`VerificationIssue` types, optional `verify()` interface, `readExistingConfig()`/`backupFile()` file-reader utilities for update workflows
 - `@dojops/planner` — TaskGraph/TaskNode Zod schemas (TaskNode extended with optional `toolType`/`toolVersion`/`toolHash`/`toolSource`/`systemPromptHash` metadata), `decompose()` LLM decomposition, `PlannerExecutor` with topological sort + dependency resolution + `completedTaskIds` skip for resume
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). All tools support updating existing configs via auto-detection + `existingContent` input field + `.bak` backup before overwrite. Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
@@ -166,8 +166,9 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 
 Set in `.env` (see `.env.example`):
 
-- `DOJOPS_PROVIDER`: `openai` (default) | `anthropic` | `ollama` | `deepseek` | `gemini`
+- `DOJOPS_PROVIDER`: `openai` (default) | `anthropic` | `ollama` | `deepseek` | `gemini` | `github-copilot`
 - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` / `GEMINI_API_KEY` as needed
+- `GITHUB_COPILOT_TOKEN`: GitHub OAuth token (`ghu_xxx`) — optional, skips interactive Device Flow for CI/CD
 - `DOJOPS_MODEL`: LLM model override
 - `DOJOPS_TEMPERATURE`: LLM temperature override (0-2)
 - `DOJOPS_API_PORT`: API server port (default `3000`)

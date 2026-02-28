@@ -7,6 +7,8 @@ import {
   VALID_PROVIDERS,
   getConfiguredProviders,
 } from "../config";
+import { copilotLogin, isCopilotAuthenticated } from "@dojops/core";
+import { createProvider } from "@dojops/api";
 import { CLIContext } from "../types";
 import { extractFlagValue } from "../parser";
 import { maskToken } from "../formatter";
@@ -63,6 +65,10 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
 
     if (name === "ollama") {
       detail = pc.dim("(local)");
+    } else if (name === "github-copilot") {
+      detail = isCopilotAuthenticated()
+        ? pc.green("authenticated") + " " + pc.dim("(OAuth)")
+        : pc.dim("(not set)");
     } else if (config.tokens?.[name]) {
       detail = maskToken(config.tokens[name]);
     } else {
@@ -96,7 +102,7 @@ async function providerDefault(args: string[]): Promise<void> {
   const config = loadConfig();
 
   // Warn if no token configured (but allow it)
-  if (name !== "ollama" && !config.tokens?.[name]) {
+  if (name !== "ollama" && name !== "github-copilot" && !config.tokens?.[name]) {
     p.log.warn(
       `No token configured for ${pc.bold(name)}. Use ${pc.dim(`dojops provider add ${name}`)} to add one.`,
     );
@@ -124,6 +130,94 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
 
   const config = loadConfig();
   let token = extractFlagValue(args.slice(1), "--token");
+
+  if (name === "github-copilot") {
+    // Run OAuth Device Flow instead of prompting for token
+    if (isCopilotAuthenticated()) {
+      p.log.info(`${pc.bold("github-copilot")} is already authenticated.`);
+    } else {
+      const s = p.spinner();
+      s.start("Starting GitHub Copilot OAuth Device Flow...");
+      await copilotLogin({
+        onDeviceCode: (userCode, verificationUri) => {
+          s.stop("Device code received.");
+          p.note(
+            [
+              `Code: ${pc.bold(pc.cyan(userCode))}`,
+              `URL:  ${pc.underline(verificationUri)}`,
+              "",
+              "Open the URL above and paste the code to authorize DojOps.",
+            ].join("\n"),
+            "GitHub Device Authorization",
+          );
+          s.start("Waiting for authorization...");
+        },
+        onStatus: (msg) => s.message(msg),
+      });
+      s.stop("Authenticated with GitHub Copilot.");
+    }
+
+    // Fetch available models and let user pick
+    if (!ctx.globalOpts.nonInteractive) {
+      try {
+        const ms = p.spinner();
+        ms.start("Fetching available Copilot models...");
+        const llm = createProvider({ provider: "github-copilot" });
+        const models = await llm.listModels?.();
+        ms.stop("Models fetched.");
+
+        if (models && models.length > 0) {
+          const customValue = "__custom__";
+          const choice = await p.select({
+            message: "Select default model for github-copilot:",
+            options: [
+              ...models.map((m) => ({ value: m, label: m })),
+              { value: customValue, label: "Custom model..." },
+            ],
+            initialValue: config.defaultModel ?? "gpt-4o",
+          });
+
+          if (!p.isCancel(choice)) {
+            let model = choice as string;
+            if (model === customValue) {
+              const custom = await p.text({
+                message: "Enter custom model name:",
+                placeholder: "e.g. gpt-4o, claude-3.5-sonnet, o1-mini",
+              });
+              if (!p.isCancel(custom) && custom) {
+                model = custom as string;
+              } else {
+                model = "";
+              }
+            }
+            if (model) {
+              config.defaultModel = model;
+            }
+          }
+        }
+      } catch {
+        // Model fetching failed — user can set model later via dojops config
+      }
+    }
+
+    if (!config.defaultProvider) {
+      config.defaultProvider = name;
+      saveConfig(config);
+      p.log.success(`${pc.bold(name)} set as default provider.`);
+    } else if (config.defaultProvider !== name) {
+      saveConfig(config);
+      p.log.success(`${pc.bold(name)} is available.`);
+      p.log.info(
+        pc.dim(
+          `Default provider remains ${pc.bold(config.defaultProvider)}. Use ${pc.cyan(`dojops provider default ${name}`)} to switch.`,
+        ),
+      );
+    } else {
+      saveConfig(config);
+      p.log.info(`${pc.bold(name)} is already the default provider.`);
+    }
+    return;
+  }
 
   if (name === "ollama") {
     // Ollama doesn't need a token — prompt for host URL in interactive mode
@@ -306,6 +400,30 @@ async function providerRemove(args: string[]): Promise<void> {
   }
 
   const config = loadConfig();
+
+  if (name === "github-copilot") {
+    const { clearCopilotAuth } = await import("@dojops/core");
+    clearCopilotAuth();
+    const wasDefault = config.defaultProvider === name;
+    if (wasDefault) {
+      delete config.defaultProvider;
+      saveConfig(config);
+    }
+    p.log.success(`GitHub Copilot credentials removed.`);
+    if (wasDefault) {
+      const remaining = getConfiguredProviders(config).filter((p) => p !== "ollama");
+      if (remaining.length > 0) {
+        p.log.warn(
+          `${pc.bold(name)} was the default provider. Use ${pc.cyan(`dojops provider default ${remaining[0]}`)} to set a new default.`,
+        );
+      } else {
+        p.log.warn(
+          `${pc.bold(name)} was the default provider. No other providers are configured. Use ${pc.cyan("dojops provider add <name>")} to configure one.`,
+        );
+      }
+    }
+    return;
+  }
 
   if (!config.tokens?.[name]) {
     p.log.info(`No token stored for ${pc.bold(name)}.`);

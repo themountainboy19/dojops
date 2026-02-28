@@ -1,18 +1,19 @@
 # Configuration
 
-DojOps supports 5 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
+DojOps supports 6 LLM providers with flexible configuration via CLI flags, environment variables, config files, and named profiles.
 
 ---
 
 ## Supported Providers
 
-| Provider  | `DOJOPS_PROVIDER` | Required Env Var    | Default Model                | SDK                   |
-| --------- | ----------------- | ------------------- | ---------------------------- | --------------------- |
-| OpenAI    | `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                | `openai`              |
-| Anthropic | `anthropic`       | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` | `@anthropic-ai/sdk`   |
-| Ollama    | `ollama`          | _(none -- local)_   | `llama3`                     | `ollama`              |
-| DeepSeek  | `deepseek`        | `DEEPSEEK_API_KEY`  | `deepseek-chat`              | `openai` (compatible) |
-| Gemini    | `gemini`          | `GEMINI_API_KEY`    | `gemini-2.5-flash`           | `@google/genai`       |
+| Provider       | `DOJOPS_PROVIDER` | Required Env Var      | Default Model                | SDK                   |
+| -------------- | ----------------- | --------------------- | ---------------------------- | --------------------- |
+| OpenAI         | `openai`          | `OPENAI_API_KEY`      | `gpt-4o-mini`                | `openai`              |
+| Anthropic      | `anthropic`       | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` | `@anthropic-ai/sdk`   |
+| Ollama         | `ollama`          | _(none -- local)_     | `llama3`                     | `ollama`              |
+| DeepSeek       | `deepseek`        | `DEEPSEEK_API_KEY`    | `deepseek-chat`              | `openai` (compatible) |
+| Gemini         | `gemini`          | `GEMINI_API_KEY`      | `gemini-2.5-flash`           | `@google/genai`       |
+| GitHub Copilot | `github-copilot`  | _(OAuth Device Flow)_ | `gpt-4o`                     | `openai` (compatible) |
 
 ---
 
@@ -166,6 +167,7 @@ When running `dojops config`, DojOps calls the provider's `listModels()` API to 
 - **Ollama** — Lists locally installed models
 - **DeepSeek** — Lists available DeepSeek models
 - **Gemini** — Lists available Gemini models
+- **GitHub Copilot** — Lists models available to your Copilot subscription tier
 
 ---
 
@@ -219,18 +221,19 @@ dojops config profile use prod   # Uses OpenAI GPT-4o
 
 ## Environment Variables Reference
 
-| Variable                         | Description                      | Default                  |
-| -------------------------------- | -------------------------------- | ------------------------ |
-| `DOJOPS_PROVIDER`                | LLM provider name                | `openai`                 |
-| `DOJOPS_MODEL`                   | Model override                   | Provider default         |
-| `DOJOPS_TEMPERATURE`             | Temperature override             | Provider default         |
-| `OPENAI_API_KEY`                 | OpenAI API key                   | --                       |
-| `ANTHROPIC_API_KEY`              | Anthropic API key                | --                       |
-| `DEEPSEEK_API_KEY`               | DeepSeek API key                 | --                       |
-| `GEMINI_API_KEY`                 | Google Gemini API key            | --                       |
-| `DOJOPS_API_PORT`                | API server port                  | `3000`                   |
-| `OLLAMA_HOST`                    | Ollama server URL                | `http://localhost:11434` |
-| `OLLAMA_TLS_REJECT_UNAUTHORIZED` | TLS cert verification for Ollama | `true`                   |
+| Variable                         | Description                           | Default                  |
+| -------------------------------- | ------------------------------------- | ------------------------ |
+| `DOJOPS_PROVIDER`                | LLM provider name                     | `openai`                 |
+| `DOJOPS_MODEL`                   | Model override                        | Provider default         |
+| `DOJOPS_TEMPERATURE`             | Temperature override                  | Provider default         |
+| `OPENAI_API_KEY`                 | OpenAI API key                        | --                       |
+| `ANTHROPIC_API_KEY`              | Anthropic API key                     | --                       |
+| `DEEPSEEK_API_KEY`               | DeepSeek API key                      | --                       |
+| `GEMINI_API_KEY`                 | Google Gemini API key                 | --                       |
+| `DOJOPS_API_PORT`                | API server port                       | `3000`                   |
+| `OLLAMA_HOST`                    | Ollama server URL                     | `http://localhost:11434` |
+| `OLLAMA_TLS_REJECT_UNAUTHORIZED` | TLS cert verification for Ollama      | `true`                   |
+| `GITHUB_COPILOT_TOKEN`           | GitHub OAuth token (skip device flow) | --                       |
 
 ### Ollama Setup
 
@@ -262,6 +265,34 @@ export OLLAMA_TLS_REJECT_UNAUTHORIZED=false
 ```
 
 The Ollama host URL is resolved with this priority: `OLLAMA_HOST` env > `~/.dojops/config.json` > `http://localhost:11434`.
+
+### GitHub Copilot Setup
+
+GitHub Copilot uses an OAuth Device Flow instead of a static API key. You need an active GitHub Copilot subscription (Pro, Pro+, Business, or Enterprise).
+
+```bash
+# Authenticate via Device Flow (opens browser)
+dojops auth login --provider github-copilot
+
+# Or use the provider command
+dojops provider add github-copilot
+
+# Or configure interactively
+dojops config
+# Select "github-copilot" → Device Flow runs automatically
+```
+
+The Device Flow works as follows:
+
+1. DojOps requests a one-time device code from GitHub
+2. You open `https://github.com/login/device` in your browser and enter the code
+3. DojOps polls GitHub for authorization
+4. Once approved, DojOps exchanges the OAuth token for a short-lived Copilot JWT
+5. The JWT is cached and auto-refreshed before each API call (~30 min expiry)
+
+Tokens are stored in `~/.dojops/copilot-token.json` (mode 0600). The Copilot API is OpenAI-compatible, so you can use models like `gpt-4o`, `claude-3.5-sonnet`, `o1-mini`, etc. depending on your subscription tier.
+
+For CI/CD, you can set `GITHUB_COPILOT_TOKEN` to a GitHub OAuth token (`ghu_xxx`) to skip the interactive Device Flow.
 
 ---
 

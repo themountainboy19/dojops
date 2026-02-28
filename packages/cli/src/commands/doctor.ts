@@ -52,7 +52,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   });
 
   // API key present
-  if (provider && provider !== "ollama") {
+  if (provider && provider !== "ollama" && provider !== "github-copilot") {
     const envVarMap: Record<string, string> = {
       openai: "OPENAI_API_KEY",
       anthropic: "ANTHROPIC_API_KEY",
@@ -67,6 +67,25 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
       status: hasEnvKey || hasConfigKey ? "pass" : "fail",
       detail: hasEnvKey ? `Set via $${envVar}` : hasConfigKey ? "Set in config" : "Not found",
     });
+  }
+
+  // GitHub Copilot auth check
+  if (provider === "github-copilot") {
+    try {
+      const { getValidCopilotToken } = await import("@dojops/core");
+      const { apiBaseUrl } = await getValidCopilotToken();
+      checks.push({
+        name: "Copilot API",
+        status: "pass",
+        detail: `Connected to ${apiBaseUrl}`,
+      });
+    } catch (err) {
+      checks.push({
+        name: "Copilot API",
+        status: "fail",
+        detail: (err as Error).message,
+      });
+    }
   }
 
   // .dojops/ initialized

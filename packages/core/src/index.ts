@@ -5,6 +5,8 @@ export * from "./llm/ollama";
 export * from "./llm/anthropic";
 export * from "./llm/deepseek";
 export * from "./llm/gemini";
+export * from "./llm/copilot-auth";
+export * from "./llm/github-copilot";
 export * from "./llm/json-validator";
 export * from "./llm/deterministic-provider";
 export * from "./llm/fallback-provider";

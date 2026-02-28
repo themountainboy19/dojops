@@ -120,7 +120,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   // Auto-load from ~/.dojops/server.json when DOJOPS_API_KEY is not set
   const serverApiKey = process.env.DOJOPS_API_KEY ?? loadServerApiKey();
   if (!serverApiKey && !noAuth) {
-    if (providerName === "ollama") {
+    if (providerName === "ollama" || providerName === "github-copilot") {
       p.log.warn(
         `No API key configured (DOJOPS_API_KEY). The API is unprotected. ` +
           `Set DOJOPS_API_KEY or use ${pc.bold("--no-auth")} to suppress this warning.`,
@@ -136,7 +136,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   // Startup validation: warn if no LLM API key configured for cloud providers
-  if (providerName !== "ollama" && !apiKey) {
+  if (providerName !== "ollama" && providerName !== "github-copilot" && !apiKey) {
     p.log.warn(
       `No LLM API key found for ${pc.bold(providerName)}. Requests will fail until a key is configured.`,
     );

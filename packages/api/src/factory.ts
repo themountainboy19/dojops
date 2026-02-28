@@ -4,6 +4,7 @@ import {
   AnthropicProvider,
   DeepSeekProvider,
   GeminiProvider,
+  GitHubCopilotProvider,
   LLMProvider,
   AgentRouter,
   ALL_SPECIALIST_CONFIGS,
@@ -80,6 +81,10 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
       );
     }
     return withRetry(new GeminiProvider(key, model));
+  } else if (providerName === "github-copilot") {
+    // No API key needed — auth managed via OAuth Device Flow
+    // getValidCopilotToken() handles JWT refresh internally
+    return withRetry(new GitHubCopilotProvider(model));
   } else {
     const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
     if (!key) {

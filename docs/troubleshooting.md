@@ -81,6 +81,44 @@ export OLLAMA_TLS_REJECT_UNAUTHORIZED=false
 
 Run `dojops status` to verify connectivity — it will show the resolved Ollama URL.
 
+### GitHub Copilot Authentication Issues
+
+**Symptom:** `Error: Not authenticated with GitHub Copilot` or `Error: GitHub token is invalid or expired`
+
+**Solution:**
+
+1. Re-authenticate:
+   ```bash
+   dojops auth login --provider github-copilot
+   ```
+2. The Device Flow will open your browser for authorization
+
+**Symptom:** `Error: Access denied. Make sure your GitHub account has an active Copilot subscription.`
+
+**Solution:**
+
+- Verify you have an active Copilot subscription (Pro, Pro+, Business, or Enterprise) at https://github.com/settings/copilot
+- If using a GitHub organization, ensure Copilot is enabled for your account
+
+**Symptom:** Token expires frequently / requests fail after ~30 minutes
+
+**Solution:**
+
+- This is expected — Copilot JWTs are short-lived (~30 min). DojOps auto-refreshes them before each API call using your long-lived GitHub OAuth token
+- If auto-refresh fails, your GitHub OAuth token may have been revoked. Re-authenticate:
+  ```bash
+  dojops auth logout --provider github-copilot
+  dojops auth login --provider github-copilot
+  ```
+
+**CI/CD Usage:**
+
+```bash
+# Set a GitHub OAuth token to skip the interactive Device Flow
+export GITHUB_COPILOT_TOKEN=ghu_xxx
+export DOJOPS_PROVIDER=github-copilot
+```
+
 ---
 
 ## Dashboard Issues

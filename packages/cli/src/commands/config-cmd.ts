@@ -14,6 +14,7 @@ import { maskToken } from "../formatter";
 import { extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { createProvider } from "@dojops/api";
+import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 
 function showConfig(config: DojOpsConfig): void {
   const lines = [
@@ -22,11 +23,12 @@ function showConfig(config: DojOpsConfig): void {
     `${pc.bold("Temperature:")} ${config.defaultTemperature != null ? String(config.defaultTemperature) : pc.dim("(not set)")}`,
     `${pc.bold("Ollama host:")} ${config.ollamaHost ?? pc.dim("(default)")}`,
     `${pc.bold("Tokens:")}`,
-    `  openai:    ${maskToken(config.tokens?.openai)}`,
-    `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
-    `  deepseek:  ${maskToken(config.tokens?.deepseek)}`,
-    `  gemini:    ${maskToken(config.tokens?.gemini)}`,
-    `  ollama:    ${pc.dim("(no token needed)")}`,
+    `  openai:          ${maskToken(config.tokens?.openai)}`,
+    `  anthropic:       ${maskToken(config.tokens?.anthropic)}`,
+    `  deepseek:        ${maskToken(config.tokens?.deepseek)}`,
+    `  gemini:          ${maskToken(config.tokens?.gemini)}`,
+    `  ollama:          ${pc.dim("(no token needed)")}`,
+    `  github-copilot:  ${isCopilotAuthenticated() ? pc.green("authenticated") + " " + pc.dim("(OAuth)") : pc.dim("(not set)")}`,
   ];
 
   // Show environment variable tokens (not visible via config file)
@@ -117,10 +119,12 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
 
     if (tokenFlag) {
       const provider = providerFlag ?? config.defaultProvider ?? "openai";
-      if (provider === "ollama") {
+      if (provider === "ollama" || provider === "github-copilot") {
         throw new CLIError(
           ExitCode.VALIDATION_ERROR,
-          "Ollama runs locally and does not require an API token.",
+          provider === "ollama"
+            ? "Ollama runs locally and does not require an API token."
+            : "GitHub Copilot uses OAuth Device Flow. Run: dojops auth login --provider github-copilot",
         );
       }
       config.tokens = config.tokens ?? {};
@@ -163,6 +167,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
     ollama: "e.g. llama3, mistral, codellama",
     deepseek: "e.g. deepseek-chat, deepseek-reasoner",
     gemini: "e.g. gemini-2.5-flash, gemini-2.5-pro",
+    "github-copilot": "e.g. gpt-4o, claude-3.5-sonnet, o1-mini",
   };
 
   const answers = await p.group(
@@ -174,7 +179,8 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
           initialValue: config.defaultProvider ?? "openai",
         }),
       token: ({ results }) => {
-        if (results.provider === "ollama") return Promise.resolve("");
+        if (results.provider === "ollama" || results.provider === "github-copilot")
+          return Promise.resolve("");
         const currentToken = config.tokens?.[results.provider!];
         const hint = currentToken ? ` [current: ${maskToken(currentToken)}]` : "";
         return p.password({
@@ -213,8 +219,31 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
         const provider = results.provider as string;
         const token = (results.token as string) || config.tokens?.[provider];
 
+        // GitHub Copilot: run OAuth Device Flow if needed before fetching models
+        if (provider === "github-copilot" && !isCopilotAuthenticated()) {
+          const cs = p.spinner();
+          cs.start("Starting GitHub Copilot OAuth Device Flow...");
+          await copilotLogin({
+            onDeviceCode: (userCode, verificationUri) => {
+              cs.stop("Device code received.");
+              p.note(
+                [
+                  `Code: ${pc.bold(pc.cyan(userCode))}`,
+                  `URL:  ${pc.underline(verificationUri)}`,
+                  "",
+                  "Open the URL above and paste the code to authorize DojOps.",
+                ].join("\n"),
+                "GitHub Device Authorization",
+              );
+              cs.start("Waiting for authorization...");
+            },
+            onStatus: (msg) => cs.message(msg),
+          });
+          cs.stop("Authenticated with GitHub Copilot.");
+        }
+
         // Try fetching models dynamically
-        if (token || provider === "ollama") {
+        if (token || provider === "ollama" || provider === "github-copilot") {
           try {
             const isStructured = ctx.globalOpts.output !== "table";
             const s = p.spinner();
@@ -271,6 +300,7 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   );
 
   const chosenProvider = answers.provider as string;
+
   if (answers.token) {
     config.tokens = config.tokens ?? {};
     config.tokens[chosenProvider] = answers.token as string;
@@ -320,7 +350,11 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   // Offer to configure another provider (interactive only)
   if (!ctx.globalOpts.nonInteractive) {
     const unconfigured = VALID_PROVIDERS.filter(
-      (prov) => prov !== "ollama" && prov !== chosenProvider && !config.tokens?.[prov],
+      (prov) =>
+        prov !== "ollama" &&
+        prov !== "github-copilot" &&
+        prov !== chosenProvider &&
+        !config.tokens?.[prov],
     );
     if (unconfigured.length > 0) {
       const addAnother = await p.confirm({

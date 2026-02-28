@@ -17,6 +17,8 @@ export function redactSecrets(msg: string): string {
       .replace(/AIza[A-Za-z0-9_-]{30,}/g, "AIza***REDACTED***")
       // DeepSeek ds- keys
       .replace(/ds-[A-Za-z0-9]{20,}/g, "ds-***REDACTED***")
+      // GitHub OAuth tokens (ghu_, gho_, ghp_, ghs_, ghr_)
+      .replace(/gh[uposr]_[A-Za-z0-9_]{20,}/g, "gh*_***REDACTED***")
       // Bearer tokens
       .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer ***REDACTED***")
       // Authorization header values

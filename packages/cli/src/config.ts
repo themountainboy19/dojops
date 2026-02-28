@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { isCopilotAuthenticated } from "@dojops/core";
 
 export interface DojOpsConfig {
   defaultProvider?: string;
@@ -11,7 +12,14 @@ export interface DojOpsConfig {
   ollamaTlsRejectUnauthorized?: boolean;
 }
 
-export const VALID_PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini"] as const;
+export const VALID_PROVIDERS = [
+  "openai",
+  "anthropic",
+  "ollama",
+  "deepseek",
+  "gemini",
+  "github-copilot",
+] as const;
 export type Provider = (typeof VALID_PROVIDERS)[number];
 
 const TOKEN_ENV_MAP: Record<string, string> = {
@@ -19,6 +27,7 @@ const TOKEN_ENV_MAP: Record<string, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   deepseek: "DEEPSEEK_API_KEY",
   gemini: "GEMINI_API_KEY",
+  "github-copilot": "GITHUB_COPILOT_TOKEN",
 };
 
 function configDir(): string {
@@ -156,7 +165,7 @@ export function resolveOllamaTls(cliFlag: boolean | undefined, config: DojOpsCon
  * Returns undefined for ollama (no token needed).
  */
 export function resolveToken(provider: string, config: DojOpsConfig): string | undefined {
-  if (provider === "ollama") return undefined;
+  if (provider === "ollama" || provider === "github-copilot") return undefined;
 
   const envVar = TOKEN_ENV_MAP[provider];
   if (envVar && process.env[envVar]) {
@@ -264,6 +273,7 @@ export function getConfiguredProviders(config: DojOpsConfig): string[] {
     }
   }
   set.add("ollama");
+  if (isCopilotAuthenticated()) set.add("github-copilot");
   return [...set];
 }
 

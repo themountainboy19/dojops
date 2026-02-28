@@ -1,18 +1,19 @@
 # Provider Management
 
-DojOps supports 5 LLM providers. The `dojops provider` command provides a dedicated interface for managing them — adding tokens, switching defaults, and viewing status.
+DojOps supports 6 LLM providers. The `dojops provider` command provides a dedicated interface for managing them — adding tokens, switching defaults, and viewing status.
 
 ---
 
 ## Supported Providers
 
-| Provider  | Name        | Token Required | Default Model                |
-| --------- | ----------- | -------------- | ---------------------------- |
-| OpenAI    | `openai`    | Yes            | `gpt-4o-mini`                |
-| Anthropic | `anthropic` | Yes            | `claude-sonnet-4-5-20250929` |
-| DeepSeek  | `deepseek`  | Yes            | `deepseek-chat`              |
-| Gemini    | `gemini`    | Yes            | `gemini-2.5-flash`           |
-| Ollama    | `ollama`    | No (local)     | `llama3`                     |
+| Provider       | Name             | Token Required    | Default Model                |
+| -------------- | ---------------- | ----------------- | ---------------------------- |
+| OpenAI         | `openai`         | Yes               | `gpt-4o-mini`                |
+| Anthropic      | `anthropic`      | Yes               | `claude-sonnet-4-5-20250929` |
+| DeepSeek       | `deepseek`       | Yes               | `deepseek-chat`              |
+| Gemini         | `gemini`         | Yes               | `gemini-2.5-flash`           |
+| Ollama         | `ollama`         | No (local)        | `llama3`                     |
+| GitHub Copilot | `github-copilot` | OAuth Device Flow | `gpt-4o`                     |
 
 ---
 
@@ -76,6 +77,15 @@ dojops provider add ollama
 ```
 
 You can also set the host via the `OLLAMA_HOST` environment variable or `dojops config`.
+
+**GitHub Copilot** uses OAuth Device Flow instead of a token. Running `provider add` triggers the interactive flow:
+
+```bash
+dojops provider add github-copilot
+# Shows: Code: XXXX-XXXX, URL: https://github.com/login/device
+# → Open URL, enter code, authorize
+# ✓ Authenticated with GitHub Copilot.
+```
 
 ### `provider remove <name>`
 

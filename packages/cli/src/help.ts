@@ -45,7 +45,7 @@ export function printHelp(): void {
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
   console.log(
-    `  ${pc.cyan("--provider=NAME")}    LLM provider: openai, anthropic, ollama, deepseek, gemini`,
+    `  ${pc.cyan("--provider=NAME")}    LLM provider: openai, anthropic, ollama, deepseek, gemini, github-copilot`,
   );
   console.log(`  ${pc.cyan("--model=NAME")}       LLM model override`);
   console.log(`  ${pc.cyan("--temperature=N")}    LLM temperature (0-2)`);
@@ -150,6 +150,7 @@ export function printHelp(): void {
   console.log(
     `  Token:     $OPENAI_API_KEY / $ANTHROPIC_API_KEY / $DEEPSEEK_API_KEY / $GEMINI_API_KEY  >  config token`,
   );
+  console.log(`  Copilot:   OAuth Device Flow (dojops auth login --provider github-copilot)`);
   console.log();
   console.log(pc.bold("CI ENVIRONMENTS"));
   console.log(`  Automatically detected via $CI, $GITHUB_ACTIONS, $GITLAB_CI, $JENKINS_URL,`);
@@ -162,6 +163,7 @@ export function printHelp(): void {
   console.log(`  ${pc.dim("Ollama:")}    llama3, mistral, codellama`);
   console.log(`  ${pc.dim("DeepSeek:")} deepseek-chat, deepseek-reasoner`);
   console.log(`  ${pc.dim("Gemini:")}   gemini-2.5-flash, gemini-2.5-pro`);
+  console.log(`  ${pc.dim("Copilot:")}  gpt-4o, claude-3.5-sonnet, o1-mini (via GitHub Copilot)`);
   console.log();
   console.log(pc.bold("EXIT CODES"));
   console.log(`  0    Success`);
