@@ -9,6 +9,8 @@ import {
   resolveProvider,
   resolveModel,
   resolveToken,
+  resolveOllamaHost,
+  resolveOllamaTls,
   validateProvider,
 } from "./config";
 
@@ -30,6 +32,8 @@ describe("config", () => {
     delete process.env.DOJOPS_MODEL;
     delete process.env.OPENAI_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OLLAMA_HOST;
+    delete process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED;
   });
 
   afterEach(() => {
@@ -177,6 +181,57 @@ describe("config", () => {
 
     it("returns undefined when nothing set", () => {
       expect(resolveToken("openai", {})).toBeUndefined();
+    });
+  });
+
+  describe("resolveOllamaHost", () => {
+    it("uses CLI flag first", () => {
+      process.env.OLLAMA_HOST = "http://env:9999";
+      expect(resolveOllamaHost("http://cli:8888", { ollamaHost: "http://config:7777" })).toBe(
+        "http://cli:8888",
+      );
+    });
+
+    it("uses env var when no CLI flag", () => {
+      process.env.OLLAMA_HOST = "http://env:9999";
+      expect(resolveOllamaHost(undefined, { ollamaHost: "http://config:7777" })).toBe(
+        "http://env:9999",
+      );
+    });
+
+    it("uses config when no CLI flag or env var", () => {
+      expect(resolveOllamaHost(undefined, { ollamaHost: "https://ollama.corp:8443" })).toBe(
+        "https://ollama.corp:8443",
+      );
+    });
+
+    it("defaults to http://localhost:11434", () => {
+      expect(resolveOllamaHost(undefined, {})).toBe("http://localhost:11434");
+    });
+  });
+
+  describe("resolveOllamaTls", () => {
+    it("uses CLI flag first", () => {
+      process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED = "true";
+      expect(resolveOllamaTls(false, { ollamaTlsRejectUnauthorized: true })).toBe(false);
+    });
+
+    it("uses env var when no CLI flag", () => {
+      process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED = "false";
+      expect(resolveOllamaTls(undefined, { ollamaTlsRejectUnauthorized: true })).toBe(false);
+    });
+
+    it("treats env var '0' as false", () => {
+      process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED = "0";
+      expect(resolveOllamaTls(undefined, {})).toBe(false);
+    });
+
+    it("uses config when no CLI flag or env var", () => {
+      expect(resolveOllamaTls(undefined, { ollamaTlsRejectUnauthorized: false })).toBe(false);
+    });
+
+    it("defaults to true", () => {
+      expect(resolveOllamaTls(undefined, {})).toBe(true);
     });
   });
 });

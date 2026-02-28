@@ -21,6 +21,8 @@ vi.mock("@clack/prompts", () => ({
   note: vi.fn(),
   password: vi.fn(),
   select: vi.fn(),
+  text: vi.fn(),
+  confirm: vi.fn(),
   isCancel: vi.fn(() => false),
 }));
 
@@ -208,7 +210,35 @@ describe("provider command", () => {
 
     it("handles ollama add without token", async () => {
       mockNoConfig();
+      vi.mocked(clack.text).mockResolvedValue("http://localhost:11434");
       await providerCommand(["add", "ollama"], makeCtx());
+      expect(mockLog.success).toHaveBeenCalled();
+    });
+
+    it("handles ollama add with custom host", async () => {
+      mockNoConfig();
+      vi.mocked(clack.text).mockResolvedValue("https://ollama.internal:8443");
+      vi.mocked(clack.confirm).mockResolvedValue(true);
+      await providerCommand(["add", "ollama"], makeCtx());
+      const saved = getWrittenConfig();
+      expect(saved?.ollamaHost).toBe("https://ollama.internal:8443");
+      expect(mockLog.success).toHaveBeenCalled();
+    });
+
+    it("handles ollama add with HTTPS and TLS disabled", async () => {
+      mockNoConfig();
+      vi.mocked(clack.text).mockResolvedValue("https://ollama.internal:8443");
+      vi.mocked(clack.confirm).mockResolvedValue(false);
+      await providerCommand(["add", "ollama"], makeCtx());
+      const saved = getWrittenConfig();
+      expect(saved?.ollamaHost).toBe("https://ollama.internal:8443");
+      expect(saved?.ollamaTlsRejectUnauthorized).toBe(false);
+    });
+
+    it("skips host prompt in non-interactive mode for ollama", async () => {
+      mockNoConfig();
+      await providerCommand(["add", "ollama"], makeCtx({ nonInteractive: true }));
+      expect(clack.text).not.toHaveBeenCalled();
       expect(mockLog.success).toHaveBeenCalled();
     });
 

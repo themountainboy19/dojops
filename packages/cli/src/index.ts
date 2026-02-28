@@ -13,7 +13,14 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider } from "@dojops/api";
 import { LLMProvider, FallbackProvider } from "@dojops/core";
-import { resolveProvider, resolveModel, resolveToken, loadProfileConfig } from "./config";
+import {
+  resolveProvider,
+  resolveModel,
+  resolveToken,
+  resolveOllamaHost,
+  resolveOllamaTls,
+  loadProfileConfig,
+} from "./config";
 import { parseGlobalOptions, parseCommandPath } from "./parser";
 import { remapLegacyArgs } from "./compat";
 import { printHelp, printCommandHelp, printBanner } from "./help";
@@ -204,7 +211,16 @@ async function main() {
       const model = resolveModel(globalOpts.model, config);
       const apiKey = resolveToken(providerName, config);
 
-      let provider: LLMProvider = createProvider({ provider: providerName, model, apiKey });
+      const ollamaHost =
+        providerName === "ollama" ? resolveOllamaHost(undefined, config) : undefined;
+      const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, config) : undefined;
+      let provider: LLMProvider = createProvider({
+        provider: providerName,
+        model,
+        apiKey,
+        ollamaHost,
+        ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+      });
 
       // F-2: Multi-provider fallback
       const fallbackName = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;

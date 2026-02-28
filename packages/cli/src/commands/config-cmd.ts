@@ -20,6 +20,7 @@ function showConfig(config: DojOpsConfig): void {
     `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
     `${pc.bold("Model:")}     ${config.defaultModel ?? pc.dim("(not set)")}`,
     `${pc.bold("Temperature:")} ${config.defaultTemperature != null ? String(config.defaultTemperature) : pc.dim("(not set)")}`,
+    `${pc.bold("Ollama host:")} ${config.ollamaHost ?? pc.dim("(default)")}`,
     `${pc.bold("Tokens:")}`,
     `  openai:    ${maskToken(config.tokens?.openai)}`,
     `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
@@ -180,6 +181,34 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
           message: `API key for ${results.provider}${hint}:`,
         });
       },
+      ollamaHost: ({ results }) => {
+        if (results.provider !== "ollama") return Promise.resolve("");
+        return p.text({
+          message: "Ollama server URL:",
+          placeholder: "http://localhost:11434",
+          defaultValue: config.ollamaHost ?? "http://localhost:11434",
+          validate: (val) => {
+            if (!val) return undefined;
+            try {
+              const u = new URL(val);
+              if (u.protocol !== "http:" && u.protocol !== "https:") {
+                return "URL must use http:// or https://";
+              }
+            } catch {
+              return "Invalid URL";
+            }
+            return undefined;
+          },
+        });
+      },
+      ollamaTls: ({ results }) => {
+        const host = results.ollamaHost as string;
+        if (!host || !host.startsWith("https://")) return Promise.resolve(true);
+        return p.confirm({
+          message: "Verify TLS certificates? (disable for self-signed certs)",
+          initialValue: config.ollamaTlsRejectUnauthorized ?? true,
+        });
+      },
       model: async ({ results }) => {
         const provider = results.provider as string;
         const token = (results.token as string) || config.tokens?.[provider];
@@ -190,7 +219,14 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
             const isStructured = ctx.globalOpts.output !== "table";
             const s = p.spinner();
             if (!isStructured) s.start("Fetching available models...");
-            const llm = createProvider({ provider, apiKey: token || undefined });
+            const ollamaHost = (results.ollamaHost as string) || undefined;
+            const ollamaTls = results.ollamaTls as boolean | undefined;
+            const llm = createProvider({
+              provider,
+              apiKey: token || undefined,
+              ollamaHost,
+              ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+            });
             const models = await llm.listModels?.();
             if (!isStructured) s.stop("Models fetched.");
 
@@ -241,6 +277,22 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
   }
   if (answers.model) {
     config.defaultModel = answers.model as string;
+  }
+
+  // Persist Ollama host settings
+  if (chosenProvider === "ollama") {
+    const host = answers.ollamaHost as string;
+    if (host && host !== "http://localhost:11434") {
+      config.ollamaHost = host;
+    } else {
+      delete config.ollamaHost;
+    }
+    const tls = answers.ollamaTls;
+    if (tls === false) {
+      config.ollamaTlsRejectUnauthorized = false;
+    } else {
+      delete config.ollamaTlsRejectUnauthorized;
+    }
   }
 
   // Smart default handling: don't blindly overwrite existing default

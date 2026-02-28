@@ -6,10 +6,11 @@ import { OllamaProvider } from "./ollama";
 
 const TestSchema = z.object({ answer: z.string() });
 
-const { mockOpenAICreate, mockAnthropicCreate, mockAxiosPost } = vi.hoisted(() => ({
+const { mockOpenAICreate, mockAnthropicCreate, mockAxiosPost, mockAxiosGet } = vi.hoisted(() => ({
   mockOpenAICreate: vi.fn(),
   mockAnthropicCreate: vi.fn(),
   mockAxiosPost: vi.fn(),
+  mockAxiosGet: vi.fn(),
 }));
 
 vi.mock("openai", () => ({
@@ -25,7 +26,12 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 vi.mock("axios", () => ({
-  default: { post: mockAxiosPost },
+  default: {
+    post: mockAxiosPost,
+    get: mockAxiosGet,
+    isAxiosError: (err: unknown) =>
+      err instanceof Error && "isAxiosError" in (err as Record<string, unknown>),
+  },
 }));
 
 // ---- Tests ----
@@ -349,7 +355,7 @@ describe("OllamaProvider", () => {
     expect(res.parsed).toEqual({ answer: "42" });
   });
 
-  it("sends JSON format flag when schema is provided", async () => {
+  it("sends JSON Schema object (not string) when schema is provided", async () => {
     mockAxiosPost.mockResolvedValue({
       data: { response: '{"answer":"x"}' },
     });
@@ -359,7 +365,9 @@ describe("OllamaProvider", () => {
 
     const call = mockAxiosPost.mock.calls[0];
     expect(call[0]).toBe("http://localhost:11434/api/generate");
-    expect(call[1].format).toBe("json");
+    // format should be a JSON Schema object, not the string "json"
+    expect(call[1].format).toEqual(expect.objectContaining({ type: "object" }));
+    expect(call[1].format).not.toBe("json");
     expect(call[1].stream).toBe(false);
   });
 
@@ -390,5 +398,296 @@ describe("OllamaProvider", () => {
 
     const call = mockAxiosPost.mock.calls[0];
     expect(call[1].options).toBeUndefined();
+  });
+
+  // ---------------------------------------------------------------
+  // Token usage extraction
+  // ---------------------------------------------------------------
+
+  describe("token usage extraction", () => {
+    it("extracts prompt_eval_count and eval_count from /api/generate", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { response: "Hello!", prompt_eval_count: 15, eval_count: 8 },
+      });
+
+      const provider = new OllamaProvider();
+      const res = await provider.generate({ prompt: "Hi" });
+
+      expect(res.usage).toEqual({ promptTokens: 15, completionTokens: 8, totalTokens: 23 });
+    });
+
+    it("extracts prompt_eval_count and eval_count from /api/chat", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: {
+          message: { content: "Hello!" },
+          prompt_eval_count: 20,
+          eval_count: 12,
+        },
+      });
+
+      const provider = new OllamaProvider();
+      const res = await provider.generate({
+        prompt: "Hi",
+        messages: [{ role: "user", content: "Hi" }],
+      });
+
+      expect(res.usage).toEqual({ promptTokens: 20, completionTokens: 12, totalTokens: 32 });
+    });
+
+    it("returns undefined usage when counts missing", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "Hello!" } });
+
+      const provider = new OllamaProvider();
+      const res = await provider.generate({ prompt: "Hi" });
+
+      expect(res.usage).toBeUndefined();
+    });
+
+    it("returns undefined usage when only one count present", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { response: "Hello!", prompt_eval_count: 15 },
+      });
+
+      const provider = new OllamaProvider();
+      const res = await provider.generate({ prompt: "Hi" });
+
+      expect(res.usage).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Request timeout
+  // ---------------------------------------------------------------
+
+  describe("request timeout", () => {
+    it("passes timeout config to axios.post for generate", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider();
+      await provider.generate({ prompt: "Hi" });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig).toEqual({ timeout: 120_000 });
+    });
+
+    it("passes timeout config to axios.post for chat", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { message: { content: "ok" } },
+      });
+
+      const provider = new OllamaProvider();
+      await provider.generate({
+        prompt: "Hi",
+        messages: [{ role: "user", content: "Hi" }],
+      });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig).toEqual({ timeout: 120_000 });
+    });
+
+    it("passes timeout config to axios.get for listModels", async () => {
+      mockAxiosGet.mockResolvedValue({ data: { models: [] } });
+
+      const provider = new OllamaProvider();
+      await provider.listModels();
+
+      const axiosConfig = mockAxiosGet.mock.calls[0][1];
+      expect(axiosConfig).toEqual({ timeout: 120_000 });
+    });
+
+    it("throws timeout error with helpful message on ECONNABORTED", async () => {
+      const err = new Error("timeout of 120000ms exceeded") as Error & {
+        isAxiosError: boolean;
+        code: string;
+      };
+      err.isAxiosError = true;
+      err.code = "ECONNABORTED";
+      mockAxiosPost.mockRejectedValue(err);
+
+      const provider = new OllamaProvider();
+      await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/timed out after 120s/);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // JSON Schema format
+  // ---------------------------------------------------------------
+
+  describe("JSON Schema format", () => {
+    it("sends JSON Schema in chat mode too", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { message: { content: '{"answer":"x"}' } },
+      });
+
+      const provider = new OllamaProvider();
+      await provider.generate({
+        prompt: "q",
+        schema: TestSchema,
+        messages: [{ role: "user", content: "q" }],
+      });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].format).toEqual(expect.objectContaining({ type: "object" }));
+      expect(call[1].format).not.toBe("json");
+    });
+
+    it("does not send format when no schema", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider();
+      await provider.generate({ prompt: "Hi" });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].format).toBeUndefined();
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Model-not-found (404)
+  // ---------------------------------------------------------------
+
+  describe("model-not-found", () => {
+    it('throws helpful error with "ollama pull" hint on 404', async () => {
+      const err = new Error("Request failed with status 404") as Error & {
+        isAxiosError: boolean;
+        response: { status: number };
+      };
+      err.isAxiosError = true;
+      err.response = { status: 404 };
+      mockAxiosPost.mockRejectedValue(err);
+
+      const provider = new OllamaProvider(undefined, "mistral");
+      await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(
+        /Model "mistral" not found.*ollama pull mistral/,
+      );
+    });
+
+    it("ECONNREFUSED still gets connection message", async () => {
+      const err = new Error("connect ECONNREFUSED") as Error & {
+        isAxiosError: boolean;
+        code: string;
+      };
+      err.isAxiosError = true;
+      err.code = "ECONNREFUSED";
+      mockAxiosPost.mockRejectedValue(err);
+
+      const provider = new OllamaProvider();
+      await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Cannot connect to Ollama/);
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // keep_alive
+  // ---------------------------------------------------------------
+
+  describe("keep_alive", () => {
+    it("sends keep_alive in generate request", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider();
+      await provider.generate({ prompt: "Hi" });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].keep_alive).toBe("5m");
+    });
+
+    it("sends keep_alive in chat request", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { message: { content: "ok" } },
+      });
+
+      const provider = new OllamaProvider();
+      await provider.generate({
+        prompt: "Hi",
+        messages: [{ role: "user", content: "Hi" }],
+      });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].keep_alive).toBe("5m");
+    });
+
+    it('uses default "5m" when not specified', () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider();
+      // default constructor — keepAlive should be "5m"
+      provider.generate({ prompt: "Hi" });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].keep_alive).toBe("5m");
+    });
+
+    it("uses custom keep_alive when specified", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider(undefined, undefined, "30m");
+      await provider.generate({ prompt: "Hi" });
+
+      const call = mockAxiosPost.mock.calls[0];
+      expect(call[1].keep_alive).toBe("30m");
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // TLS configuration
+  // ---------------------------------------------------------------
+
+  describe("TLS configuration", () => {
+    it("does not include httpsAgent by default", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider();
+      await provider.generate({ prompt: "Hi" });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig.httpsAgent).toBeUndefined();
+    });
+
+    it("does not include httpsAgent when tlsRejectUnauthorized is true", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", true);
+      await provider.generate({ prompt: "Hi" });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig.httpsAgent).toBeUndefined();
+    });
+
+    it("includes httpsAgent with rejectUnauthorized=false when TLS verification disabled", async () => {
+      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+
+      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
+      await provider.generate({ prompt: "Hi" });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig.httpsAgent).toBeDefined();
+      expect(axiosConfig.httpsAgent.options.rejectUnauthorized).toBe(false);
+    });
+
+    it("passes httpsAgent to listModels when TLS verification disabled", async () => {
+      mockAxiosGet.mockResolvedValue({ data: { models: [] } });
+
+      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
+      await provider.listModels();
+
+      const axiosConfig = mockAxiosGet.mock.calls[0][1];
+      expect(axiosConfig.httpsAgent).toBeDefined();
+      expect(axiosConfig.httpsAgent.options.rejectUnauthorized).toBe(false);
+    });
+
+    it("passes httpsAgent to chat requests when TLS verification disabled", async () => {
+      mockAxiosPost.mockResolvedValue({
+        data: { message: { content: "ok" } },
+      });
+
+      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
+      await provider.generate({
+        prompt: "Hi",
+        messages: [{ role: "user", content: "Hi" }],
+      });
+
+      const axiosConfig = mockAxiosPost.mock.calls[0][2];
+      expect(axiosConfig.httpsAgent).toBeDefined();
+    });
   });
 });

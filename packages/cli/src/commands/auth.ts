@@ -45,7 +45,7 @@ async function authLogin(args: string[], ctx: CLIContext): Promise<void> {
   if (provider === "ollama") {
     p.log.info(
       pc.dim(
-        "Just set DOJOPS_PROVIDER=ollama or run: dojops auth login --provider openai --token <KEY>",
+        'Ollama does not require an API token. Use "dojops config" to configure the Ollama server URL.',
       ),
     );
     throw new CLIError(

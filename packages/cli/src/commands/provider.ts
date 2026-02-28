@@ -126,7 +126,52 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
   let token = extractFlagValue(args.slice(1), "--token");
 
   if (name === "ollama") {
-    // Ollama doesn't need a token
+    // Ollama doesn't need a token — prompt for host URL in interactive mode
+    if (!ctx.globalOpts.nonInteractive) {
+      const host = await p.text({
+        message: "Ollama server URL:",
+        placeholder: "http://localhost:11434",
+        defaultValue: config.ollamaHost ?? "http://localhost:11434",
+        validate: (val) => {
+          if (!val) return undefined;
+          try {
+            const u = new URL(val);
+            if (u.protocol !== "http:" && u.protocol !== "https:") {
+              return "URL must use http:// or https://";
+            }
+          } catch {
+            return "Invalid URL";
+          }
+          return undefined;
+        },
+      });
+      if (p.isCancel(host)) {
+        p.log.info("Cancelled.");
+        return;
+      }
+      const hostStr = host as string;
+      if (hostStr && hostStr !== "http://localhost:11434") {
+        config.ollamaHost = hostStr;
+      } else {
+        delete config.ollamaHost;
+      }
+
+      // TLS prompt for HTTPS URLs
+      if (hostStr.startsWith("https://")) {
+        const tls = await p.confirm({
+          message: "Verify TLS certificates? (disable for self-signed certs)",
+          initialValue: config.ollamaTlsRejectUnauthorized ?? true,
+        });
+        if (!p.isCancel(tls)) {
+          if (tls === false) {
+            config.ollamaTlsRejectUnauthorized = false;
+          } else {
+            delete config.ollamaTlsRejectUnauthorized;
+          }
+        }
+      }
+    }
+
     const configured = getConfiguredProviders(config);
     // Only ollama counts as "first" if no other provider has a token
     const hasOther = configured.some((p) => p !== "ollama");
@@ -144,6 +189,7 @@ async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
         ),
       );
     } else {
+      saveConfig(config);
       p.log.info(`${pc.bold(name)} is already the default provider.`);
     }
     return;

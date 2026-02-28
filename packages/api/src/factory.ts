@@ -24,6 +24,8 @@ export interface ProviderOptions {
   apiKey?: string;
   /** When true, returns a NoopProvider instead of throwing on missing API key */
   allowMissing?: boolean;
+  ollamaHost?: string;
+  ollamaTlsRejectUnauthorized?: boolean;
 }
 
 export function createProvider(options?: ProviderOptions): LLMProvider {
@@ -33,7 +35,9 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   const allowMissing = options?.allowMissing ?? false;
 
   if (providerName === "ollama") {
-    return withRetry(new OllamaProvider(undefined, model));
+    const baseUrl = options?.ollamaHost ?? process.env.OLLAMA_HOST ?? undefined;
+    const rejectUnauthorized = options?.ollamaTlsRejectUnauthorized;
+    return withRetry(new OllamaProvider(baseUrl, model, undefined, rejectUnauthorized));
   } else if (providerName === "anthropic") {
     const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
     if (!key) {

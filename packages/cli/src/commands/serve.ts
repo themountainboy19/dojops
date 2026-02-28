@@ -9,7 +9,7 @@ import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from
 import { createToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { extractFlagValue, hasFlag } from "../parser";
-import { resolveToken } from "../config";
+import { resolveToken, resolveOllamaHost, resolveOllamaTls } from "../config";
 import { findProjectRoot } from "../state";
 import { ExitCode } from "../exit-codes";
 
@@ -96,9 +96,15 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const model = ctx.globalOpts.model ?? ctx.config.defaultModel;
   const apiKey = resolveToken(providerName, ctx.config);
 
+  // Resolve Ollama host settings from config
+  const ollamaHost =
+    providerName === "ollama" ? resolveOllamaHost(undefined, ctx.config) : undefined;
+  const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, ctx.config) : undefined;
+
   // Populate env vars so createProvider() inside the API also picks them up
   if (providerName) process.env.DOJOPS_PROVIDER = providerName;
   if (model) process.env.DOJOPS_MODEL = model;
+  if (ollamaHost && !process.env.OLLAMA_HOST) process.env.OLLAMA_HOST = ollamaHost;
   if (apiKey) {
     const envVarMap: Record<string, string> = {
       openai: "OPENAI_API_KEY",
@@ -137,7 +143,14 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.info(`  ${pc.dim("$")} dojops auth login --provider ${providerName} --token <YOUR_KEY>`);
   }
 
-  const provider = createProvider({ provider: providerName, model, apiKey, allowMissing: true });
+  const provider = createProvider({
+    provider: providerName,
+    model,
+    apiKey,
+    allowMissing: true,
+    ollamaHost,
+    ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+  });
 
   // A27: Validate provider connectivity at startup
   if (provider.listModels) {

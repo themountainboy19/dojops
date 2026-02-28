@@ -7,6 +7,8 @@ export interface DojOpsConfig {
   defaultModel?: string;
   defaultTemperature?: number;
   tokens?: Record<string, string>;
+  ollamaHost?: string;
+  ollamaTlsRejectUnauthorized?: boolean;
 }
 
 export const VALID_PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini"] as const;
@@ -127,6 +129,25 @@ export function resolveTemperature(
   const envVal = process.env.DOJOPS_TEMPERATURE;
   if (envVal !== undefined) return Number(envVal);
   return config.defaultTemperature ?? undefined;
+}
+
+/**
+ * Resolves the Ollama server URL.
+ * Priority: CLI flag > OLLAMA_HOST env > config ollamaHost > "http://localhost:11434"
+ */
+export function resolveOllamaHost(cliFlag: string | undefined, config: DojOpsConfig): string {
+  return cliFlag ?? process.env.OLLAMA_HOST ?? config.ollamaHost ?? "http://localhost:11434";
+}
+
+/**
+ * Resolves the Ollama TLS certificate verification setting.
+ * Priority: CLI flag > OLLAMA_TLS_REJECT_UNAUTHORIZED env > config > true
+ */
+export function resolveOllamaTls(cliFlag: boolean | undefined, config: DojOpsConfig): boolean {
+  if (cliFlag !== undefined) return cliFlag;
+  const envVal = process.env.OLLAMA_TLS_REJECT_UNAUTHORIZED;
+  if (envVal !== undefined) return envVal !== "0" && envVal.toLowerCase() !== "false";
+  return config.ollamaTlsRejectUnauthorized ?? true;
 }
 
 /**

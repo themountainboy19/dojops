@@ -8,7 +8,7 @@ import {
   isToolSupportedOnCurrentPlatform,
 } from "@dojops/core";
 import { CLIContext } from "../types";
-import { getConfigPath } from "../config";
+import { getConfigPath, resolveOllamaHost } from "../config";
 import { ExitCode } from "../exit-codes";
 import {
   findProjectRoot,
@@ -79,9 +79,10 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
 
   // Ollama reachability
   if (provider === "ollama" || process.env.DOJOPS_PROVIDER === "ollama") {
+    const ollamaHost = resolveOllamaHost(undefined, ctx.config);
     let ollamaOk = false;
     try {
-      const resp = await fetch("http://localhost:11434/api/tags");
+      const resp = await fetch(`${ollamaHost}/api/tags`);
       ollamaOk = resp.ok;
     } catch {
       // not reachable
@@ -89,7 +90,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     checks.push({
       name: "Ollama server",
       status: ollamaOk ? "pass" : "fail",
-      detail: ollamaOk ? "Running at localhost:11434" : "Not reachable",
+      detail: ollamaOk ? `Running at ${ollamaHost}` : `Not reachable at ${ollamaHost}`,
     });
   }
 
