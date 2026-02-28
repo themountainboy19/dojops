@@ -1214,8 +1214,10 @@ describe("generateDirectoryTree", () => {
 
     // maxDepth=1 should show 'a/' but not descend further
     const tree = generateDirectoryTree(dir, 1);
+    const lines = tree.split("\n");
     expect(tree).toContain("a/");
-    expect(tree).not.toContain("b/");
+    // Check no line has "b/" as a tree entry (avoid matching temp dir name like "dojops-scanner-XXb/")
+    expect(lines.some((l) => l.includes("── b/"))).toBe(false);
     expect(tree).not.toContain("deep.txt");
   });
 

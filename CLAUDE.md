@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (1578 tests)
+pnpm test               # Vitest across all packages (1924 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -86,9 +86,11 @@ pnpm dojops -- serve                 # in-repo alternative
 
 **Key abstractions:**
 
-- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, optional `listModels(): Promise<string[]>`, supports optional `schema` field for structured JSON output, `temperature` passthrough to all 5 providers
+- `LLMProvider` interface (`packages/core/src/llm/provider.ts`) — `generate(LLMRequest): Promise<LLMResponse>`, optional `listModels(): Promise<string[]>`, supports optional `schema` field for structured JSON output, `temperature` passthrough to all 6 providers
 - `DeterministicProvider` (`packages/core/src/llm/deterministic-provider.ts`) — LLMProvider proxy that forces `temperature: 0` on every `generate()` call; used by `--replay` mode
-- `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 5 providers
+- `GitHubCopilotProvider` (`packages/core/src/llm/github-copilot.ts`) — LLM provider using OpenAI SDK with Copilot API (`baseURL` override), creates new client per `generate()` call for fresh JWT, `KNOWN_COPILOT_MODELS` fallback when API returns empty
+- `getValidCopilotToken()` / `copilot-auth.ts` (`packages/core/src/llm/copilot-auth.ts`) — OAuth Device Flow (`requestDeviceCode` → `pollForAccessToken` → `getCopilotToken`), JWT auto-refresh (~30min expiry), token persistence at `~/.dojops/copilot-token.json` (mode 0o600), `isCopilotAuthenticated()` quick check, `GITHUB_COPILOT_TOKEN` env var bypass for CI/CD
+- `parseAndValidate()` (`packages/core/src/llm/json-validator.ts`) — strips markdown fences, JSON.parse, Zod safeParse; used by all 6 providers
 - `DevOpsAgent` (`packages/core/src/agent.ts`) — wraps an LLMProvider
 - `AgentRouter` (`packages/core/src/agents/router.ts`) — keyword-based routing to specialist agents with confidence scoring; accepts any `SpecialistConfig[]` (built-in + custom)
 - `SpecialistAgent` (`packages/core/src/agents/specialist.ts`) — domain-specific LLM agent with system prompt (16 built-in specialists: ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python + user-defined custom agents)
@@ -131,6 +133,8 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 *-tool.ts      -> BaseTool subclass: generate() auto-detects existing files + returns data with `isUpdate` flag, verify() validates, execute() creates .bak backup before overwriting + writes to disk
 ```
 
+**Test organization**: All test files live in `__tests__/` directories mirroring the source structure (e.g. `src/__tests__/llm/copilot-auth.test.ts` tests `src/llm/copilot-auth.ts`). Dynamic `import()` and `vi.mock()` paths in tests must use correct relative paths from the `__tests__/` location to the source files.
+
 **Design principles** (from docs/architecture.md): No blind execution. Structured JSON outputs. Schema validation before tool execution. Idempotent operations.
 
 ## Current Status
@@ -148,7 +152,7 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 - `@dojops/cli` — Full lifecycle: `init` (writes `context.json` + `context.md` + user review prompt), `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve` (`credentials`), `chat`, `check`, `scan` (`--security`, `--deps`, `--iac`, `--sbom`), `tools` (`list/validate/init`), `toolchain` (`list/install/remove/clean`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with tool version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, tool integrity validation on resume (extracted to `checkToolIntegrity()`), tool metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore` (random UUID IDs, O(1) lookup), API key authentication (Bearer/X-API-Key with timing-safe compare), dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with bounded reads (10MB file cap, 10K audit line cap), vanilla web dashboard (dark theme, 5 tabs + login overlay for auth), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/TOOL_SPEC_v1.md` freezes the v1 custom tool contract (manifest schema, discovery, security constraints, compatibility promise)
-- Dev tooling — Vitest (1578 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (1924 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 
