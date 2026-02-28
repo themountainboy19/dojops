@@ -288,7 +288,7 @@ describe("PlannerExecutor", () => {
     });
   });
 
-  describe("$ref to unknown task", () => {
+  describe("$ref resolution edge cases", () => {
     it("throws error when $ref references a task that does not exist", async () => {
       const graph: TaskGraph = {
         goal: "bad ref",
@@ -304,9 +304,154 @@ describe("PlannerExecutor", () => {
       };
 
       const executor = new PlannerExecutor([new SuccessTool()]);
-      // resolveInputRefs throws before the try/catch that wraps generate(),
-      // so the error propagates as a rejection from execute()
       await expect(executor.execute(graph)).rejects.toThrow("references unknown task");
+    });
+
+    it("resolves $ref to undefined when referenced task has output: undefined", async () => {
+      // A completed task with no output (output is undefined by default on TaskResult)
+      // Use a tool that returns data without specific fields — the SuccessTool
+      // returns { result: "ok" }, so we wire t2's input to reference t1's output
+      const graph: TaskGraph = {
+        goal: "ref to undefined output",
+        tasks: [
+          {
+            id: "t1",
+            tool: "success-tool",
+            description: "produces output",
+            dependsOn: [],
+            input: {},
+          },
+          {
+            id: "t2",
+            tool: "success-tool",
+            description: "references t1",
+            dependsOn: ["t1"],
+            input: { data: "$ref:t1" },
+          },
+        ],
+      };
+
+      const executor = new PlannerExecutor([new SuccessTool()]);
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      expect(result.results[1].status).toBe("completed");
+      // t1's output is { result: "ok" }, which is passed through sanitizeRefOutput
+      expect(result.results[1].output).toHaveProperty("data");
+    });
+
+    it("throws error when $ref references a failed task", async () => {
+      const graph: TaskGraph = {
+        goal: "ref to failed",
+        tasks: [
+          {
+            id: "t1",
+            tool: "fail-tool",
+            description: "will fail",
+            dependsOn: [],
+            input: {},
+          },
+          {
+            id: "t2",
+            tool: "success-tool",
+            description: "references failed t1",
+            dependsOn: ["t1"],
+            input: { data: "$ref:t1" },
+          },
+        ],
+      };
+
+      const executor = new PlannerExecutor([new SuccessTool(), new FailTool()]);
+      const result = await executor.execute(graph);
+
+      // t1 fails, t2 should be skipped because its dependency failed
+      expect(result.success).toBe(false);
+      expect(result.results[0].status).toBe("failed");
+      expect(result.results[1].status).toBe("skipped");
+      expect(result.results[1].error).toContain("failed dependency");
+    });
+
+    it("sanitizes string output from $ref resolution", async () => {
+      // Create a tool that returns a string with control characters
+      class ControlCharTool extends BaseTool<Record<string, unknown>> {
+        name = "control-char-tool";
+        description = "Returns output with control characters";
+        inputSchema = SuccessInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: { content: "hello\x00\x07world\u200Bfoo\uFEFFbar" },
+          };
+        }
+      }
+
+      const graph: TaskGraph = {
+        goal: "sanitize ref",
+        tasks: [
+          {
+            id: "t1",
+            tool: "control-char-tool",
+            description: "produces dirty output",
+            dependsOn: [],
+            input: {},
+          },
+          {
+            id: "t2",
+            tool: "success-tool",
+            description: "references t1",
+            dependsOn: ["t1"],
+            input: { data: "$ref:t1" },
+          },
+        ],
+      };
+
+      const executor = new PlannerExecutor([new SuccessTool(), new ControlCharTool()]);
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      const t2Output = result.results[1].output as Record<string, unknown>;
+      const refData = t2Output.data as Record<string, unknown>;
+      // Control characters and zero-width markers should be stripped
+      expect(refData.content).toBe("helloworldfoobar");
+    });
+
+    it("resolves $ref to null when referenced task output contains null values", async () => {
+      class NullOutputTool extends BaseTool<Record<string, unknown>> {
+        name = "null-output-tool";
+        description = "Returns null in output data";
+        inputSchema = SuccessInputSchema;
+        async generate(): Promise<ToolOutput> {
+          return { success: true, data: null };
+        }
+      }
+
+      const graph: TaskGraph = {
+        goal: "ref to null",
+        tasks: [
+          {
+            id: "t1",
+            tool: "null-output-tool",
+            description: "produces null output",
+            dependsOn: [],
+            input: {},
+          },
+          {
+            id: "t2",
+            tool: "success-tool",
+            description: "references t1",
+            dependsOn: ["t1"],
+            input: { data: "$ref:t1" },
+          },
+        ],
+      };
+
+      const executor = new PlannerExecutor([new SuccessTool(), new NullOutputTool()]);
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      const t2Output = result.results[1].output as Record<string, unknown>;
+      // sanitizeRefOutput returns null as-is (it's not a string/array/object)
+      expect(t2Output.data).toBeNull();
     });
   });
 

@@ -113,6 +113,145 @@ describe("OpenAIProvider", () => {
     const call = mockOpenAICreate.mock.calls[0][0];
     expect(call.temperature).toBeUndefined();
   });
+
+  // ---------------------------------------------------------------
+  // Error path tests
+  // ---------------------------------------------------------------
+
+  it("throws clear error on HTTP 401 Unauthorized", async () => {
+    mockOpenAICreate.mockRejectedValue(
+      new Error(
+        '401 {"error":{"message":"Incorrect API key provided: sk-proj-abc123...","type":"invalid_request_error","code":"invalid_api_key"}}',
+      ),
+    );
+
+    const provider = new OpenAIProvider("bad-key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Incorrect API key/);
+  });
+
+  it("throws appropriate error on HTTP 429 rate limiting", async () => {
+    mockOpenAICreate.mockRejectedValue(
+      new Error(
+        '429 {"error":{"message":"Rate limit reached for gpt-4o-mini. Please retry after 20s.","type":"tokens","code":"rate_limit_exceeded"}}',
+      ),
+    );
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Rate limit reached/);
+  });
+
+  it("throws appropriate error on HTTP 503 service unavailability", async () => {
+    mockOpenAICreate.mockRejectedValue(
+      new Error(
+        '503 {"error":{"message":"The server is temporarily unable to handle the request.","type":"server_error"}}',
+      ),
+    );
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/temporarily unable/);
+  });
+
+  it("throws clear error on network ECONNREFUSED", async () => {
+    const networkErr = new Error("connect ECONNREFUSED 127.0.0.1:443");
+    mockOpenAICreate.mockRejectedValue(networkErr);
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/ECONNREFUSED/);
+  });
+
+  it("throws error on malformed LLM response (invalid JSON) with schema", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "This is not valid JSON {{{" } }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi", schema: TestSchema })).rejects.toThrow(
+      /Failed to parse JSON|Schema validation failed/,
+    );
+  });
+
+  it("throws error when choices array is empty", async () => {
+    mockOpenAICreate.mockResolvedValue({ choices: [] });
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/empty choices/);
+  });
+
+  it("throws error when structured response is truncated (finish_reason=length)", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: '{"answer":"partial' }, finish_reason: "length" }],
+    });
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi", schema: TestSchema })).rejects.toThrow(
+      /truncated/i,
+    );
+  });
+
+  it("redacts API keys in error messages", async () => {
+    mockOpenAICreate.mockRejectedValue(
+      new Error(
+        '401 {"error":{"message":"Invalid API key: sk-proj-abcdefghijklmnopqrstuvwxyz123456"}}',
+      ),
+    );
+
+    const provider = new OpenAIProvider("key");
+    try {
+      await provider.generate({ prompt: "Hi" });
+      expect.fail("should have thrown");
+    } catch (err: unknown) {
+      const msg = (err as Error).message;
+      expect(msg).not.toContain("sk-proj-abcdefghijklmnopqrstuvwxyz123456");
+      expect(msg).toContain("REDACTED");
+    }
+  });
+
+  it("extracts nested error message from SDK JSON errors", async () => {
+    mockOpenAICreate.mockRejectedValue(
+      new Error(
+        '400 {"error":{"message":"Invalid prompt: too long","type":"invalid_request_error"}}',
+      ),
+    );
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Invalid prompt: too long/);
+  });
+
+  it("falls back to raw error message when JSON extraction fails", async () => {
+    mockOpenAICreate.mockRejectedValue(new Error("Something went wrong without JSON"));
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(
+      /Something went wrong without JSON/,
+    );
+  });
+
+  it("handles non-Error thrown values", async () => {
+    mockOpenAICreate.mockRejectedValue("plain string error");
+
+    const provider = new OpenAIProvider("key");
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/plain string error/);
+  });
+
+  it("includes token usage in successful response", async () => {
+    mockOpenAICreate.mockResolvedValue({
+      choices: [{ message: { content: "Hello!" } }],
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+      },
+    });
+
+    const provider = new OpenAIProvider("key");
+    const res = await provider.generate({ prompt: "Hi" });
+
+    expect(res.usage).toEqual({
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+    });
+  });
 });
 
 describe("AnthropicProvider", () => {

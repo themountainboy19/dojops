@@ -365,7 +365,8 @@ async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
   }
 
   // Check project dir first, then global
-  const projectDir = path.join(process.cwd(), ".dojops", "agents", name);
+  const projectRoot = findProjectRoot();
+  const projectDir = projectRoot ? path.join(projectRoot, ".dojops", "agents", name) : null;
   const globalDir = path.join(
     process.env.HOME ?? process.env.USERPROFILE ?? "",
     ".dojops",
@@ -374,7 +375,7 @@ async function agentRemove(args: string[], ctx: CLIContext): Promise<void> {
   );
 
   let targetDir: string | null = null;
-  if (fs.existsSync(projectDir)) {
+  if (projectDir && fs.existsSync(projectDir)) {
     targetDir = projectDir;
   } else if (fs.existsSync(globalDir)) {
     targetDir = globalDir;

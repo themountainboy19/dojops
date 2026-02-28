@@ -354,6 +354,10 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "agents list":
+    case "agents info":
+    case "agents create":
+    case "agents remove":
     case "agents":
       console.log(`\n${pc.bold("dojops agents")} — Manage specialist agents (built-in + custom)`);
       console.log(`\n${pc.bold("USAGE")}`);

@@ -48,6 +48,10 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
   const totalCount = legacyTools.length + dopsEntries.length;
 
   if (totalCount === 0) {
+    if (ctx.globalOpts.output === "json") {
+      console.log("[]");
+      return;
+    }
     p.log.info("No custom tools discovered.");
     p.log.info(pc.dim("Place tools in ~/.dojops/tools/<name>/ or .dojops/tools/<name>.dops"));
     return;

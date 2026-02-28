@@ -127,6 +127,86 @@ describe("serializer", () => {
     expect(result).toBe(false);
   });
 
+  it("concurrent session saves both complete without corruption", async () => {
+    const id1 = "chat-aabb00110022";
+    const id2 = "chat-ccdd00330044";
+
+    const state1 = makeState(id1);
+    state1.messages = [
+      { role: "user", content: "Message from session 1", timestamp: "2024-01-01T00:00:00.000Z" },
+    ];
+    state1.metadata = { totalTokensEstimate: 100, messageCount: 1 };
+
+    const state2 = makeState(id2);
+    state2.messages = [
+      { role: "user", content: "Message from session 2", timestamp: "2024-01-01T00:00:01.000Z" },
+    ];
+    state2.metadata = { totalTokensEstimate: 200, messageCount: 1 };
+
+    // Save both sessions concurrently
+    await Promise.all([
+      Promise.resolve(saveSession(tmpDir, state1)),
+      Promise.resolve(saveSession(tmpDir, state2)),
+    ]);
+
+    // Both sessions should be loadable
+    const loaded1 = loadSession(tmpDir, id1);
+    const loaded2 = loadSession(tmpDir, id2);
+
+    expect(loaded1).not.toBeNull();
+    expect(loaded2).not.toBeNull();
+    expect(loaded1!.id).toBe(id1);
+    expect(loaded2!.id).toBe(id2);
+    expect(loaded1!.messages[0].content).toBe("Message from session 1");
+    expect(loaded2!.messages[0].content).toBe("Message from session 2");
+  });
+
+  it("concurrent writes to the same session result in clean last-write-wins", async () => {
+    const id = "chat-ee00ff112233";
+
+    const state1 = makeState(id);
+    state1.messages = [
+      { role: "user", content: "First write", timestamp: "2024-01-01T00:00:00.000Z" },
+    ];
+    state1.metadata = { totalTokensEstimate: 10, messageCount: 1 };
+
+    const state2 = makeState(id);
+    state2.messages = [
+      { role: "user", content: "Second write", timestamp: "2024-01-01T00:00:01.000Z" },
+      { role: "assistant", content: "Response", timestamp: "2024-01-01T00:00:02.000Z" },
+    ];
+    state2.metadata = { totalTokensEstimate: 20, messageCount: 2 };
+
+    // Both save concurrently to the same session file
+    await Promise.all([
+      Promise.resolve(saveSession(tmpDir, state1)),
+      Promise.resolve(saveSession(tmpDir, state2)),
+    ]);
+
+    // The file should contain valid JSON (not corrupted by interleaving)
+    const loaded = loadSession(tmpDir, id);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.id).toBe(id);
+
+    // The content should be from either state1 or state2 (last-write-wins),
+    // but must be a complete, uncorrupted state
+    const messageContents = loaded!.messages.map((m) => m.content);
+    const isState1 = messageContents.length === 1 && messageContents[0] === "First write";
+    const isState2 = messageContents.length === 2 && messageContents[0] === "Second write";
+    expect(isState1 || isState2).toBe(true);
+  });
+
+  it("concurrent saves to multiple sessions all appear in listing", async () => {
+    const ids = ["chat-1100aabb0011", "chat-2200ccdd0022", "chat-3300eeff0033"];
+
+    await Promise.all(ids.map((id) => Promise.resolve(saveSession(tmpDir, makeState(id)))));
+
+    const sessions = listSessions(tmpDir);
+    expect(sessions).toHaveLength(3);
+    const sessionIds = sessions.map((s) => s.id).sort();
+    expect(sessionIds).toEqual(ids.sort());
+  });
+
   it("listSessions filters out files with non-hex session IDs", () => {
     // Create sessions directory
     const sessDir = path.join(tmpDir, ".dojops", "sessions");

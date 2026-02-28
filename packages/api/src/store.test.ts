@@ -134,4 +134,223 @@ describe("HistoryStore", () => {
     // First entry should have been evicted from index too
     expect(smallStore.getById(first.id)).toBeUndefined();
   });
+
+  describe("T-8: eviction boundary tests", () => {
+    it("all entries present when at exact capacity", () => {
+      const capacity = 5;
+      const boundedStore = new HistoryStore(capacity);
+      const entries = [];
+
+      for (let i = 0; i < capacity; i++) {
+        entries.push(
+          boundedStore.add({
+            type: "generate",
+            request: { index: i },
+            response: {},
+            durationMs: i * 10,
+            success: true,
+          }),
+        );
+      }
+
+      // All entries should be present
+      expect(boundedStore.getAll()).toHaveLength(capacity);
+
+      // Every entry should be retrievable by ID
+      for (const entry of entries) {
+        expect(boundedStore.getById(entry.id)).toBeDefined();
+        expect(boundedStore.getById(entry.id)!.id).toBe(entry.id);
+      }
+    });
+
+    it("evicts oldest entry when one entry exceeds capacity", () => {
+      const capacity = 5;
+      const boundedStore = new HistoryStore(capacity);
+      const entries = [];
+
+      for (let i = 0; i < capacity; i++) {
+        entries.push(
+          boundedStore.add({
+            type: "generate",
+            request: { index: i },
+            response: {},
+            durationMs: i * 10,
+            success: true,
+          }),
+        );
+      }
+
+      // Add one more entry beyond capacity
+      const overflowEntry = boundedStore.add({
+        type: "scan",
+        request: { index: capacity },
+        response: {},
+        durationMs: 999,
+        success: true,
+      });
+
+      // Store should still be at capacity
+      expect(boundedStore.getAll()).toHaveLength(capacity);
+
+      // The oldest (first) entry should be evicted
+      expect(boundedStore.getById(entries[0].id)).toBeUndefined();
+
+      // Entries 1..4 should still be present
+      for (let i = 1; i < capacity; i++) {
+        expect(boundedStore.getById(entries[i].id)).toBeDefined();
+      }
+
+      // The new overflow entry should be retrievable
+      expect(boundedStore.getById(overflowEntry.id)).toBeDefined();
+      expect(boundedStore.getById(overflowEntry.id)!.type).toBe("scan");
+    });
+
+    it("evicted entry is not retrievable by ID", () => {
+      const boundedStore = new HistoryStore(2);
+      const first = boundedStore.add({
+        type: "generate",
+        request: { n: 1 },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      boundedStore.add({
+        type: "plan",
+        request: { n: 2 },
+        response: {},
+        durationMs: 20,
+        success: true,
+      });
+
+      // At capacity — first still accessible
+      expect(boundedStore.getById(first.id)).toBeDefined();
+
+      // Trigger eviction
+      boundedStore.add({
+        type: "diff",
+        request: { n: 3 },
+        response: {},
+        durationMs: 30,
+        success: true,
+      });
+
+      // First entry should be gone from both getAll and getById
+      expect(boundedStore.getById(first.id)).toBeUndefined();
+      const allIds = boundedStore.getAll().map((e) => e.id);
+      expect(allIds).not.toContain(first.id);
+    });
+
+    it("new entry IS retrievable by ID after eviction", () => {
+      const boundedStore = new HistoryStore(2);
+      boundedStore.add({
+        type: "generate",
+        request: {},
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      boundedStore.add({
+        type: "plan",
+        request: {},
+        response: {},
+        durationMs: 20,
+        success: true,
+      });
+
+      // Add beyond capacity
+      const newest = boundedStore.add({
+        type: "diff",
+        request: { newest: true },
+        response: {},
+        durationMs: 30,
+        success: true,
+      });
+
+      const found = boundedStore.getById(newest.id);
+      expect(found).toBeDefined();
+      expect(found!.id).toBe(newest.id);
+      expect(found!.type).toBe("diff");
+      expect((found!.request as { newest: boolean }).newest).toBe(true);
+    });
+
+    it("getAll returns entries in correct order after eviction", () => {
+      const boundedStore = new HistoryStore(3);
+      const e1 = boundedStore.add({
+        type: "generate",
+        request: { n: 1 },
+        response: {},
+        durationMs: 10,
+        success: true,
+      });
+      const e2 = boundedStore.add({
+        type: "plan",
+        request: { n: 2 },
+        response: {},
+        durationMs: 20,
+        success: true,
+      });
+      const e3 = boundedStore.add({
+        type: "diff",
+        request: { n: 3 },
+        response: {},
+        durationMs: 30,
+        success: true,
+      });
+      // Trigger eviction of e1
+      const e4 = boundedStore.add({
+        type: "scan",
+        request: { n: 4 },
+        response: {},
+        durationMs: 40,
+        success: true,
+      });
+
+      const all = boundedStore.getAll();
+      expect(all).toHaveLength(3);
+
+      // getAll returns reverse-chronological order: newest first
+      expect(all[0].id).toBe(e4.id);
+      expect(all[1].id).toBe(e3.id);
+      expect(all[2].id).toBe(e2.id);
+
+      // e1 should not appear
+      expect(all.find((e) => e.id === e1.id)).toBeUndefined();
+    });
+
+    it("multiple evictions work correctly when adding many entries beyond capacity", () => {
+      const boundedStore = new HistoryStore(3);
+      const allAdded = [];
+
+      // Add 7 entries to a store with capacity 3 — should evict 4
+      for (let i = 0; i < 7; i++) {
+        allAdded.push(
+          boundedStore.add({
+            type: "generate",
+            request: { index: i },
+            response: {},
+            durationMs: i,
+            success: true,
+          }),
+        );
+      }
+
+      expect(boundedStore.getAll()).toHaveLength(3);
+
+      // First 4 entries (indices 0-3) should be evicted
+      for (let i = 0; i < 4; i++) {
+        expect(boundedStore.getById(allAdded[i].id)).toBeUndefined();
+      }
+
+      // Last 3 entries (indices 4-6) should be present
+      for (let i = 4; i < 7; i++) {
+        expect(boundedStore.getById(allAdded[i].id)).toBeDefined();
+      }
+
+      // Order should be newest first
+      const all = boundedStore.getAll();
+      expect(all[0].id).toBe(allAdded[6].id);
+      expect(all[1].id).toBe(allAdded[5].id);
+      expect(all[2].id).toBe(allAdded[4].id);
+    });
+  });
 });

@@ -265,6 +265,20 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
 
       s.stop(`${pc.green("Agent")} ${pc.dim(`(${result.agent})`)}`);
       p.log.message(result.content);
+
+      // Context window warning: estimate tokens from message length
+      const sessionState = session.getState();
+      const totalChars = sessionState.messages.reduce((sum, m) => sum + m.content.length, 0);
+      const estimatedTokens = Math.ceil(totalChars / 4); // rough estimate: 4 chars per token
+      if (estimatedTokens > 100_000) {
+        p.log.warn(
+          pc.yellow(
+            `Context size: ~${Math.round(estimatedTokens / 1000)}K tokens. Consider starting a new session (/exit) to avoid degraded responses.`,
+          ),
+        );
+      } else if (estimatedTokens > 50_000) {
+        p.log.info(pc.dim(`Context: ~${Math.round(estimatedTokens / 1000)}K tokens`));
+      }
     } catch (err) {
       s.stop("Error");
       p.log.error(err instanceof Error ? err.message : String(err));

@@ -163,7 +163,12 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
 
   // Change impact summary
   const remainingTasks = plan.tasks.filter((t) => !completedTaskIds.has(t.id));
-  const estimatedFiles = remainingTasks.length;
+  // Estimate file count: helm produces 2+ files, most tools produce 1
+  const MULTI_FILE_TOOLS = new Set(["helm", "docker-compose"]);
+  const estimatedFiles = remainingTasks.reduce(
+    (sum, t) => sum + (MULTI_FILE_TOOLS.has(t.tool) ? 2 : 1),
+    0,
+  );
   const verificationTools = [
     ...new Set(
       remainingTasks

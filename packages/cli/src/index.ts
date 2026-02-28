@@ -253,6 +253,10 @@ async function main() {
         p.log.warn(
           `Unknown command: "${firstArg}". Run ${pc.dim("dojops --help")} to see available commands.`,
         );
+        p.log.info(
+          pc.dim(`If you meant to generate, use: dojops generate "${remapped.join(" ")}"`),
+        );
+        process.exit(ExitCode.VALIDATION_ERROR);
       }
 
       // Default: generate command (dojops "prompt")

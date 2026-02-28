@@ -115,13 +115,37 @@ async function authLogout(args: string[], ctx: CLIContext): Promise<void> {
 
 async function authStatus(): Promise<void> {
   const config = loadConfig();
+
+  const envVarMap: Record<string, string> = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    gemini: "GEMINI_API_KEY",
+  };
+
+  function tokenSource(provider: string): string {
+    const envVar = envVarMap[provider];
+    const hasEnv = envVar ? !!process.env[envVar] : false;
+    const hasConfig = !!config.tokens?.[provider];
+    if (hasEnv && hasConfig) {
+      return `${maskToken(process.env[envVar])} ${pc.dim("(env + config)")}`;
+    }
+    if (hasEnv) {
+      return `${maskToken(process.env[envVar])} ${pc.dim("(env)")}`;
+    }
+    if (hasConfig) {
+      return `${maskToken(config.tokens?.[provider])} ${pc.dim("(config)")}`;
+    }
+    return pc.dim("(not set)");
+  }
+
   const lines = [
     `${pc.bold("Provider:")}  ${config.defaultProvider ?? pc.dim("(not set)")}`,
     `${pc.bold("Tokens:")}`,
-    `  openai:    ${maskToken(config.tokens?.openai)}`,
-    `  anthropic: ${maskToken(config.tokens?.anthropic)}`,
-    `  deepseek:  ${maskToken(config.tokens?.deepseek)}`,
-    `  gemini:    ${maskToken(config.tokens?.gemini)}`,
+    `  openai:    ${tokenSource("openai")}`,
+    `  anthropic: ${tokenSource("anthropic")}`,
+    `  deepseek:  ${tokenSource("deepseek")}`,
+    `  gemini:    ${tokenSource("gemini")}`,
     `  ollama:    ${pc.dim("(local, no token needed)")}`,
   ];
   p.note(lines.join("\n"), "Auth Status");

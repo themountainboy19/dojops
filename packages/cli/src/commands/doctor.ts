@@ -9,6 +9,7 @@ import {
 } from "@dojops/core";
 import { CLIContext } from "../types";
 import { getConfigPath } from "../config";
+import { ExitCode } from "../exit-codes";
 import {
   findProjectRoot,
   listPlans,
@@ -219,6 +220,7 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   const failCount = checks.filter((c) => c.status === "fail").length;
   if (failCount > 0) {
     p.log.error(`${failCount} check(s) failed.`);
+    // Exit non-zero after offering tool installs below
   } else {
     p.log.success("All checks passed.");
   }
@@ -235,5 +237,10 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   );
   if (hasMissingSystemTools) {
     await offerSystemToolInstall({ nonInteractive: ctx.globalOpts.nonInteractive });
+  }
+
+  // Exit non-zero when checks failed
+  if (failCount > 0) {
+    process.exit(ExitCode.GENERAL_ERROR);
   }
 }

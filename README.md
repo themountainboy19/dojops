@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="packages/api/public/icons/dojops-icon.png" alt="DojOps" width="120" />
+  <img src="packages/api/public/logo/official-dojops-logo.png" alt="DojOps" width="120" />
 </p>
 
 <h1 align="center">DojOps — AI DevOps Automation Engine</h1>

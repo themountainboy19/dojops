@@ -54,12 +54,17 @@ export function loadConfig(): DojOpsConfig {
 /**
  * H-13: Checks file permissions and warns if group or other users have read access.
  * Only effective on POSIX systems (Linux/macOS); silently skips on Windows.
+ * Uses a module-level flag to only warn once per process.
  */
+let permissionWarningShown = false;
+
 function checkConfigPermissions(filePath: string): void {
+  if (permissionWarningShown) return;
   try {
     const stat = fs.statSync(filePath);
     const groupOtherBits = stat.mode & 0o077;
     if (groupOtherBits !== 0) {
+      permissionWarningShown = true;
       const octal = "0o" + stat.mode.toString(8);
       console.warn(
         `Warning: config file ${filePath} is readable by other users (mode ${octal}). Consider: chmod 600 ${filePath}`,
