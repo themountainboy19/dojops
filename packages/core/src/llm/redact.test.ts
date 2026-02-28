@@ -73,4 +73,18 @@ describe("redactSecrets", () => {
     const result = redactSecrets(msg);
     expect(result).toContain("claude-***REDACTED***");
   });
+
+  it("redacts Anthropic sk-ant- prefixed keys", () => {
+    const msg = "Error: Invalid key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
+    const result = redactSecrets(msg);
+    expect(result).toContain("sk-ant-***REDACTED***");
+    expect(result).not.toContain("AbCdEfGhIjKlMn");
+  });
+
+  it("redacts DeepSeek ds- prefixed keys", () => {
+    const msg = "Failed auth with key ds-AbCdEfGhIjKlMnOpQrStUvWxYz";
+    const result = redactSecrets(msg);
+    expect(result).toContain("ds-***REDACTED***");
+    expect(result).not.toContain("AbCdEfGhIjKlMn");
+  });
 });

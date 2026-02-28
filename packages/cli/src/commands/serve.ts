@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -58,6 +59,27 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   if (isNaN(port) || port < 1 || port > 65535) {
     p.log.error(`Invalid port: "${portArg ?? process.env.DOJOPS_API_PORT}". Must be 1-65535.`);
     process.exit(ExitCode.VALIDATION_ERROR);
+  }
+
+  // E-1: TLS support via --tls-cert and --tls-key flags
+  const tlsCertPath = extractFlagValue(args, "--tls-cert");
+  const tlsKeyPath = extractFlagValue(args, "--tls-key");
+  let tlsOptions: { cert: Buffer; key: Buffer } | undefined;
+
+  if (tlsCertPath || tlsKeyPath) {
+    if (!tlsCertPath || !tlsKeyPath) {
+      p.log.error("Both --tls-cert and --tls-key must be provided together.");
+      process.exit(ExitCode.VALIDATION_ERROR);
+    }
+    try {
+      tlsOptions = {
+        cert: fs.readFileSync(tlsCertPath),
+        key: fs.readFileSync(tlsKeyPath),
+      };
+    } catch (err) {
+      p.log.error(`Failed to read TLS files: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(ExitCode.VALIDATION_ERROR);
+    }
   }
 
   const { createApp, HistoryStore } = await import("@dojops/api");
@@ -140,20 +162,38 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     rootDir: projectRoot,
     customToolCount: registry.getCustomTools().length,
     customAgentNames,
-    corsOrigin: `http://localhost:${port}`,
+    corsOrigin: `${tlsOptions ? "https" : "http"}://localhost:${port}`,
     apiKey: serverApiKey ?? undefined,
   });
 
-  const server = app.listen(port, () => {
+  const protocol = tlsOptions ? "https" : "http";
+  const server = tlsOptions
+    ? https.createServer(tlsOptions, app).listen(port, onListening)
+    : app.listen(port, onListening);
+
+  function onListening(): void {
     const noteLines = [
       `${pc.bold("Provider:")}  ${provider.name}`,
       `${pc.bold("Agents:")}    ${pc.cyan(String(router.getAgents().length))} specialist agents loaded`,
       `${pc.bold("Metrics:")}   ${projectRoot ? pc.green("enabled") : pc.yellow("disabled (no project root)")}`,
-      `${pc.bold("Dashboard:")} ${pc.underline(`http://localhost:${port}`)}`,
+      `${pc.bold("TLS:")}       ${tlsOptions ? pc.green("enabled") : pc.yellow("disabled")}`,
+      `${pc.bold("Dashboard:")} ${pc.underline(`${protocol}://localhost:${port}`)}`,
     ];
     p.note(noteLines.join("\n"), "Server Started");
-    p.log.success(`DojOps API server running on ${pc.underline(`http://localhost:${port}`)}`);
-  });
+    p.log.success(
+      `DojOps API server running on ${pc.underline(`${protocol}://localhost:${port}`)}`,
+    );
+
+    // E-1: Warn when serving over plain HTTP with auth enabled (API key in cleartext)
+    if (!tlsOptions && serverApiKey) {
+      p.log.warn(
+        `Server is running over ${pc.bold("plain HTTP")} with API key authentication enabled. ` +
+          `API keys are transmitted in cleartext. ` +
+          `Use ${pc.bold("--tls-cert")} and ${pc.bold("--tls-key")} for HTTPS, ` +
+          `or place a TLS-terminating reverse proxy in front.`,
+      );
+    }
+  }
 
   server.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {

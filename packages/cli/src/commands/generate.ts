@@ -3,14 +3,16 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput } from "@dojops/core";
+import { isDevOpsFile } from "@dojops/executor";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
-import { extractFlagValue } from "../parser";
+import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot, loadContext } from "../state";
 
 export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
   const writePath = extractFlagValue(args, "--write");
+  const allowAllPaths = hasFlag(args, "--allow-all-paths");
   const prompt = args.filter((a) => !a.startsWith("-") && a !== writePath).join(" ");
 
   if (!prompt) {
@@ -109,6 +111,14 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   // MF-8: --write flag — write output to file
   if (writePath) {
+    // H-11: Enforce DevOps allowlist on --write target
+    if (!allowAllPaths && !isDevOpsFile(writePath)) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Write to "${writePath}" blocked: not a recognized DevOps file. Use --allow-all-paths to bypass.`,
+      );
+    }
+
     // Create .bak backup if file already exists
     if (fs.existsSync(writePath)) {
       fs.copyFileSync(writePath, writePath + ".bak");

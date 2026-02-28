@@ -202,8 +202,11 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops <prompt>`);
       console.log(`  ${pc.dim("$")} dojops generate <prompt>`);
       console.log(`\n${pc.bold("OPTIONS")}`);
-      console.log(`  ${pc.cyan("--agent=NAME")}    Force routing to a specific specialist agent`);
-      console.log(`  ${pc.cyan("--write=PATH")}    Write generated output to a file`);
+      console.log(
+        `  ${pc.cyan("--agent=NAME")}         Force routing to a specific specialist agent`,
+      );
+      console.log(`  ${pc.cyan("--write=PATH")}         Write generated output to a file`);
+      console.log(`  ${pc.cyan("--allow-all-paths")}    Bypass DevOps file allowlist for --write`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Routes your prompt to the best-matching specialist agent and generates`);
       console.log(`  a response. This is the default command when no subcommand is given.`);
@@ -504,11 +507,19 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--no-auth")}     Allow unauthenticated access ${pc.dim("(not recommended)")}`,
       );
+      console.log(
+        `  ${pc.cyan("--tls-cert=F")}  Path to TLS certificate file ${pc.dim("(enables HTTPS)")}`,
+      );
+      console.log(
+        `  ${pc.cyan("--tls-key=F")}   Path to TLS private key file ${pc.dim("(requires --tls-cert)")}`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Starts an Express server exposing all DojOps capabilities via REST API`);
       console.log(`  and a web dashboard at the root URL.`);
       console.log(`  When DOJOPS_API_KEY is set or ~/.dojops/server.json exists, all API`);
       console.log(`  routes (except /api/health) require authentication.`);
+      console.log(`  Use --tls-cert and --tls-key together to enable HTTPS. Without TLS,`);
+      console.log(`  a warning is shown if API key auth is enabled (cleartext credentials).`);
       console.log(`\n${pc.bold("ENDPOINTS")}`);
       console.log(`  GET  /api/health       Provider status`);
       console.log(`  POST /api/generate     Agent-routed LLM generation`);
@@ -522,6 +533,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops serve credentials`);
       console.log(`  ${pc.dim("$")} dojops serve`);
       console.log(`  ${pc.dim("$")} dojops serve --port=8080`);
+      console.log(`  ${pc.dim("$")} dojops serve --tls-cert=cert.pem --tls-key=key.pem`);
       console.log();
       break;
 
