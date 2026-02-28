@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Router } from "express";
 import { LLMProvider, AgentRouter } from "@dojops/core";
-import { ChatSession } from "@dojops/session";
+import { ChatSession, cleanExpiredSessions } from "@dojops/session";
 import type { ChatSessionState } from "@dojops/session";
 import { HistoryStore } from "../store";
 import { ChatRequestSchema, ChatSessionRequestSchema } from "../schemas";
@@ -220,8 +220,32 @@ export function createChatRouter(
   });
 
   // GET /sessions — List all sessions (A28: error handling)
+  // E-4: Lazy cleanup of expired sessions on list
+  let lastCleanup = 0;
+  const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
   router.get("/sessions", (_req, res, next) => {
     try {
+      // E-4: Periodic lazy cleanup of expired disk sessions
+      const now = Date.now();
+      if (rootDir && now - lastCleanup > CLEANUP_INTERVAL_MS) {
+        const deleted = cleanExpiredSessions(rootDir);
+        if (deleted > 0) {
+          // Remove expired sessions from in-memory cache too
+          for (const [id, session] of sessions) {
+            const state = session.getState();
+            const updatedAt = new Date(state.updatedAt).getTime();
+            const ttl = process.env.DOJOPS_SESSION_TTL_MS
+              ? parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
+              : 7 * 24 * 60 * 60 * 1000;
+            if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
+              sessions.delete(id);
+            }
+          }
+        }
+        lastCleanup = now;
+      }
+
       const list: ChatSessionState[] = [];
       for (const session of sessions.values()) {
         list.push(session.getState());

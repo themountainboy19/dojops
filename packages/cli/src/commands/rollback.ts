@@ -12,6 +12,7 @@ import {
   acquireLock,
   releaseLock,
   isLocked,
+  getCurrentUser,
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -139,7 +140,7 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: `rollback ${planId}`,
       action: "rollback",
       planId,

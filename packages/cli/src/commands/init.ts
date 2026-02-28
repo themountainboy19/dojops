@@ -439,17 +439,38 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     });
 
     if (!p.isCancel(review) && review) {
+      const EDITOR_ALLOWLIST = [
+        "vim",
+        "vi",
+        "nano",
+        "code",
+        "emacs",
+        "subl",
+        "gedit",
+        "notepad",
+        "notepad++",
+        "kate",
+        "micro",
+      ];
       const editor = process.env.EDITOR || process.env.VISUAL;
       if (editor) {
-        p.log.info(`Opening ${pc.cyan(contextMdPath)} in ${pc.cyan(editor)}...`);
-        try {
-          const editorParts = editor.split(/\s+/);
-          execFileSync(editorParts[0], [...editorParts.slice(1), contextMdPath], {
-            stdio: "inherit",
-          });
-          p.log.success("Context file updated.");
-        } catch {
-          p.log.warn(`Could not open editor. Edit manually: ${pc.dim(contextMdPath)}`);
+        const editorParts = editor.split(/\s+/);
+        const editorBinary = path.basename(editorParts[0]);
+        if (!EDITOR_ALLOWLIST.includes(editorBinary)) {
+          p.log.warn(
+            `Editor ${pc.cyan(editorBinary)} is not in the allowed list (${EDITOR_ALLOWLIST.join(", ")}). Skipping.`,
+          );
+          p.log.info(`Edit the context file manually: ${pc.cyan(contextMdPath)}`);
+        } else {
+          p.log.info(`Opening ${pc.cyan(contextMdPath)} in ${pc.cyan(editor)}...`);
+          try {
+            execFileSync(editorParts[0], [...editorParts.slice(1), contextMdPath], {
+              stdio: "inherit",
+            });
+            p.log.success("Context file updated.");
+          } catch {
+            p.log.warn(`Could not open editor. Edit manually: ${pc.dim(contextMdPath)}`);
+          }
         }
       } else {
         p.log.info(`Edit the context file at: ${pc.cyan(contextMdPath)}`);

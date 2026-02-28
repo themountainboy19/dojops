@@ -12,6 +12,7 @@ import {
   acquireLock,
   releaseLock,
   isLocked,
+  getCurrentUser,
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -98,7 +99,7 @@ export async function destroyCommand(args: string[], ctx: CLIContext): Promise<v
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: `destroy ${planId}`,
       action: "destroy",
       planId,

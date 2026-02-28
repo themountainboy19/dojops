@@ -34,15 +34,39 @@ export function getConfigPath(): string {
 
 /** Loads config from ~/.dojops/config.json. Returns empty config if missing or invalid. */
 export function loadConfig(): DojOpsConfig {
+  const filePath = configFile();
   try {
-    const raw = fs.readFileSync(configFile(), "utf-8");
+    const raw = fs.readFileSync(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return {};
     }
+
+    // H-13: Warn if config file (which may contain API tokens) is readable by group/other
+    checkConfigPermissions(filePath);
+
     return parsed as DojOpsConfig;
   } catch {
     return {};
+  }
+}
+
+/**
+ * H-13: Checks file permissions and warns if group or other users have read access.
+ * Only effective on POSIX systems (Linux/macOS); silently skips on Windows.
+ */
+function checkConfigPermissions(filePath: string): void {
+  try {
+    const stat = fs.statSync(filePath);
+    const groupOtherBits = stat.mode & 0o077;
+    if (groupOtherBits !== 0) {
+      const octal = "0o" + stat.mode.toString(8);
+      console.warn(
+        `Warning: config file ${filePath} is readable by other users (mode ${octal}). Consider: chmod 600 ${filePath}`,
+      );
+    }
+  } catch {
+    // statSync failed (e.g., file just deleted) — ignore
   }
 }
 

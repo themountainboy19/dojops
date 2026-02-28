@@ -1,7 +1,100 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Mock child_process before importing the module under test
+const mockExecFileSync = vi.fn();
+vi.mock("node:child_process", () => ({
+  execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
+}));
+
 import { verifyWithBinary } from "../binary-verifier";
 
 describe("verifyWithBinary", () => {
+  beforeEach(() => {
+    mockExecFileSync.mockReset();
+  });
+
+  describe("E-8: network safety", () => {
+    it("adds -get=false to terraform init when network permission is none", async () => {
+      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+      enoent.code = "ENOENT";
+      mockExecFileSync.mockImplementation(() => {
+        throw enoent;
+      });
+
+      await verifyWithBinary({
+        content: 'resource "aws_s3_bucket" "b" {}',
+        filename: "main.tf",
+        config: {
+          command: "terraform init && terraform validate -json",
+          parser: "terraform-json",
+          timeout: 30000,
+          cwd: "output",
+        },
+        childProcessPermission: "required",
+        networkPermission: "none",
+      });
+
+      // The first call should be "terraform" with args including "-get=false"
+      expect(mockExecFileSync).toHaveBeenCalled();
+      const firstCall = mockExecFileSync.mock.calls[0];
+      expect(firstCall[0]).toBe("terraform");
+      expect(firstCall[1]).toContain("-get=false");
+    });
+
+    it("does not add -get=false when network permission is required", async () => {
+      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+      enoent.code = "ENOENT";
+      mockExecFileSync.mockImplementation(() => {
+        throw enoent;
+      });
+
+      await verifyWithBinary({
+        content: 'resource "aws_s3_bucket" "b" {}',
+        filename: "main.tf",
+        config: {
+          command: "terraform init && terraform validate -json",
+          parser: "terraform-json",
+          timeout: 30000,
+          cwd: "output",
+        },
+        childProcessPermission: "required",
+        networkPermission: "required",
+      });
+
+      expect(mockExecFileSync).toHaveBeenCalled();
+      const firstCall = mockExecFileSync.mock.calls[0];
+      expect(firstCall[0]).toBe("terraform");
+      expect(firstCall[1]).not.toContain("-get=false");
+    });
+
+    it("adds -get=false when network permission is absent (defaults to none)", async () => {
+      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+      enoent.code = "ENOENT";
+      mockExecFileSync.mockImplementation(() => {
+        throw enoent;
+      });
+
+      await verifyWithBinary({
+        content: 'resource "aws_s3_bucket" "b" {}',
+        filename: "main.tf",
+        config: {
+          command: "terraform init && terraform validate -json",
+          parser: "terraform-json",
+          timeout: 30000,
+          cwd: "output",
+        },
+        childProcessPermission: "required",
+        // networkPermission omitted — defaults to undefined (not "required")
+      });
+
+      expect(mockExecFileSync).toHaveBeenCalled();
+      const firstCall = mockExecFileSync.mock.calls[0];
+      expect(firstCall[0]).toBe("terraform");
+      // When omitted, networkPermission !== "required" so -get=false should be added
+      expect(firstCall[1]).toContain("-get=false");
+    });
+  });
+
   it("skips when child_process permission is not required", async () => {
     const result = await verifyWithBinary({
       content: "test content",
@@ -52,6 +145,12 @@ describe("verifyWithBinary", () => {
   });
 
   it("handles binary not found gracefully", async () => {
+    const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
+    enoent.code = "ENOENT";
+    mockExecFileSync.mockImplementation(() => {
+      throw enoent;
+    });
+
     const result = await verifyWithBinary({
       content: "test content",
       filename: "main.tf",
@@ -63,7 +162,6 @@ describe("verifyWithBinary", () => {
       },
       childProcessPermission: "required",
     });
-    // terraform likely not installed in test env
     expect(result.passed).toBe(true);
     expect(result.issues.some((i) => i.message.includes("not found"))).toBe(true);
   });

@@ -23,6 +23,7 @@ import {
   loadContext,
   checkGitDirty,
   PlanState,
+  getCurrentUser,
 } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
@@ -270,6 +271,9 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     const tools = registry.getAll();
 
     // Replay validation: provider/model/systemPromptHash match
+    // Replay integrity failures always hard-fail unless --force is used.
+    // The --yes flag must NOT bypass this check since deterministic replay
+    // requires an exact environment match to produce meaningful results.
     if (replay) {
       const result = validateReplayIntegrity(plan, provider.name, ctx.globalOpts.model, registry);
       if (!result.valid) {
@@ -280,12 +284,14 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
             `  ${pc.yellow("!")} ${m.field}${taskLabel}: expected "${m.expected}", got "${m.actual}"`,
           );
         }
-        if (!autoApprove) {
-          p.cancel("Replay aborted due to environment mismatch. Use --yes to force.");
+        if (!force) {
           releaseLock(root);
-          throw new CLIError(ExitCode.VALIDATION_ERROR);
+          throw new CLIError(
+            ExitCode.VALIDATION_ERROR,
+            "Replay aborted due to environment mismatch. Use --force to override.",
+          );
         }
-        p.log.warn("Continuing despite replay mismatches (--yes).");
+        p.log.warn("Continuing despite replay mismatches (--force).");
       } else {
         p.log.success("Replay validation passed.");
       }
@@ -504,7 +510,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     // Audit
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: `apply${replay ? " --replay" : ""} ${plan.id}`,
       action: "apply",
       planId: plan.id,

@@ -11,6 +11,33 @@ const noopLogger: PlannerLogger = {
   taskEnd() {},
 };
 
+/** Max size for string values resolved from $ref outputs (50KB) */
+const MAX_REF_STRING_LENGTH = 50_000;
+
+/** Strip control characters and Unicode bidi/zero-width markers from strings */
+function sanitizeRefString(value: string): string {
+  const cleaned = value.replace(
+    // eslint-disable-next-line no-control-regex
+    /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F\u200B-\u200D\uFEFF\u200E\u200F\u202A-\u202E\u2066-\u2069]/g,
+    "",
+  );
+  return cleaned.length > MAX_REF_STRING_LENGTH ? cleaned.slice(0, MAX_REF_STRING_LENGTH) : cleaned;
+}
+
+/** Recursively sanitize string values in $ref-resolved data */
+function sanitizeRefOutput(value: unknown): unknown {
+  if (typeof value === "string") return sanitizeRefString(value);
+  if (Array.isArray(value)) return value.map(sanitizeRefOutput);
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = sanitizeRefOutput(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 function resolveInputRefs(
   input: Record<string, unknown>,
   results: Map<string, TaskResult>,
@@ -26,7 +53,7 @@ function resolveInputRefs(
       if (refResult.status === "failed" || refResult.status === "skipped") {
         throw new Error(`$ref:${refId} references a ${refResult.status} task`);
       }
-      resolved[key] = refResult.output;
+      resolved[key] = sanitizeRefOutput(refResult.output);
     } else {
       resolved[key] = value;
     }

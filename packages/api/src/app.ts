@@ -1,4 +1,4 @@
-import express, { Express } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -20,6 +20,7 @@ import {
   createMetricsRouter,
 } from "./routes";
 import { MetricsAggregator } from "./metrics";
+import { TokenTracker } from "./token-tracker";
 
 export interface AppDependencies {
   provider: LLMProvider;
@@ -33,7 +34,51 @@ export interface AppDependencies {
   customToolCount?: number;
   customAgentNames?: Set<string>;
   corsOrigin?: string | string[];
-  apiKey?: string;
+  apiKey?: string | string[];
+}
+
+/**
+ * In-memory per-route rate limiter factory.
+ * Uses Map<string, { count, resetAt }> keyed by IP.
+ */
+export function createRateLimiter(windowMs: number, maxRequests: number) {
+  const clients = new Map<string, { count: number; resetAt: number }>();
+
+  // Periodic cleanup of expired entries (every windowMs)
+  const cleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of clients) {
+      if (now >= entry.resetAt) {
+        clients.delete(key);
+      }
+    }
+  }, windowMs);
+  // Allow the process to exit without waiting for the interval
+  if (cleanupInterval.unref) {
+    cleanupInterval.unref();
+  }
+
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const ip = req.ip ?? req.socket.remoteAddress ?? "unknown";
+    const now = Date.now();
+    let entry = clients.get(ip);
+
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      clients.set(ip, entry);
+    }
+
+    entry.count++;
+
+    if (entry.count > maxRequests) {
+      const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+      res.setHeader("Retry-After", String(retryAfter));
+      res.status(429).json({ error: "Too many requests, please try again later" });
+      return;
+    }
+
+    next();
+  };
 }
 
 export function createApp(deps: AppDependencies): Express {
@@ -126,10 +171,16 @@ export function createApp(deps: AppDependencies): Express {
       const headerKey = req.headers["x-api-key"] as string | undefined;
       const provided = bearer ?? headerKey;
       if (provided && apiKey) {
-        const expected = Buffer.from(apiKey, "utf8");
-        const actual = Buffer.from(provided, "utf8");
-        isAuthenticated =
-          expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+        // E-3: Support single key or array of keys for health check auth gating
+        const keys = Array.isArray(apiKey) ? apiKey : [apiKey];
+        for (const key of keys) {
+          const expected = Buffer.from(key, "utf8");
+          const actual = Buffer.from(provided, "utf8");
+          if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) {
+            isAuthenticated = true;
+            break;
+          }
+        }
       }
     }
 
@@ -153,15 +204,57 @@ export function createApp(deps: AppDependencies): Express {
     });
   });
 
-  // API routes
-  app.use("/api/generate", createGenerateRouter(deps.router, deps.store));
-  app.use("/api/plan", createPlanRouter(deps.provider, deps.tools, deps.store));
-  app.use("/api/debug-ci", createDebugCIRouter(deps.debugger, deps.store));
-  app.use("/api/diff", createDiffRouter(deps.diffAnalyzer, deps.store));
+  // Per-route rate limiters (E-6) — more restrictive limits for expensive endpoints
+  const FIFTEEN_MIN = 15 * 60 * 1000;
+  const llmLimiter = createRateLimiter(FIFTEEN_MIN, 20); // generate, chat, diff, debug-ci
+  const planLimiter = createRateLimiter(FIFTEEN_MIN, 10); // most expensive
+  const scanLimiter = createRateLimiter(FIFTEEN_MIN, 5); // scanner invocations
+
+  // API routes (with per-route rate limiters on expensive endpoints)
+  app.use("/api/generate", llmLimiter, createGenerateRouter(deps.router, deps.store));
+  app.use("/api/plan", planLimiter, createPlanRouter(deps.provider, deps.tools, deps.store));
+  app.use("/api/debug-ci", llmLimiter, createDebugCIRouter(deps.debugger, deps.store));
+  app.use("/api/diff", llmLimiter, createDiffRouter(deps.diffAnalyzer, deps.store));
   app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));
   app.use("/api/history", createHistoryRouter(deps.store));
-  app.use("/api/scan", createScanRouter(deps.store, deps.rootDir));
-  app.use("/api/chat", createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir));
+  app.use("/api/scan", scanLimiter, createScanRouter(deps.store, deps.rootDir));
+  app.use(
+    "/api/chat",
+    llmLimiter,
+    createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir),
+  );
+
+  // Token budget tracker (E-7)
+  const tokenTracker = new TokenTracker();
+
+  // Hook token tracking into history store additions
+  const originalAdd = deps.store.add.bind(deps.store);
+  deps.store.add = (entry) => {
+    const result = originalAdd(entry);
+    // Extract token usage from response if available
+    if (entry.response && typeof entry.response === "object") {
+      const resp = entry.response as Record<string, unknown>;
+      if (typeof resp.totalTokens === "number") {
+        tokenTracker.record(resp.totalTokens);
+      } else if (typeof resp.usage === "object" && resp.usage !== null) {
+        const usage = resp.usage as Record<string, unknown>;
+        const total =
+          typeof usage.totalTokens === "number"
+            ? usage.totalTokens
+            : typeof usage.total_tokens === "number"
+              ? usage.total_tokens
+              : 0;
+        if (total > 0) tokenTracker.record(total);
+      }
+    }
+    return result;
+  };
+
+  // Token metrics endpoint (E-7) — must be registered before the catch-all /api/metrics router
+  app.get("/api/metrics/tokens", (_req: express.Request, res: express.Response) => {
+    res.json(tokenTracker.getSummary());
+  });
+
   if (aggregator) {
     app.use("/api/metrics", createMetricsRouter(aggregator));
   } else {

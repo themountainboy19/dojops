@@ -15,9 +15,17 @@ import { ExitCode } from "../exit-codes";
 
 const SERVER_JSON_PATH = path.join(os.homedir(), ".dojops", "server.json");
 
-function loadServerApiKey(): string | undefined {
+function loadServerApiKey(): string | string[] | undefined {
   try {
-    const data = JSON.parse(fs.readFileSync(SERVER_JSON_PATH, "utf-8")) as { apiKey?: string };
+    const data = JSON.parse(fs.readFileSync(SERVER_JSON_PATH, "utf-8")) as {
+      apiKey?: string;
+      apiKeys?: string[];
+    };
+    // E-3: Support { "apiKeys": ["key1", "key2"] } format for key rotation
+    if (Array.isArray(data.apiKeys) && data.apiKeys.length > 0) {
+      const validKeys = data.apiKeys.filter((k) => typeof k === "string" && k.length > 0);
+      if (validKeys.length > 0) return validKeys.length === 1 ? validKeys[0] : validKeys;
+    }
     return typeof data.apiKey === "string" && data.apiKey.length > 0 ? data.apiKey : undefined;
   } catch {
     return undefined;
@@ -163,7 +171,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     customToolCount: registry.getCustomTools().length,
     customAgentNames,
     corsOrigin: `${tlsOptions ? "https" : "http"}://localhost:${port}`,
-    apiKey: serverApiKey ?? undefined,
+    apiKey: Array.isArray(serverApiKey) ? serverApiKey[0] : (serverApiKey ?? undefined),
   });
 
   const protocol = tlsOptions ? "https" : "http";

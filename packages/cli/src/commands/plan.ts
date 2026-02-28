@@ -26,6 +26,7 @@ import {
   releaseLock,
   isLocked,
   PlanState,
+  getCurrentUser,
 } from "../state";
 
 export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
@@ -285,7 +286,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: `plan --execute "${prompt}"`,
       action: "plan-execute",
       planId,
@@ -390,7 +391,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: `plan "${prompt}"`,
       action: "plan",
       planId,

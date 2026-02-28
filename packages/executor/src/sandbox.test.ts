@@ -109,6 +109,53 @@ describe("createSandboxedFs", () => {
 
     expect(sfs.readFileSync(filePath)).toBe("ok");
   });
+
+  it("rejects writeFileSync with ../ path traversal", () => {
+    const dir = makeTmpDir();
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        allowedWritePaths: [dir],
+      }),
+    );
+    // Attempt to write outside allowed directory using ../
+    const escapePath = path.join(dir, "..", "escape.txt");
+
+    expect(() => sfs.writeFileSync(escapePath, "data")).toThrow(PolicyViolationError);
+  });
+
+  it("rejects writeFileSync with path outside allowed paths", () => {
+    const dir = makeTmpDir();
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        allowedWritePaths: [dir],
+      }),
+    );
+
+    expect(() => sfs.writeFileSync("/tmp/outside-allowed.txt", "data")).toThrow(
+      PolicyViolationError,
+    );
+  });
+
+  it("rejects readFileSync with path matching denied paths", () => {
+    const dir = makeTmpDir();
+    // Create a file inside the denied path so stat succeeds
+    const deniedDir = path.join(dir, "denied-area");
+    fs.mkdirSync(deniedDir, { recursive: true });
+    const deniedFile = path.join(deniedDir, "secret.txt");
+    fs.writeFileSync(deniedFile, "secret data", "utf-8");
+
+    const sfs = createSandboxedFs(
+      policy({
+        allowWrite: true,
+        deniedWritePaths: [deniedDir],
+      }),
+    );
+
+    expect(() => sfs.readFileSync(deniedFile)).toThrow(PolicyViolationError);
+    expect(() => sfs.readFileSync(deniedFile)).toThrow("denied by policy");
+  });
 });
 
 describe("withTimeout", () => {

@@ -291,4 +291,217 @@ describe("API integration", () => {
       expect(res.status).toBe(400);
     });
   });
+
+  describe("T-8: metrics endpoints with auth enabled", () => {
+    it("returns 401 for GET /api/metrics without API key when auth is enabled", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "metrics-secret-key";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/metrics");
+      expect(res.status).toBe(401);
+      expect(res.body.error).toBe("Authentication required");
+    });
+
+    it("returns 401 for GET /api/metrics/overview without API key when auth is enabled", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "metrics-secret-key";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/metrics/overview");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 401 for GET /api/metrics/security without API key when auth is enabled", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "metrics-secret-key";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/metrics/security");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 401 for GET /api/metrics/audit without API key when auth is enabled", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "metrics-secret-key";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/metrics/audit");
+      expect(res.status).toBe(401);
+    });
+
+    it("returns 200 for GET /api/metrics with valid API key and rootDir", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+
+      // Create a temporary rootDir with .dojops directory for MetricsAggregator
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
+      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
+
+      try {
+        const authDeps = createMockDeps();
+        authDeps.apiKey = "metrics-secret-key";
+        authDeps.rootDir = tmpDir;
+        const app = createApp(authDeps);
+
+        const res = await request(app).get("/api/metrics").set("X-API-Key", "metrics-secret-key");
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveProperty("overview");
+        expect(res.body).toHaveProperty("security");
+        expect(res.body).toHaveProperty("audit");
+        expect(res.body).toHaveProperty("generatedAt");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns 200 for GET /api/metrics/overview with valid API key and rootDir", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
+      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
+
+      try {
+        const authDeps = createMockDeps();
+        authDeps.apiKey = "metrics-secret-key";
+        authDeps.rootDir = tmpDir;
+        const app = createApp(authDeps);
+
+        const res = await request(app)
+          .get("/api/metrics/overview")
+          .set("X-API-Key", "metrics-secret-key");
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveProperty("totalPlans");
+        expect(res.body).toHaveProperty("totalExecutions");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns 200 for GET /api/metrics/security with valid API key and rootDir", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
+      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
+
+      try {
+        const authDeps = createMockDeps();
+        authDeps.apiKey = "metrics-secret-key";
+        authDeps.rootDir = tmpDir;
+        const app = createApp(authDeps);
+
+        const res = await request(app)
+          .get("/api/metrics/security")
+          .set("X-API-Key", "metrics-secret-key");
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveProperty("totalScans");
+        expect(res.body).toHaveProperty("bySeverity");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns 200 for GET /api/metrics/audit with valid API key and rootDir", async () => {
+      const fs = await import("fs");
+      const path = await import("path");
+      const os = await import("os");
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
+      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
+
+      try {
+        const authDeps = createMockDeps();
+        authDeps.apiKey = "metrics-secret-key";
+        authDeps.rootDir = tmpDir;
+        const app = createApp(authDeps);
+
+        const res = await request(app)
+          .get("/api/metrics/audit")
+          .set("X-API-Key", "metrics-secret-key");
+        expect(res.status).toBe(200);
+        expect(res.body).toHaveProperty("totalEntries");
+        expect(res.body).toHaveProperty("chainIntegrity");
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it("returns 403 for GET /api/metrics with wrong API key", async () => {
+      const authDeps = createMockDeps();
+      authDeps.apiKey = "metrics-secret-key";
+      const app = createApp(authDeps);
+
+      const res = await request(app).get("/api/metrics").set("X-API-Key", "wrong-key-value--");
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe("Invalid API key");
+    });
+
+    it("returns 404 for metrics when rootDir not provided (no aggregator)", async () => {
+      // Without rootDir, metrics routes return 404
+      const app = createApp(deps);
+      const res = await request(app).get("/api/metrics");
+      expect(res.status).toBe(404);
+      expect(res.body.error).toContain("Metrics not available");
+    });
+  });
+
+  describe("T-12: CORS behavior for unknown and allowed origins", () => {
+    it("does not set Access-Control-Allow-Origin for unknown origin", async () => {
+      const app = createApp(deps);
+      const res = await request(app)
+        .options("/api/health")
+        .set("Origin", "https://evil.example.com")
+        .set("Access-Control-Request-Method", "GET");
+      // CORS middleware should not reflect an unknown origin
+      const allowOrigin = res.headers["access-control-allow-origin"];
+      // Either the header is absent or it does not match the malicious origin
+      if (allowOrigin) {
+        expect(allowOrigin).not.toBe("https://evil.example.com");
+      }
+    });
+
+    it("sets Access-Control-Allow-Origin for allowed origin", async () => {
+      const customDeps = createMockDeps();
+      customDeps.corsOrigin = "https://trusted.example.com";
+      const app = createApp(customDeps);
+
+      const res = await request(app)
+        .get("/api/health")
+        .set("Origin", "https://trusted.example.com");
+      expect(res.headers["access-control-allow-origin"]).toBe("https://trusted.example.com");
+    });
+
+    it("handles OPTIONS preflight from allowed origin", async () => {
+      const customDeps = createMockDeps();
+      customDeps.corsOrigin = "https://trusted.example.com";
+      const app = createApp(customDeps);
+
+      const res = await request(app)
+        .options("/api/generate")
+        .set("Origin", "https://trusted.example.com")
+        .set("Access-Control-Request-Method", "POST");
+      expect(res.headers["access-control-allow-origin"]).toBe("https://trusted.example.com");
+      expect(res.status).toBe(204);
+    });
+
+    it("does not reflect arbitrary origins when corsOrigin is set", async () => {
+      const customDeps = createMockDeps();
+      customDeps.corsOrigin = "https://trusted.example.com";
+      const app = createApp(customDeps);
+
+      const res = await request(app)
+        .get("/api/health")
+        .set("Origin", "https://attacker.example.com");
+      // The CORS header should not reflect the attacker origin
+      const allowOrigin = res.headers["access-control-allow-origin"];
+      if (allowOrigin) {
+        expect(allowOrigin).not.toBe("https://attacker.example.com");
+      }
+    });
+  });
 });

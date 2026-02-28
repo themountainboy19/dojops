@@ -86,7 +86,18 @@ export function isDevOpsFile(filePath: string): boolean {
   // Extract a relative path: strip leading ./ and any absolute prefix
   let relative = filePath.replace(/\\/g, "/");
   if (path.isAbsolute(relative)) {
-    const segments = filePath.replace(/\\/g, "/").split("/");
+    // For absolute paths, resolve and check if under cwd (H-20)
+    const resolved = path.resolve(filePath);
+    const cwd = process.cwd();
+    const cwdPrefix = cwd.endsWith(path.sep) ? cwd : cwd + path.sep;
+    if (!resolved.startsWith(cwdPrefix) && resolved !== cwd) {
+      // Absolute path outside cwd — reject to prevent basename bypass (e.g. ~/.ssh/Dockerfile)
+      return false;
+    }
+    // Path is under cwd — extract relative portion
+    relative = resolved.slice(cwdPrefix.length).replace(/\\/g, "/");
+
+    const segments = relative.split("/");
     // Find the first segment that matches a known DevOps root
     const devopsRoots = [
       ".github",
@@ -104,10 +115,8 @@ export function isDevOpsFile(filePath: string): boolean {
     const rootIdx = segments.findIndex((s) => devopsRoots.includes(s));
     if (rootIdx >= 0) {
       relative = segments.slice(rootIdx).join("/");
-    } else {
-      // Just use the basename for matching
-      relative = segments[segments.length - 1];
     }
+    // For paths under cwd, basename fallback is safe since we've verified containment
   }
   // Strip leading ./
   if (relative.startsWith("./")) relative = relative.slice(2);

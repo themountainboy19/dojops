@@ -41,7 +41,24 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
     },
 
     readFileSync(filePath: string): string {
-      return fs.readFileSync(filePath, "utf-8");
+      const resolved = path.resolve(filePath);
+
+      // Reject reads from denied paths
+      for (const denied of policy.deniedWritePaths) {
+        const deniedResolved = path.resolve(denied);
+        if (resolved.startsWith(deniedResolved)) {
+          throw new PolicyViolationError(
+            `Read from ${resolved} is denied by policy (matches ${deniedResolved})`,
+            "deniedWritePaths",
+          );
+        }
+      }
+
+      // Enforce file size limit before reading
+      const stat = fs.statSync(resolved);
+      checkFileSize(stat.size, policy);
+
+      return fs.readFileSync(resolved, "utf-8");
     },
   };
 }

@@ -470,5 +470,98 @@ describe("MetricsAggregator", () => {
       expect(agg.getOverview().totalPlans).toBe(0);
       expect(agg.getSecurity().totalScans).toBe(0);
     });
+
+    it("skips files larger than 10MB in readJsonFiles", () => {
+      // Create a valid plan JSON file larger than 10MB
+      const largePlan = {
+        id: "plan-large",
+        goal: "test",
+        createdAt: "2024-01-01",
+        risk: "LOW",
+        tasks: [],
+        approvalStatus: "APPLIED",
+      };
+      const largeContent = JSON.stringify(largePlan) + " ".repeat(11 * 1024 * 1024);
+      fs.writeFileSync(path.join(dojopsDir, "plans", "plan-large.json"), largeContent);
+
+      // Also write a small valid plan
+      const smallPlan = {
+        id: "plan-small",
+        goal: "small test",
+        createdAt: "2024-01-02",
+        risk: "LOW",
+        tasks: [],
+        approvalStatus: "PENDING",
+      };
+      fs.writeFileSync(path.join(dojopsDir, "plans", "plan-small.json"), JSON.stringify(smallPlan));
+
+      const agg = new MetricsAggregator(rootDir);
+      const result = agg.getOverview();
+
+      // The large file should be skipped, only the small file should be counted
+      expect(result.totalPlans).toBe(1);
+    });
+
+    it("caps topIssues at 100 items", () => {
+      // Create a scan report with more than 100 unique findings
+      const findings = [];
+      for (let i = 0; i < 120; i++) {
+        findings.push({
+          message: `unique-issue-${i}`,
+          severity: "medium",
+          tool: "test-tool",
+          category: "security",
+        });
+      }
+      writeScanReport(dojopsDir, {
+        id: "scan-many",
+        timestamp: "2024-01-01T00:00:00Z",
+        findings,
+      });
+
+      const agg = new MetricsAggregator(rootDir);
+      const result = agg.getSecurity();
+
+      expect(result.topIssues.length).toBeLessThanOrEqual(100);
+    });
+
+    it("caps audit entries at 10000 lines", () => {
+      // Write more than 10,000 audit entries directly to the JSONL file
+      const lines: string[] = [];
+      let previousHash = "genesis";
+      for (let i = 0; i < 10_050; i++) {
+        const entry = {
+          seq: i + 1,
+          timestamp: `2024-01-01T00:00:${String(i % 60).padStart(2, "0")}Z`,
+          user: "test",
+          command: "plan",
+          action: "decompose",
+          status: "success",
+          durationMs: 100,
+          previousHash,
+        };
+        const payload = [
+          entry.seq,
+          entry.timestamp,
+          entry.user,
+          entry.command,
+          entry.action,
+          "",
+          entry.status,
+          entry.durationMs,
+          entry.previousHash,
+        ].join("\0");
+        const hash = crypto.createHash("sha256").update(payload).digest("hex");
+        lines.push(JSON.stringify({ ...entry, hash }));
+        previousHash = hash;
+      }
+      fs.writeFileSync(path.join(dojopsDir, "history", "audit.jsonl"), lines.join("\n") + "\n");
+
+      const agg = new MetricsAggregator(rootDir);
+      const result = agg.getAudit();
+
+      // Should be capped at 10,000 entries (the last 10,000)
+      expect(result.totalEntries).toBeLessThanOrEqual(10_000);
+    });
   });
 });

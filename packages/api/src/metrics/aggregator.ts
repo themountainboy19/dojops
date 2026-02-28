@@ -67,6 +67,19 @@ function computeAuditHash(entry: MetricsAuditEntry, hmacKey?: string | null): st
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
+/**
+ * JSON.parse with a reviver that rejects prototype-pollution keys
+ * (__proto__, constructor, prototype).
+ */
+function safeJsonParse<T>(text: string): T {
+  return JSON.parse(text, (key, value) => {
+    if (DANGEROUS_KEYS.has(key)) return undefined;
+    return value;
+  }) as T;
+}
+
 export class MetricsAggregator {
   private readonly dojopsDir: string;
   // A32: Simple in-memory cache with 30s TTL (matches dashboard refresh interval)
@@ -103,7 +116,7 @@ export class MetricsAggregator {
           const filePath = path.join(dir, f);
           const stat = fs.statSync(filePath);
           if (stat.size > MetricsAggregator.MAX_FILE_SIZE) return null;
-          return JSON.parse(fs.readFileSync(filePath, "utf-8")) as T;
+          return safeJsonParse<T>(fs.readFileSync(filePath, "utf-8"));
         } catch {
           return null;
         }
@@ -123,7 +136,7 @@ export class MetricsAggregator {
     return capped
       .map((line) => {
         try {
-          return JSON.parse(line) as MetricsAuditEntry;
+          return safeJsonParse<MetricsAuditEntry>(line);
         } catch {
           return null;
         }

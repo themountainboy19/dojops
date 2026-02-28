@@ -48,6 +48,8 @@ export interface BinaryVerifierInput {
   severityMapping?: SeverityMapping;
   /** Whether child_process permission is required */
   childProcessPermission?: "required" | "none";
+  /** Whether network permission is required (default: "none") */
+  networkPermission?: "required" | "none";
 }
 
 /**
@@ -55,7 +57,8 @@ export interface BinaryVerifierInput {
  * Returns VerificationResult with rich parsed issues.
  */
 export async function verifyWithBinary(input: BinaryVerifierInput): Promise<VerificationResult> {
-  const { content, filename, config, severityMapping, childProcessPermission } = input;
+  const { content, filename, config, severityMapping, childProcessPermission, networkPermission } =
+    input;
 
   // Security gate 1: child_process permission
   if (childProcessPermission !== "required") {
@@ -98,42 +101,74 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
   try {
     fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
 
-    // Parse command into binary + args
-    const parts = config.command.split(/\s+/);
-    const binary = parts[0];
-    const args = parts.slice(1);
+    // Split on && to handle chained commands (e.g. "terraform init ... && terraform validate ...")
+    // execFileSync passes && as a literal argument, so we must run each command separately.
+    const commands = config.command.split(/\s*&&\s*/);
 
-    // Execute the binary
-    let rawOutput: string;
-    try {
-      rawOutput = execFileSync(binary, args, {
-        encoding: "utf-8",
-        timeout: config.timeout,
-        stdio: "pipe",
-        cwd: tmpDir,
-      });
-    } catch (err: unknown) {
-      if (isENOENT(err)) {
-        return {
-          passed: true,
-          tool: config.parser,
-          issues: [{ severity: "warning", message: `${binary} not found — verification skipped` }],
-        };
+    let rawOutput = "";
+    for (let i = 0; i < commands.length; i++) {
+      const parts = commands[i].split(/\s+/).filter(Boolean);
+      const binary = parts[0];
+      let args = parts.slice(1);
+
+      // E-8: Network safety — prevent unintended network access during verification.
+      // When network permission is not "required", add flags to prevent provider downloads.
+      if (networkPermission !== "required") {
+        if (binary === "terraform" && args[0] === "init" && !args.includes("-get=false")) {
+          args = [...args, "-get=false"];
+        }
       }
-      // Many tools exit non-zero on validation errors but still produce parseable output
-      const execErr = err as { stdout?: string; stderr?: string };
-      rawOutput = execErr.stdout || execErr.stderr || "";
-      if (!rawOutput) {
-        const msg = err instanceof Error ? err.message : String(err);
+
+      // Validate each sub-command binary against the whitelist
+      if (!ALLOWED_VERIFICATION_BINARIES.has(binary)) {
         return {
           passed: false,
           tool: config.parser,
-          issues: [{ severity: "error", message: `Verification failed: ${msg}` }],
+          issues: [
+            {
+              severity: "error",
+              message: `Verification command not allowed: ${binary}`,
+            },
+          ],
         };
+      }
+
+      try {
+        rawOutput = execFileSync(binary, args, {
+          encoding: "utf-8",
+          timeout: config.timeout,
+          stdio: "pipe",
+          cwd: tmpDir,
+        });
+      } catch (err: unknown) {
+        if (isENOENT(err)) {
+          return {
+            passed: true,
+            tool: config.parser,
+            issues: [
+              { severity: "warning", message: `${binary} not found — verification skipped` },
+            ],
+          };
+        }
+        // Many tools exit non-zero on validation errors but still produce parseable output
+        const execErr = err as { stdout?: string; stderr?: string };
+        rawOutput = execErr.stdout || execErr.stderr || "";
+        if (!rawOutput) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return {
+            passed: false,
+            tool: config.parser,
+            issues: [{ severity: "error", message: `Verification failed: ${msg}` }],
+          };
+        }
+        // If a non-final command fails, stop the chain (mirrors shell && behavior)
+        if (i < commands.length - 1) {
+          break;
+        }
       }
     }
 
-    // Parse the output
+    // Parse the output from the last command
     const issues: VerificationIssue[] = parser(rawOutput, severityMapping);
     const hasErrors = issues.some((i) => i.severity === "error");
 
@@ -160,7 +195,7 @@ export async function runVerification(
   serializedContent: string,
   filename: string,
   verificationConfig: VerificationConfig | undefined,
-  permissions: { child_process?: "required" | "none" },
+  permissions: { child_process?: "required" | "none"; network?: "required" | "none" },
   structuralIssues: VerificationIssue[],
   toolName: string,
 ): Promise<VerificationResult> {
@@ -174,6 +209,7 @@ export async function runVerification(
       config: verificationConfig.binary,
       severityMapping: verificationConfig.severity as SeverityMapping | undefined,
       childProcessPermission: permissions.child_process,
+      networkPermission: permissions.network,
     });
     allIssues.push(...binaryResult.issues);
   }

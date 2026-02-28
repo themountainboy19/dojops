@@ -1,9 +1,25 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { RepoContextSchemaV1, RepoContextSchemaV2 } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
+
+// ── User identity ─────────────────────────────────────────────────
+
+/**
+ * Returns the current OS username via os.userInfo() instead of the
+ * trivially-spoofable process.env.USER / process.env.USERNAME.
+ * Falls back to "unknown" if os.userInfo() throws (e.g. missing /etc/passwd entry).
+ */
+export function getCurrentUser(): string {
+  try {
+    return os.userInfo().username;
+  } catch {
+    return "unknown";
+  }
+}
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -83,9 +99,13 @@ export interface AuditVerificationResult {
 
 export interface LockInfo {
   pid: number;
+  uuid: string;
   operation: string;
   acquiredAt: string;
 }
+
+/** Maximum lock age before it is considered stale, regardless of PID liveness (2 hours). */
+const MAX_LOCK_AGE_MS = 2 * 60 * 60 * 1000;
 
 // ── Execution locking ─────────────────────────────────────────────
 
@@ -97,6 +117,7 @@ export function acquireLock(rootDir: string, operation: string): boolean {
   const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   const info: LockInfo = {
     pid: process.pid,
+    uuid: crypto.randomUUID(),
     operation,
     acquiredAt: new Date().toISOString(),
   };
@@ -136,6 +157,15 @@ export function isLocked(rootDir: string): { locked: boolean; info?: LockInfo } 
   const lockFile = path.join(dojopsDir(rootDir), "lock.json");
   try {
     const data = JSON.parse(fs.readFileSync(lockFile, "utf-8")) as LockInfo;
+
+    // H-7: Check lock age first — if older than MAX_LOCK_AGE_MS, treat as stale
+    // regardless of PID liveness (guards against PID reuse attacks)
+    const lockAge = Date.now() - new Date(data.acquiredAt).getTime();
+    if (lockAge > MAX_LOCK_AGE_MS) {
+      fs.unlinkSync(lockFile);
+      return { locked: false };
+    }
+
     // Check if the locking process is still alive
     try {
       process.kill(data.pid, 0);
@@ -280,11 +310,67 @@ export function isValidPlanId(planId: string): boolean {
   return /^plan-[a-z0-9-]+$/.test(planId);
 }
 
+const VALID_RISK_LEVELS = new Set(["LOW", "MEDIUM", "HIGH"]);
+const VALID_APPROVAL_STATUSES = new Set(["PENDING", "APPROVED", "DENIED", "APPLIED", "PARTIAL"]);
+
+/**
+ * H-9: Validates plan data after JSON.parse to prevent malicious plan files
+ * from bypassing security gates (e.g., spoofing risk level).
+ * Throws if critical fields have unexpected types or values.
+ */
+function validatePlanData(data: unknown): PlanState {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error("Plan data must be a non-null object");
+  }
+
+  const plan = data as Record<string, unknown>;
+
+  if (typeof plan.id !== "string" || !plan.id) {
+    throw new Error("Plan must have a string 'id'");
+  }
+  if (typeof plan.goal !== "string") {
+    throw new Error("Plan must have a string 'goal'");
+  }
+  if (typeof plan.createdAt !== "string") {
+    throw new Error("Plan must have a string 'createdAt'");
+  }
+  if (typeof plan.risk !== "string" || !VALID_RISK_LEVELS.has(plan.risk)) {
+    throw new Error(
+      `Plan 'risk' must be one of ${[...VALID_RISK_LEVELS].join(", ")}, got: ${String(plan.risk)}`,
+    );
+  }
+  if (!Array.isArray(plan.tasks)) {
+    throw new Error("Plan must have an array 'tasks'");
+  }
+  for (const task of plan.tasks) {
+    if (typeof task !== "object" || task === null) {
+      throw new Error("Each task must be a non-null object");
+    }
+    if (typeof task.id !== "string" || typeof task.tool !== "string") {
+      throw new Error("Each task must have string 'id' and 'tool'");
+    }
+  }
+  if (!Array.isArray(plan.files)) {
+    throw new Error("Plan must have an array 'files'");
+  }
+  if (
+    typeof plan.approvalStatus !== "string" ||
+    !VALID_APPROVAL_STATUSES.has(plan.approvalStatus)
+  ) {
+    throw new Error(
+      `Plan 'approvalStatus' must be one of ${[...VALID_APPROVAL_STATUSES].join(", ")}, got: ${String(plan.approvalStatus)}`,
+    );
+  }
+
+  return data as PlanState;
+}
+
 export function loadPlan(rootDir: string, planId: string): PlanState | null {
   if (!isValidPlanId(planId)) return null;
   const file = path.join(plansDir(rootDir), `${planId}.json`);
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as PlanState;
+    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return validatePlanData(data);
   } catch {
     return null;
   }
@@ -298,7 +384,8 @@ export function listPlans(rootDir: string): PlanState[] {
     .filter((f) => f.endsWith(".json"))
     .map((f) => {
       try {
-        return JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8")) as PlanState;
+        const data = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
+        return validatePlanData(data);
       } catch {
         return null;
       }
@@ -420,10 +507,39 @@ function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): numbe
   return -1;
 }
 
+// ── E-5: Audit log rotation ──────────────────────────────────────
+
+const DEFAULT_AUDIT_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+
+/**
+ * Rotate the audit log if it exceeds the configured max size.
+ * Renames audit.jsonl -> audit.jsonl.1 (overwrites existing .1) and starts fresh.
+ */
+function rotateAuditIfNeeded(file: string): void {
+  const maxSizeEnv = process.env.DOJOPS_AUDIT_MAX_SIZE_MB;
+  const maxBytes = maxSizeEnv ? parseFloat(maxSizeEnv) * 1024 * 1024 : DEFAULT_AUDIT_MAX_SIZE_BYTES;
+
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return;
+
+  try {
+    const stat = fs.statSync(file);
+    if (stat.size > maxBytes) {
+      const rotated = file + ".1";
+      // Rename current to .1 (overwrites existing .1)
+      fs.renameSync(file, rotated);
+    }
+  } catch {
+    // File doesn't exist yet or stat failed — nothing to rotate
+  }
+}
+
 export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const file = auditFile(rootDir);
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  // E-5: Rotate before appending if file exceeds size limit
+  rotateAuditIfNeeded(file);
 
   // A5: Load HMAC key for audit hash chain
   const hmacKey = loadAuditKey(rootDir);

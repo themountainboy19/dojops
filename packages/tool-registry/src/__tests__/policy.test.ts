@@ -164,4 +164,41 @@ describe("isToolAllowed", () => {
     const policy: ToolPolicy = { blockedTools: [] };
     expect(isToolAllowed("any-tool", policy)).toBe(true);
   });
+
+  describe("T-11: path traversal in tool names", () => {
+    it("blocks tool name containing ../ when in blockedTools", () => {
+      const policy: ToolPolicy = { blockedTools: ["../malicious-tool"] };
+      expect(isToolAllowed("../malicious-tool", policy)).toBe(false);
+    });
+
+    it("does not match traversal tool name against legitimate tool in allowedTools", () => {
+      const policy: ToolPolicy = { allowedTools: ["my-tool"] };
+      // A tool name with path traversal should not be in the allowed list
+      expect(isToolAllowed("../my-tool", policy)).toBe(false);
+      expect(isToolAllowed("../../my-tool", policy)).toBe(false);
+    });
+
+    it("tool name with ../ is not allowed when only legitimate names are in allowedTools", () => {
+      const policy: ToolPolicy = { allowedTools: ["tool-a", "tool-b"] };
+      expect(isToolAllowed("../tool-a", policy)).toBe(false);
+      expect(isToolAllowed("tool-a/../tool-b", policy)).toBe(false);
+    });
+
+    it("tool name with URL-encoded traversal is treated as a different name", () => {
+      const policy: ToolPolicy = { allowedTools: ["tool-a"] };
+      // URL-encoded ../ (%2e%2e%2f) should not match the legitimate name
+      expect(isToolAllowed("%2e%2e%2ftool-a", policy)).toBe(false);
+      expect(isToolAllowed("..%2ftool-a", policy)).toBe(false);
+    });
+
+    it("blocks URL-encoded traversal names via blockedTools", () => {
+      const policy: ToolPolicy = { blockedTools: ["%2e%2e%2fmalicious"] };
+      expect(isToolAllowed("%2e%2e%2fmalicious", policy)).toBe(false);
+    });
+
+    it("tool name with backslash traversal is treated as a different name", () => {
+      const policy: ToolPolicy = { allowedTools: ["tool-a"] };
+      expect(isToolAllowed("..\\tool-a", policy)).toBe(false);
+    });
+  });
 });

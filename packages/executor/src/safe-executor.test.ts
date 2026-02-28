@@ -504,4 +504,191 @@ describe("SafeExecutor", () => {
       expect(log[0].filesModified).toEqual(["/tmp/existing.yaml"]);
     });
   });
+
+  describe("T-10: concurrent execute() calls", () => {
+    it("both concurrent executeTask calls complete without corruption", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const [result1, result2] = await Promise.all([
+        executor.executeTask("t1", new MockTool(), { value: "first" }),
+        executor.executeTask("t2", new MockTool(), { value: "second" }),
+      ]);
+
+      expect(result1.status).toBe("completed");
+      expect(result2.status).toBe("completed");
+      expect(result1.output).toEqual({ executed: "first" });
+      expect(result2.output).toEqual({ executed: "second" });
+
+      const log = executor.getAuditLog();
+      expect(log).toHaveLength(2);
+      const taskIds = log.map((e) => e.taskId).sort();
+      expect(taskIds).toEqual(["t1", "t2"]);
+    });
+
+    it("concurrent execute() calls to the same tool produce independent results", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const results = await Promise.all([
+        executor.executeTask("concurrent-1", new FileTrackingTool(), { value: "a" }),
+        executor.executeTask("concurrent-2", new FileTrackingTool(), { value: "b" }),
+        executor.executeTask("concurrent-3", new FileTrackingTool(), { value: "c" }),
+      ]);
+
+      // All should complete
+      for (const result of results) {
+        expect(result.status).toBe("completed");
+      }
+
+      const log = executor.getAuditLog();
+      expect(log).toHaveLength(3);
+
+      // Each audit entry should have its own file tracking
+      for (const entry of log) {
+        expect(entry.filesWritten).toEqual(["/tmp/new.yaml"]);
+        expect(entry.filesModified).toEqual(["/tmp/existing.yaml"]);
+      }
+    });
+
+    it("concurrent mix of passing and failing tools does not corrupt state", async () => {
+      const executor = new SafeExecutor({
+        policy: { requireApproval: false },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      const [success, failure] = await Promise.all([
+        executor.executeTask("pass-task", new MockTool(), { value: "ok" }),
+        executor.executeTask("fail-task", new FailingTool(), { value: "bad" }),
+      ]);
+
+      expect(success.status).toBe("completed");
+      expect(failure.status).toBe("failed");
+
+      const log = executor.getAuditLog();
+      expect(log).toHaveLength(2);
+
+      const successLog = log.find((e) => e.taskId === "pass-task");
+      const failLog = log.find((e) => e.taskId === "fail-task");
+      expect(successLog!.status).toBe("completed");
+      expect(failLog!.status).toBe("failed");
+    });
+  });
+
+  describe("T-13: SafeExecutor policy + DevOps allowlist interaction", () => {
+    it("blocks non-DevOps file write when enforceDevOpsAllowlist is true", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          allowWrite: true,
+          enforceDevOpsAllowlist: true,
+          allowedWritePaths: [],
+          deniedWritePaths: [],
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      // Create a tool that writes to a non-DevOps path
+      class NonDevOpsWriteTool extends BaseTool<MockInput> {
+        name = "non-devops-write-tool";
+        description = "Writes to non-DevOps file";
+        inputSchema = MockInputSchema;
+        async generate(input: MockInput): Promise<ToolOutput> {
+          return { success: true, data: { result: input.value } };
+        }
+        async execute(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: {},
+            filesWritten: ["src/index.ts"],
+            filesModified: [],
+          };
+        }
+      }
+
+      const result = await executor.executeTask("t-allowlist", new NonDevOpsWriteTool(), {
+        value: "test",
+      });
+
+      expect(result.status).toBe("failed");
+      expect(result.error).toContain("Policy violation");
+      expect(result.error).toContain("not a recognized DevOps file");
+    });
+
+    it("allows any file write when enforceDevOpsAllowlist is false", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          allowWrite: true,
+          enforceDevOpsAllowlist: false,
+          allowedWritePaths: [],
+          deniedWritePaths: [],
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      class AnyFileWriteTool extends BaseTool<MockInput> {
+        name = "any-file-write-tool";
+        description = "Writes to arbitrary file";
+        inputSchema = MockInputSchema;
+        async generate(input: MockInput): Promise<ToolOutput> {
+          return { success: true, data: { result: input.value } };
+        }
+        async execute(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: {},
+            filesWritten: ["src/index.ts"],
+            filesModified: ["package.json"],
+          };
+        }
+      }
+
+      const result = await executor.executeTask("t-no-allowlist", new AnyFileWriteTool(), {
+        value: "test",
+      });
+
+      expect(result.status).toBe("completed");
+    });
+
+    it("allows DevOps file writes when enforceDevOpsAllowlist is true", async () => {
+      const executor = new SafeExecutor({
+        policy: {
+          requireApproval: false,
+          allowWrite: true,
+          enforceDevOpsAllowlist: true,
+          allowedWritePaths: [],
+          deniedWritePaths: [],
+        },
+        approvalHandler: new AutoApproveHandler(),
+      });
+
+      class DevOpsWriteTool extends BaseTool<MockInput> {
+        name = "devops-write-tool";
+        description = "Writes to DevOps files";
+        inputSchema = MockInputSchema;
+        async generate(input: MockInput): Promise<ToolOutput> {
+          return { success: true, data: { result: input.value } };
+        }
+        async execute(): Promise<ToolOutput> {
+          return {
+            success: true,
+            data: {},
+            filesWritten: ["Dockerfile", "main.tf"],
+            filesModified: [],
+          };
+        }
+      }
+
+      const result = await executor.executeTask("t-devops-ok", new DevOpsWriteTool(), {
+        value: "test",
+      });
+
+      expect(result.status).toBe("completed");
+    });
+  });
 });

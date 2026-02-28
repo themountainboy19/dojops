@@ -41,13 +41,30 @@ export function createScanRouter(store: HistoryStore, rootDir?: string): Router 
         return;
       }
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Scan timed out")), SCAN_TIMEOUT_MS),
-      );
-      const report = await Promise.race([
-        runScan(projectPath, scanType, context as Parameters<typeof runScan>[2]),
-        timeoutPromise,
-      ]);
+      // AbortController allows future scanner implementations to accept a signal
+      // and terminate child processes (trivy, gitleaks, etc.) on timeout.
+      // Currently runScan() does not accept a signal, so child processes will
+      // finish in the background after timeout — but the timeout is cleaned up
+      // on success to prevent leaked timers.
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => {
+        abortController.abort();
+      }, SCAN_TIMEOUT_MS);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        abortController.signal.addEventListener("abort", () => {
+          reject(new Error("Scan timed out"));
+        });
+      });
+
+      let report;
+      try {
+        report = await Promise.race([
+          runScan(projectPath, scanType, context as Parameters<typeof runScan>[2]),
+          timeoutPromise,
+        ]);
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const entry = store.add({
         type: "scan",

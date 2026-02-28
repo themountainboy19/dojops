@@ -43,41 +43,41 @@ describe("serializer", () => {
   });
 
   it("saveSession writes to .dojops/sessions/", () => {
-    const state = makeState("chat-abc12345");
+    const state = makeState("chat-abc12345def");
     saveSession(tmpDir, state);
-    const file = path.join(tmpDir, ".dojops", "sessions", "chat-abc12345.json");
+    const file = path.join(tmpDir, ".dojops", "sessions", "chat-abc12345def.json");
     expect(fs.existsSync(file)).toBe(true);
   });
 
   it("loadSession reads back correctly", () => {
-    const state = makeState("chat-load1234");
+    const state = makeState("chat-10ad12340000");
     saveSession(tmpDir, state);
-    const loaded = loadSession(tmpDir, "chat-load1234");
+    const loaded = loadSession(tmpDir, "chat-10ad12340000");
     expect(loaded).not.toBeNull();
-    expect(loaded!.id).toBe("chat-load1234");
+    expect(loaded!.id).toBe("chat-10ad12340000");
     expect(loaded!.messages).toHaveLength(2);
     expect(loaded!.mode).toBe("INTERACTIVE");
   });
 
   it("loadSession returns null for missing session", () => {
-    const result = loadSession(tmpDir, "chat-nonexist");
+    const result = loadSession(tmpDir, "chat-00000000");
     expect(result).toBeNull();
   });
 
   it("listSessions returns sorted list", () => {
-    const s1 = makeState("chat-first000");
+    const s1 = makeState("chat-f1a51000");
     saveSession(tmpDir, s1);
 
     // Manually overwrite to set a known updatedAt in the past
-    const file1 = path.join(tmpDir, ".dojops", "sessions", "chat-first000.json");
+    const file1 = path.join(tmpDir, ".dojops", "sessions", "chat-f1a51000.json");
     const data1 = JSON.parse(fs.readFileSync(file1, "utf-8"));
     data1.updatedAt = "2024-01-01T00:00:00.000Z";
     fs.writeFileSync(file1, JSON.stringify(data1, null, 2) + "\n");
 
-    const s2 = makeState("chat-second00");
+    const s2 = makeState("chat-5ec00d00");
     saveSession(tmpDir, s2);
 
-    const file2 = path.join(tmpDir, ".dojops", "sessions", "chat-second00.json");
+    const file2 = path.join(tmpDir, ".dojops", "sessions", "chat-5ec00d00.json");
     const data2 = JSON.parse(fs.readFileSync(file2, "utf-8"));
     data2.updatedAt = "2024-12-31T00:00:00.000Z";
     fs.writeFileSync(file2, JSON.stringify(data2, null, 2) + "\n");
@@ -85,7 +85,7 @@ describe("serializer", () => {
     const sessions = listSessions(tmpDir);
     expect(sessions).toHaveLength(2);
     // Most recent first
-    expect(sessions[0].id).toBe("chat-second00");
+    expect(sessions[0].id).toBe("chat-5ec00d00");
   });
 
   it("listSessions returns empty array when no sessions", () => {
@@ -94,16 +94,71 @@ describe("serializer", () => {
   });
 
   it("deleteSession removes file", () => {
-    const state = makeState("chat-del12345");
+    const state = makeState("chat-de112345");
     saveSession(tmpDir, state);
-    expect(loadSession(tmpDir, "chat-del12345")).not.toBeNull();
-    const deleted = deleteSession(tmpDir, "chat-del12345");
+    expect(loadSession(tmpDir, "chat-de112345")).not.toBeNull();
+    const deleted = deleteSession(tmpDir, "chat-de112345");
     expect(deleted).toBe(true);
-    expect(loadSession(tmpDir, "chat-del12345")).toBeNull();
+    expect(loadSession(tmpDir, "chat-de112345")).toBeNull();
   });
 
   it("deleteSession returns false for missing session", () => {
-    const result = deleteSession(tmpDir, "chat-nothere0");
+    const result = deleteSession(tmpDir, "chat-00000001");
     expect(result).toBe(false);
+  });
+
+  it("loadSession returns null for path traversal session ID", () => {
+    const result = loadSession(tmpDir, "chat-../../etc/passwd");
+    expect(result).toBeNull();
+  });
+
+  it("loadSession returns null for ID with directory separators", () => {
+    const result = loadSession(tmpDir, "chat-../../../etc/shadow");
+    expect(result).toBeNull();
+  });
+
+  it("deleteSession returns false for path traversal session ID", () => {
+    const result = deleteSession(tmpDir, "chat-../../etc/passwd");
+    expect(result).toBe(false);
+  });
+
+  it("deleteSession returns false for ID containing directory separators", () => {
+    const result = deleteSession(tmpDir, "chat-../secret");
+    expect(result).toBe(false);
+  });
+
+  it("listSessions filters out files with non-hex session IDs", () => {
+    // Create sessions directory
+    const sessDir = path.join(tmpDir, ".dojops", "sessions");
+    fs.mkdirSync(sessDir, { recursive: true });
+
+    // Write a valid session file
+    const validId = "chat-abcdef0123456789";
+    const validState = makeState(validId);
+    fs.writeFileSync(
+      path.join(sessDir, `${validId}.json`),
+      JSON.stringify(validState, null, 2) + "\n",
+    );
+
+    // Write an invalid session file with non-hex characters in the ID
+    const invalidId = "chat-ZZZZZZZZ";
+    const invalidState = makeState(invalidId);
+    fs.writeFileSync(
+      path.join(sessDir, `${invalidId}.json`),
+      JSON.stringify(invalidState, null, 2) + "\n",
+    );
+
+    // Write another file that doesn't match the session ID pattern at all
+    const weirdFile = "not-a-session.json";
+    fs.writeFileSync(
+      path.join(sessDir, weirdFile),
+      JSON.stringify({ id: "not-a-session" }, null, 2) + "\n",
+    );
+
+    const sessions = listSessions(tmpDir);
+
+    // Only the valid hex session ID should be returned
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].id).toBe(validId);
   });
 });

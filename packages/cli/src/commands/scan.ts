@@ -17,6 +17,7 @@ import {
   saveScanReport,
   listScanReports,
   dojopsDir,
+  getCurrentUser,
 } from "../state";
 import { emitGitHubAnnotations } from "../ci-annotations";
 
@@ -181,7 +182,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   // Audit log
   appendAudit(root, {
     timestamp: new Date().toISOString(),
-    user: process.env.USER ?? "unknown",
+    user: getCurrentUser(),
     command: "scan",
     action: "scan",
     status: "success",

@@ -60,12 +60,13 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
 
   if (keywords.length === 0) return null;
 
-  // Validate system prompt for injection patterns (A4)
+  // Validate system prompt for injection patterns (A4) — reject unsafe prompts (H-19)
   const promptValidation = validateSystemPrompt(systemPrompt);
   if (!promptValidation.safe) {
     for (const warning of promptValidation.warnings) {
-      console.warn(`[agent-parser] Agent "${dirName}": ${warning}`);
+      console.warn(`[agent-parser] Agent "${dirName}" rejected: ${warning}`);
     }
+    return null;
   }
 
   return {

@@ -671,7 +671,7 @@ function renderAgents(agents) {
 async function loadHistory() {
   const container = $("history-table");
   const type = $("history-type").value;
-  const query = type ? `?type=${type}` : "";
+  const query = type ? `?type=${encodeURIComponent(type)}` : "";
 
   try {
     const data = await apiCall(`/history${query}`);

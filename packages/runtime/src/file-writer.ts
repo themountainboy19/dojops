@@ -217,6 +217,7 @@ export function matchesScopePattern(
   scopePatterns: string[],
   input: Record<string, unknown>,
 ): boolean {
+  const normalizedResolved = path.normalize(resolvedPath);
   for (const pattern of scopePatterns) {
     // Expand {var} placeholders in the scope pattern
     let expanded = pattern;
@@ -225,7 +226,7 @@ export function matchesScopePattern(
         expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value);
       }
     }
-    if (resolvedPath === expanded) return true;
+    if (normalizedResolved === path.normalize(expanded)) return true;
   }
   return false;
 }

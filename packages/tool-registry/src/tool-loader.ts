@@ -10,6 +10,9 @@ const LEGACY_DIR_NAME = "plugins";
 const MANIFEST_FILE = "tool.yaml";
 const LEGACY_MANIFEST_FILE = "plugin.yaml";
 
+/** Maximum allowed file size for manifest and schema files (64KB). */
+const MAX_MANIFEST_FILE_SIZE = 65_536;
+
 function getGlobalToolsDir(): string | null {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) return null;
@@ -39,23 +42,57 @@ function findManifestFile(dir: string): string | null {
   return null;
 }
 
+/**
+ * Returns true if the file at `filePath` exceeds the maximum allowed size.
+ * Logs a warning and returns true when the file is too large.
+ */
+function isFileTooLarge(filePath: string, label: string): boolean {
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size > MAX_MANIFEST_FILE_SIZE) {
+      console.warn(
+        `[tool-loader] Skipping ${label} "${filePath}": file size ${stat.size} exceeds limit of ${MAX_MANIFEST_FILE_SIZE} bytes`,
+      );
+      return true;
+    }
+  } catch {
+    // statSync failed — let the subsequent readFileSync handle the error
+  }
+  return false;
+}
+
 function computeHash(dir: string): string {
   const hash = crypto.createHash("sha256");
   const manifestPath = findManifestFile(dir);
   if (manifestPath) {
+    if (isFileTooLarge(manifestPath, "manifest")) return "";
     hash.update(fs.readFileSync(manifestPath));
   }
   return hash.digest("hex");
 }
 
 function loadJsonSchemaFile(dir: string, relativePath: string): Record<string, unknown> | null {
-  const fullPath = path.resolve(dir, relativePath);
-  // Containment check: ensure the resolved path stays inside the tool directory
-  const safeDir = dir.endsWith(path.sep) ? dir : dir + path.sep;
-  if (!fullPath.startsWith(safeDir)) return null;
   try {
-    if (!fs.existsSync(fullPath)) return null;
-    const content = fs.readFileSync(fullPath, "utf-8");
+    const fullPath = path.resolve(dir, relativePath);
+
+    // Resolve symlinks to real paths before containment check (H-17)
+    const realDir = fs.realpathSync(dir);
+    let realFullPath: string;
+    try {
+      realFullPath = fs.realpathSync(fullPath);
+    } catch {
+      // realpathSync fails for broken symlinks or non-existent files
+      return null;
+    }
+
+    // Containment check using real paths
+    const safeDir = realDir.endsWith(path.sep) ? realDir : realDir + path.sep;
+    if (!realFullPath.startsWith(safeDir)) return null;
+
+    // File size check (H-16)
+    if (isFileTooLarge(realFullPath, "JSON schema")) return null;
+
+    const content = fs.readFileSync(realFullPath, "utf-8");
     return JSON.parse(content) as Record<string, unknown>;
   } catch {
     return null;
@@ -65,6 +102,9 @@ function loadJsonSchemaFile(dir: string, relativePath: string): Record<string, u
 function loadToolFromDir(toolDir: string, location: "global" | "project"): ToolEntry | null {
   const manifestPath = findManifestFile(toolDir);
   if (!manifestPath) return null;
+
+  // File size check on manifest (H-16)
+  if (isFileTooLarge(manifestPath, "manifest")) return null;
 
   let raw: unknown;
   try {

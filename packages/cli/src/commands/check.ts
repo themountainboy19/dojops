@@ -4,7 +4,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
-import { findProjectRoot, loadContext, appendAudit } from "../state";
+import { findProjectRoot, loadContext, appendAudit, getCurrentUser } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
 const MAX_FILES = 20;
@@ -85,7 +85,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
       console.log(JSON.stringify(report, null, 2));
       appendAudit(root, {
         timestamp: new Date().toISOString(),
-        user: process.env.USER ?? "unknown",
+        user: getCurrentUser(),
         command: "check",
         action: "devops-check",
         status: "success",
@@ -157,7 +157,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     // Audit
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: "check",
       action: "devops-check",
       status: "success",
@@ -167,7 +167,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     s.stop("Analysis failed.");
     appendAudit(root, {
       timestamp: new Date().toISOString(),
-      user: process.env.USER ?? "unknown",
+      user: getCurrentUser(),
       command: "check",
       action: "devops-check",
       status: "failure",
