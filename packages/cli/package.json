@@ -57,7 +57,7 @@
     "@dojops/scanner": "workspace:*",
     "@dojops/session": "workspace:*",
     "@dojops/tool-registry": "workspace:*",
-    "dotenv": "^16.0.0",
+    "dotenv": "^17.0.0",
     "js-yaml": "^4.1.0",
     "picocolors": "^1.1.1"
   },

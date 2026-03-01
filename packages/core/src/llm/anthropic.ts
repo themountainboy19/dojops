@@ -7,10 +7,8 @@ export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
   private client: Anthropic;
   private model: string;
-  private apiKey: string;
 
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
-    this.apiKey = apiKey;
     this.client = new Anthropic({ apiKey });
     this.model = model;
   }
@@ -99,17 +97,8 @@ export class AnthropicProvider implements LLMProvider {
 
   async listModels(): Promise<string[]> {
     try {
-      // SDK v0.20.x lacks client.models.list() — use raw fetch with SDK-managed key
-      const response = await fetch("https://api.anthropic.com/v1/models", {
-        headers: {
-          "x-api-key": this.apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-      });
-      const data = (await response.json()) as { data?: Array<{ id: string }> };
-      const models: string[] = (data.data ?? [])
-        .filter((m) => m.id.startsWith("claude-"))
-        .map((m) => m.id);
+      const page = await this.client.models.list({ limit: 100 });
+      const models: string[] = page.data.filter((m) => m.id.startsWith("claude-")).map((m) => m.id);
       return models.sort();
     } catch {
       return [];
