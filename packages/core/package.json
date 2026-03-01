@@ -46,8 +46,7 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/genai": "^1.43.0",
     "axios": "^1.13.6",
-    "openai": "^4.0.0",
-    "zod": "^3.23.0",
-    "zod-to-json-schema": "^3.24.0"
+    "openai": "^6.0.0",
+    "zod": "^4.0.0"
   }
 }

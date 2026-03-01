@@ -1,7 +1,7 @@
 import * as crypto from "crypto";
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
-import { ZodTypeAny } from "zod";
+import { z } from "zod";
 import { DopsExecution, DopsModule, DopsRisk, FileSpec } from "./spec";
 import { compileInputSchema, compileOutputSchema } from "./schema-compiler";
 import { compilePrompt, PromptContext } from "./prompt-compiler";
@@ -31,11 +31,11 @@ export interface ToolMetadata {
 export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   readonly name: string;
   readonly description: string;
-  readonly inputSchema: ZodTypeAny;
+  readonly inputSchema: z.ZodType;
 
   private readonly module: DopsModule;
   private readonly provider: LLMProvider;
-  private readonly outputSchema: ZodTypeAny;
+  private readonly outputSchema: z.ZodType;
   private readonly options: DopsRuntimeOptions;
   private readonly _systemPromptHash: string;
   private readonly _moduleHash: string;

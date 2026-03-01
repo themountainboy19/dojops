@@ -1,4 +1,4 @@
-import { z, ZodTypeAny } from "zod";
+import { z } from "zod";
 
 export interface JSONSchemaObject {
   type?: string;
@@ -40,10 +40,10 @@ function safeRegex(pattern: string): RegExp {
  * The resulting Zod schemas have proper _def.typeName, shape(), description, etc.
  * so that zodSchemaToText() in the planner can walk them correctly.
  */
-export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
+export function jsonSchemaToZod(schema: JSONSchemaObject): z.ZodType {
   if (schema.enum && schema.enum.length > 0) {
     const values = schema.enum.map(String);
-    let result: ZodTypeAny = z.enum(values as [string, ...string[]]);
+    let result: z.ZodType = z.enum(values as [string, ...string[]]);
     if (schema.description) {
       result = result.describe(schema.description);
     }
@@ -59,7 +59,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       if (schema.minLength !== undefined) s = s.min(schema.minLength);
       if (schema.maxLength !== undefined) s = s.max(schema.maxLength);
       if (schema.pattern !== undefined) s = s.regex(safeRegex(schema.pattern));
-      let result: ZodTypeAny = s;
+      let result: z.ZodType = s;
       if (schema.description) {
         result = result.describe(schema.description);
       }
@@ -75,7 +75,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       if (schema.type === "integer") n = n.int();
       if (schema.minimum !== undefined) n = n.min(schema.minimum);
       if (schema.maximum !== undefined) n = n.max(schema.maximum);
-      let result: ZodTypeAny = n;
+      let result: z.ZodType = n;
       if (schema.description) {
         result = result.describe(schema.description);
       }
@@ -86,7 +86,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
     }
 
     case "boolean": {
-      let result: ZodTypeAny = z.boolean();
+      let result: z.ZodType = z.boolean();
       if (schema.description) {
         result = result.describe(schema.description);
       }
@@ -98,19 +98,19 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
 
     case "array": {
       const itemSchema = schema.items ? jsonSchemaToZod(schema.items) : z.unknown();
-      let result: ZodTypeAny = z.array(itemSchema);
+      let result: z.ZodType = z.array(itemSchema);
       if (schema.description) {
         result = result.describe(schema.description);
       }
       if (schema.default !== undefined) {
-        result = (result as z.ZodArray<ZodTypeAny>).default(schema.default as unknown[]);
+        result = (result as z.ZodArray<z.ZodType>).default(schema.default as unknown[]);
       }
       return result;
     }
 
     case "object": {
       if (!schema.properties) {
-        let result: ZodTypeAny = z.record(z.unknown());
+        let result: z.ZodType = z.record(z.string(), z.unknown());
         if (schema.description) {
           result = result.describe(schema.description);
         }
@@ -118,7 +118,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       }
 
       const requiredSet = new Set(schema.required ?? []);
-      const shape: Record<string, ZodTypeAny> = {};
+      const shape: Record<string, z.ZodType> = {};
 
       for (const [key, propSchema] of Object.entries(schema.properties)) {
         let field = jsonSchemaToZod(propSchema);
@@ -128,7 +128,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
         shape[key] = field;
       }
 
-      let result: ZodTypeAny = z.object(shape);
+      let result: z.ZodType = z.object(shape);
       if (schema.description) {
         result = result.describe(schema.description);
       }

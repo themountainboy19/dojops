@@ -1,4 +1,4 @@
-import { ZodTypeAny } from "zod";
+import { z } from "zod";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -11,7 +11,7 @@ export interface LLMRequest {
   messages?: ChatMessage[];
   temperature?: number;
   maxTokens?: number;
-  schema?: ZodTypeAny;
+  schema?: z.ZodType;
 }
 
 export interface LLMUsage {

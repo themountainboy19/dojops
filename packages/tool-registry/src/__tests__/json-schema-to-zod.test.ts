@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { z } from "zod";
 import { jsonSchemaToZod, JSONSchemaObject } from "../json-schema-to-zod";
 
 describe("jsonSchemaToZod", () => {
@@ -12,7 +13,9 @@ describe("jsonSchemaToZod", () => {
   it("converts string with description", () => {
     const schema: JSONSchemaObject = { type: "string", description: "A name" };
     const zod = jsonSchemaToZod(schema);
-    expect(zod._def.description).toBe("A name");
+    // Verify description is preserved via z.toJSONSchema()
+    const jsonSchema = z.toJSONSchema(zod) as Record<string, unknown>;
+    expect(jsonSchema.description).toBe("A name");
   });
 
   it("converts string with default", () => {
@@ -64,7 +67,9 @@ describe("jsonSchemaToZod", () => {
   it("converts enum with description", () => {
     const schema: JSONSchemaObject = { enum: ["x", "y"], description: "Options" };
     const zod = jsonSchemaToZod(schema);
-    expect(zod._def.description || zod._def.innerType?._def?.description).toBe("Options");
+    // Verify description is preserved via z.toJSONSchema()
+    const jsonSchema = z.toJSONSchema(zod) as Record<string, unknown>;
+    expect(jsonSchema.description).toBe("Options");
   });
 
   it("converts array of strings", () => {
@@ -149,7 +154,7 @@ describe("jsonSchemaToZod", () => {
     expect(zod.safeParse(42).success).toBe(true);
   });
 
-  it("produced schema has correct Zod typeName for zodSchemaToText compatibility", () => {
+  it("produced schema validates correctly for zodSchemaToText compatibility", () => {
     const schema: JSONSchemaObject = {
       type: "object",
       properties: {
@@ -163,14 +168,15 @@ describe("jsonSchemaToZod", () => {
     };
     const zod = jsonSchemaToZod(schema);
 
-    // The top-level should be a ZodObject
-    expect(zod._def.typeName).toBe("ZodObject");
+    // Verify it behaves as an object schema
+    expect(zod.safeParse({ name: "test" }).success).toBe(true);
+    expect(zod.safeParse({ name: "test", count: 42 }).success).toBe(true);
+    expect(zod.safeParse({}).success).toBe(false);
 
-    // It should have a shape() function
-    const shape = zod._def.shape();
-    expect(shape).toBeDefined();
-    expect(shape.name).toBeDefined();
-    expect(shape.count).toBeDefined();
+    // Verify the JSON Schema round-trip preserves structure
+    const jsonSchema = z.toJSONSchema(zod) as Record<string, unknown>;
+    expect(jsonSchema.type).toBe("object");
+    expect(jsonSchema.properties).toBeDefined();
   });
 
   it("handles field with default not being marked optional", () => {

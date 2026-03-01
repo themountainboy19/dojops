@@ -1,4 +1,4 @@
-import { z, ZodTypeAny } from "zod";
+import { z } from "zod";
 import { InputFieldDef } from "./spec";
 
 // ── JSON Schema Object (extended from tool-registry) ─
@@ -27,8 +27,8 @@ export interface JSONSchemaObject {
  * Compile input DSL fields into a Zod schema.
  * Auto-injects optional `existingContent` field.
  */
-export function compileInputSchema(fields: Record<string, InputFieldDef>): ZodTypeAny {
-  const shape: Record<string, ZodTypeAny> = {};
+export function compileInputSchema(fields: Record<string, InputFieldDef>): z.ZodType {
+  const shape: Record<string, z.ZodType> = {};
 
   for (const [name, field] of Object.entries(fields)) {
     shape[name] = compileInputField(field);
@@ -43,8 +43,8 @@ export function compileInputSchema(fields: Record<string, InputFieldDef>): ZodTy
 /**
  * Compile a single input field DSL definition into Zod.
  */
-function compileInputField(field: InputFieldDef): ZodTypeAny {
-  let schema: ZodTypeAny;
+function compileInputField(field: InputFieldDef): z.ZodType {
+  let schema: z.ZodType;
 
   switch (field.type) {
     case "string": {
@@ -98,13 +98,13 @@ function compileInputField(field: InputFieldDef): ZodTypeAny {
 
     case "object": {
       if (field.properties) {
-        const shape: Record<string, ZodTypeAny> = {};
+        const shape: Record<string, z.ZodType> = {};
         for (const [key, propDef] of Object.entries(field.properties)) {
           shape[key] = compileInputField(propDef as InputFieldDef);
         }
         schema = z.object(shape);
       } else {
-        schema = z.record(z.unknown());
+        schema = z.record(z.string(), z.unknown());
       }
       break;
     }
@@ -135,23 +135,23 @@ function compileInputField(field: InputFieldDef): ZodTypeAny {
  * Enhanced JSON Schema to Zod conversion.
  * Supports: anyOf, oneOf (as z.union), minItems, maxItems, format validation.
  */
-export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
+export function jsonSchemaToZod(schema: JSONSchemaObject): z.ZodType {
   // Handle anyOf / oneOf as union
   if (schema.anyOf && schema.anyOf.length > 0) {
     const schemas = schema.anyOf.map(jsonSchemaToZod);
     if (schemas.length === 1) return schemas[0];
-    return z.union(schemas as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]);
+    return z.union(schemas as [z.ZodType, z.ZodType, ...z.ZodType[]]);
   }
   if (schema.oneOf && schema.oneOf.length > 0) {
     const schemas = schema.oneOf.map(jsonSchemaToZod);
     if (schemas.length === 1) return schemas[0];
-    return z.union(schemas as [ZodTypeAny, ZodTypeAny, ...ZodTypeAny[]]);
+    return z.union(schemas as [z.ZodType, z.ZodType, ...z.ZodType[]]);
   }
 
   // Handle enum
   if (schema.enum && schema.enum.length > 0) {
     const values = schema.enum.map(String);
-    let result: ZodTypeAny = z.enum(values as [string, ...string[]]);
+    let result: z.ZodType = z.enum(values as [string, ...string[]]);
     if (schema.description) result = result.describe(schema.description);
     if (schema.default !== undefined) result = result.default(schema.default);
     return result;
@@ -165,7 +165,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       if (schema.pattern !== undefined) s = s.regex(new RegExp(schema.pattern));
       if (schema.format === "email") s = s.email();
       if (schema.format === "url" || schema.format === "uri") s = s.url();
-      let result: ZodTypeAny = s;
+      let result: z.ZodType = s;
       if (schema.description) result = result.describe(schema.description);
       if (schema.default !== undefined)
         result = (result as z.ZodString).default(schema.default as string);
@@ -178,7 +178,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       if (schema.type === "integer") n = n.int();
       if (schema.minimum !== undefined) n = n.min(schema.minimum);
       if (schema.maximum !== undefined) n = n.max(schema.maximum);
-      let result: ZodTypeAny = n;
+      let result: z.ZodType = n;
       if (schema.description) result = result.describe(schema.description);
       if (schema.default !== undefined)
         result = (result as z.ZodNumber).default(schema.default as number);
@@ -186,7 +186,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
     }
 
     case "boolean": {
-      let result: ZodTypeAny = z.boolean();
+      let result: z.ZodType = z.boolean();
       if (schema.description) result = result.describe(schema.description);
       if (schema.default !== undefined)
         result = (result as z.ZodBoolean).default(schema.default as boolean);
@@ -198,22 +198,22 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
       let arr = z.array(itemSchema);
       if (schema.minItems !== undefined) arr = arr.min(schema.minItems);
       if (schema.maxItems !== undefined) arr = arr.max(schema.maxItems);
-      let result: ZodTypeAny = arr;
+      let result: z.ZodType = arr;
       if (schema.description) result = result.describe(schema.description);
       if (schema.default !== undefined)
-        result = (result as z.ZodArray<ZodTypeAny>).default(schema.default as unknown[]);
+        result = (result as z.ZodArray<z.ZodType>).default(schema.default as unknown[]);
       return result;
     }
 
     case "object": {
       if (!schema.properties) {
-        let result: ZodTypeAny = z.record(z.unknown());
+        let result: z.ZodType = z.record(z.string(), z.unknown());
         if (schema.description) result = result.describe(schema.description);
         return result;
       }
 
       const requiredSet = new Set(schema.required ?? []);
-      const shape: Record<string, ZodTypeAny> = {};
+      const shape: Record<string, z.ZodType> = {};
 
       for (const [key, propSchema] of Object.entries(schema.properties)) {
         let field = jsonSchemaToZod(propSchema);
@@ -223,7 +223,7 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
         shape[key] = field;
       }
 
-      let result: ZodTypeAny = z.object(shape);
+      let result: z.ZodType = z.object(shape);
       if (schema.description) result = result.describe(schema.description);
       return result;
     }
@@ -236,6 +236,6 @@ export function jsonSchemaToZod(schema: JSONSchemaObject): ZodTypeAny {
 /**
  * Compile an output schema (JSON Schema in YAML) to Zod.
  */
-export function compileOutputSchema(schema: Record<string, unknown>): ZodTypeAny {
+export function compileOutputSchema(schema: Record<string, unknown>): z.ZodType {
   return jsonSchemaToZod(schema as JSONSchemaObject);
 }

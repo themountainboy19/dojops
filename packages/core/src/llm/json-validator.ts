@@ -1,4 +1,4 @@
-import { ZodTypeAny } from "zod";
+import { z } from "zod";
 
 export class JsonValidationError extends Error {
   constructor(
@@ -18,7 +18,7 @@ function stripMarkdownFences(text: string): string {
   return text.trim();
 }
 
-export function parseAndValidate<T>(raw: string, schema: ZodTypeAny): T {
+export function parseAndValidate<T>(raw: string, schema: z.ZodType): T {
   const cleaned = stripMarkdownFences(raw);
 
   let parsed: unknown;

@@ -1,6 +1,6 @@
 import https from "node:https";
 import axios from "axios";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { z } from "zod";
 import { LLMProvider, LLMRequest, LLMResponse, LLMUsage } from "./provider";
 import { parseAndValidate } from "./json-validator";
 
@@ -67,8 +67,7 @@ export class OllamaProvider implements LLMProvider {
       ? `${req.system ?? ""}\n\nYou MUST respond with valid JSON only. No markdown, no extra text.`.trim()
       : req.system;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const format = req.schema ? zodToJsonSchema(req.schema as any) : undefined;
+    const format = req.schema ? z.toJSONSchema(req.schema) : undefined;
 
     let content: string;
     let usage: LLMUsage | undefined;

@@ -1,60 +1,64 @@
-import { ZodTypeAny } from "zod";
+import { z } from "zod";
+
+interface JSONSchemaProperty {
+  type?: string;
+  enum?: string[];
+  items?: JSONSchemaProperty;
+  description?: string;
+  default?: unknown;
+  [key: string]: unknown;
+}
+
+interface JSONSchemaObject {
+  type?: string;
+  properties?: Record<string, JSONSchemaProperty>;
+  required?: string[];
+  enum?: string[];
+  items?: JSONSchemaProperty;
+  description?: string;
+  default?: unknown;
+  [key: string]: unknown;
+}
 
 /**
  * Converts a Zod schema into a human-readable string for LLM prompts.
- * Walks schema._def to extract field names, types, required/optional, defaults, descriptions.
+ * Uses z.toJSONSchema() (Zod 4) to avoid walking internal Zod structures.
  */
-export function zodSchemaToText(schema: ZodTypeAny): string {
-  const def = schema?._def;
-
-  if (!def?.typeName) {
+export function zodSchemaToText(schema: z.ZodType): string {
+  let jsonSchema: JSONSchemaObject;
+  try {
+    jsonSchema = z.toJSONSchema(schema) as JSONSchemaObject;
+  } catch {
     return "(no schema)";
   }
 
-  // Handle ZodObject — the main case for tool input schemas
-  if (def.typeName === "ZodObject") {
-    const shape = def.shape() as Record<string, ZodTypeAny>;
+  // Handle object schemas — the main case for tool input schemas
+  if (jsonSchema.type === "object" && jsonSchema.properties) {
+    const requiredSet = new Set(jsonSchema.required ?? []);
     const lines: string[] = [];
 
-    for (const [key, fieldSchema] of Object.entries(shape)) {
-      lines.push(describeField(key, fieldSchema));
+    for (const [key, prop] of Object.entries(jsonSchema.properties)) {
+      lines.push(describeField(key, prop, requiredSet.has(key)));
     }
 
     return lines.join("\n");
   }
 
   // Fallback for non-object schemas
-  return describeType(schema);
+  return describeTypeFromJsonSchema(jsonSchema);
 }
 
-function describeField(name: string, schema: ZodTypeAny): string {
-  let innerSchema = schema;
-  let isOptional = false;
-  let defaultValue: unknown = undefined;
-  let hasDefault = false;
-
-  // Unwrap ZodDefault
-  if (innerSchema._def.typeName === "ZodDefault") {
-    hasDefault = true;
-    defaultValue = innerSchema._def.defaultValue();
-    innerSchema = innerSchema._def.innerType as ZodTypeAny;
-  }
-
-  // Unwrap ZodOptional
-  if (innerSchema._def.typeName === "ZodOptional") {
-    isOptional = true;
-    innerSchema = innerSchema._def.innerType as ZodTypeAny;
-  }
-
-  const typeStr = describeType(innerSchema);
-  const description = innerSchema._def.description as string | undefined;
+function describeField(name: string, prop: JSONSchemaProperty, isRequired: boolean): string {
+  const hasDefault = prop.default !== undefined;
+  const typeStr = describeTypeFromJsonSchema(prop);
+  const description = prop.description;
 
   const parts = [name];
   parts.push(` (${typeStr}`);
 
   if (hasDefault) {
-    parts.push(`, optional, default: ${JSON.stringify(defaultValue)}`);
-  } else if (isOptional) {
+    parts.push(`, optional, default: ${JSON.stringify(prop.default)}`);
+  } else if (!isRequired) {
     parts.push(", optional");
   } else {
     parts.push(", required");
@@ -69,25 +73,27 @@ function describeField(name: string, schema: ZodTypeAny): string {
   return parts.join("");
 }
 
-function describeType(schema: ZodTypeAny): string {
-  const def = schema._def;
+function describeTypeFromJsonSchema(schema: JSONSchemaProperty): string {
+  if (schema.enum) {
+    return schema.enum.map((v) => `"${v}"`).join(" | ");
+  }
 
-  switch (def.typeName) {
-    case "ZodString":
+  switch (schema.type) {
+    case "string":
       return "string";
-    case "ZodNumber":
+    case "number":
+    case "integer":
       return "number";
-    case "ZodBoolean":
+    case "boolean":
       return "boolean";
-    case "ZodEnum":
-      return (def.values as string[]).map((v: string) => `"${v}"`).join(" | ");
-    case "ZodArray":
-      return `array of ${describeType(def.type as ZodTypeAny)}`;
-    case "ZodDefault":
-      return describeType(def.innerType as ZodTypeAny);
-    case "ZodOptional":
-      return describeType(def.innerType as ZodTypeAny);
+    case "array":
+      if (schema.items) {
+        return `array of ${describeTypeFromJsonSchema(schema.items)}`;
+      }
+      return "array";
+    case "object":
+      return "object";
     default:
-      return def.typeName?.replace("Zod", "").toLowerCase() ?? "unknown";
+      return "unknown";
   }
 }

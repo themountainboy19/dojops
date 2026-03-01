@@ -2,7 +2,24 @@ import { z } from "zod";
 
 // ── Input Field DSL ──────────────────────────────────
 
-const InputFieldBaseSchema = z.object({
+export interface InputFieldDef {
+  type: "string" | "number" | "integer" | "boolean" | "enum" | "array" | "object";
+  required?: boolean;
+  description?: string;
+  default?: unknown;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  min?: number;
+  max?: number;
+  values?: string[];
+  items?: InputFieldDef;
+  minItems?: number;
+  maxItems?: number;
+  properties?: Record<string, InputFieldDef>;
+}
+
+const InputFieldBaseSchema: z.ZodType<InputFieldDef> = z.object({
   type: z.enum(["string", "number", "integer", "boolean", "enum", "array", "object"]),
   required: z.boolean().optional(),
   description: z.string().optional(),
@@ -17,23 +34,48 @@ const InputFieldBaseSchema = z.object({
   // Enum values
   values: z.array(z.string()).optional(),
   // Array constraints
-  items: z.lazy((): z.ZodTypeAny => InputFieldSchema).optional(),
+  items: z.lazy((): z.ZodType<InputFieldDef> => InputFieldSchema).optional(),
   minItems: z.number().int().optional(),
   maxItems: z.number().int().optional(),
   // Object shape
-  properties: z.record(z.lazy((): z.ZodTypeAny => InputFieldSchema)).optional(),
+  properties: z
+    .record(
+      z.string(),
+      z.lazy((): z.ZodType<InputFieldDef> => InputFieldSchema),
+    )
+    .optional(),
 });
 
-export type InputFieldDef = z.infer<typeof InputFieldBaseSchema>;
-export const InputFieldSchema: z.ZodTypeAny = InputFieldBaseSchema;
+export const InputFieldSchema: z.ZodType<InputFieldDef> = InputFieldBaseSchema;
 
 // ── Output Schema (JSON Schema in YAML) ─────────────
 
-export const OutputSchemaSchema: z.ZodTypeAny = z.lazy(() =>
+export interface OutputSchemaShape {
+  type?: string;
+  properties?: Record<string, OutputSchemaShape>;
+  required?: string[];
+  items?: OutputSchemaShape;
+  enum?: unknown[];
+  default?: unknown;
+  description?: string;
+  minLength?: number;
+  maxLength?: number;
+  minimum?: number;
+  maximum?: number;
+  pattern?: string;
+  minItems?: number;
+  maxItems?: number;
+  anyOf?: OutputSchemaShape[];
+  oneOf?: OutputSchemaShape[];
+  format?: string;
+  [key: string]: unknown;
+}
+
+export const OutputSchemaSchema: z.ZodType<OutputSchemaShape> = z.lazy(() =>
   z
     .object({
       type: z.string().optional(),
-      properties: z.record(OutputSchemaSchema).optional(),
+      properties: z.record(z.string(), OutputSchemaSchema).optional(),
       required: z.array(z.string()).optional(),
       items: OutputSchemaSchema.optional(),
       enum: z.array(z.unknown()).optional(),
@@ -205,7 +247,7 @@ export const DopsFrontmatterSchema = z.object({
   meta: MetaSchema,
   input: z
     .object({
-      fields: z.record(InputFieldSchema),
+      fields: z.record(z.string(), InputFieldSchema),
     })
     .optional(),
   output: OutputSchemaSchema,

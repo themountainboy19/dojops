@@ -1,4 +1,4 @@
-import { z, ZodTypeAny } from "zod";
+import { z } from "zod";
 
 export { z };
 
@@ -28,7 +28,7 @@ export interface VerificationResult {
 export interface DevOpsTool<TInput = unknown> {
   name: string;
   description: string;
-  inputSchema: ZodTypeAny;
+  inputSchema: z.ZodType;
   validate(input: unknown): { valid: boolean; error?: string };
   generate(input: TInput): Promise<ToolOutput>;
   execute?(input: TInput): Promise<ToolOutput>;
@@ -38,7 +38,7 @@ export interface DevOpsTool<TInput = unknown> {
 export abstract class BaseTool<TInput> implements DevOpsTool<TInput> {
   abstract name: string;
   abstract description: string;
-  abstract inputSchema: ZodTypeAny;
+  abstract inputSchema: z.ZodType;
 
   validate(input: unknown): { valid: boolean; error?: string } {
     const result = this.inputSchema.safeParse(input);

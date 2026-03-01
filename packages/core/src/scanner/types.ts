@@ -84,7 +84,7 @@ export const MetadataSchema = z.object({
 
 const AgentEntrySchema = z.union([
   z.string(),
-  z.record(z.unknown()).transform((o) => {
+  z.record(z.string(), z.unknown()).transform((o) => {
     // Try common field names the LLM might use
     for (const key of ["name", "agent", "agentName", "value", "id"]) {
       if (typeof o[key] === "string") return o[key] as string;

@@ -5,7 +5,7 @@ export const TaskNodeSchema = z.object({
   tool: z.string(),
   description: z.string(),
   dependsOn: z.array(z.string()).default([]),
-  input: z.record(z.unknown()).default({}),
+  input: z.record(z.string(), z.unknown()).default({}),
 });
 
 export const TaskGraphSchema = z.object({

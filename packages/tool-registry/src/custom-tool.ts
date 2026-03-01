@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
 import { execFileSync } from "child_process";
-import { ZodTypeAny } from "zod";
+import { z } from "zod";
 import {
   DevOpsTool,
   ToolOutput,
@@ -51,14 +51,14 @@ export function isVerificationCommandAllowed(command: string): boolean {
 export class CustomTool implements DevOpsTool<Record<string, unknown>> {
   name: string;
   description: string;
-  inputSchema: ZodTypeAny;
+  inputSchema: z.ZodType;
   source: ToolSource;
 
   private manifest: ToolManifest;
   private provider: LLMProvider;
   private toolDir: string;
   private projectDir: string;
-  private outputZodSchema?: ZodTypeAny;
+  private outputZodSchema?: z.ZodType;
 
   constructor(
     manifest: ToolManifest,
