@@ -29,12 +29,6 @@ curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh
 curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh -s -- --version 1.0.0
 ```
 
-### Homebrew (macOS / Linux)
-
-```bash
-brew install dojops/tap/dojops
-```
-
 ### Docker
 
 ```bash

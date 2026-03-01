@@ -55,9 +55,6 @@ npm i -g @dojops/cli
 # Shell script
 curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh
 
-# Homebrew
-brew install dojops/tap/dojops
-
 # Docker
 docker run --rm -it ghcr.io/dojops/dojops "Create a Terraform config for S3"
 ```

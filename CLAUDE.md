@@ -156,12 +156,11 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 
 ## Installation & Distribution
 
-**4 install methods:**
+**3 install methods:**
 
 ```bash
 npm i -g @dojops/cli                                                       # npm
 curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh  # Shell script
-brew install dojops/tap/dojops                                             # Homebrew
 docker run --rm -it ghcr.io/dojops/dojops "prompt"                        # Docker (GHCR)
 ```
 
@@ -171,12 +170,9 @@ docker run --rm -it ghcr.io/dojops/dojops "prompt"                        # Dock
 3. Publish to npm (`pnpm publish-packages`)
 4. Generate SHA256 checksums (`npm pack` each package), attach `SHA256SUMS.txt` to GitHub Release
 5. Build + push Docker image to `ghcr.io/dojops/dojops:{version}` + `:latest`
-6. Update Homebrew tap formula (`dojops/homebrew-tap`) via `mislav/bump-homebrew-formula-action`
 
 **External dependencies** (manual setup, not in this repo):
-- `dojops/homebrew-tap` GitHub repository with `Formula/dojops.rb`
 - `NPM_TOKEN` secret on main repo (for npm publishing)
-- `HOMEBREW_TAP_TOKEN` secret on main repo (for tap formula updates)
 
 ## Roadmap
 

@@ -6,7 +6,7 @@ This guide covers all available installation methods for DojOps, plus upgrade, u
 
 ## Prerequisites
 
-- **Node.js** >= 20 (required for npm, shell script, and Homebrew methods)
+- **Node.js** >= 20 (required for npm and shell script methods)
 - **Docker** (required for Docker method only)
 
 ---
@@ -59,28 +59,6 @@ The script will:
 **Upgrade:** Re-run the script (installs `@latest` by default).
 
 **Uninstall:** `npm uninstall -g @dojops/cli`
-
----
-
-### Homebrew (macOS / Linux)
-
-```bash
-brew install dojops/tap/dojops
-```
-
-**Upgrade:**
-
-```bash
-brew upgrade dojops/tap/dojops
-```
-
-**Uninstall:**
-
-```bash
-brew uninstall dojops
-```
-
-> **Note**: Requires the [Homebrew](https://brew.sh/) package manager and Node.js (installed as a dependency).
 
 ---
 

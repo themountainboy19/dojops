@@ -110,23 +110,3 @@ jobs:
             org.opencontainers.image.licenses=MIT
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  homebrew:
-    needs: release
-    runs-on: ubuntu-latest
-    if: ${{ !contains(github.ref_name, '-') }}
-    timeout-minutes: 5
-    steps:
-      - name: Extract version from tag
-        id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Update Homebrew formula
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: dojops
-          homebrew-tap: dojops/homebrew-tap
-          tag-name: ${{ github.ref_name }}
-          download-url: https://registry.npmjs.org/@dojops/cli/-/cli-${{ steps.version.outputs.version }}.tgz
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
