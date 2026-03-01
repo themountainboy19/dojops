@@ -26,7 +26,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "publish-packages": "pnpm -r publish --access public"
+    "publish-packages": "pnpm -r publish --access public --no-git-checks"
   },
   "lint-staged": {
     "*.{ts,mjs,js}": [
