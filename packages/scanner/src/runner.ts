@@ -10,6 +10,7 @@ import { scanGitleaks } from "./scanners/gitleaks";
 import { scanShellcheck } from "./scanners/shellcheck";
 import { scanTrivySbom } from "./scanners/trivy-sbom";
 import { scanTrivyLicense } from "./scanners/trivy-license";
+import { scanSemgrep } from "./scanners/semgrep";
 import { loadScanPolicy, evaluatePolicy } from "./scan-policy";
 
 interface ScannerEntry {
@@ -95,6 +96,12 @@ const SCANNERS: ScannerEntry[] = [
     fn: scanTrivyLicense,
     categories: ["license"],
     applicable: () => true,
+  },
+  {
+    name: "semgrep",
+    fn: scanSemgrep,
+    categories: ["security"],
+    applicable: () => true, // Semgrep auto-detects languages
   },
 ];
 

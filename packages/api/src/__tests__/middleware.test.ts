@@ -84,8 +84,8 @@ describe("authMiddleware", () => {
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
-    // No API key configured → not authenticated
-    expect(res.locals.authenticated).toBe(false);
+    // No API key configured → treat as authenticated (no auth to bypass)
+    expect(res.locals.authenticated).toBe(true);
   });
 
   it("allows /health without auth even when apiKey is set", () => {

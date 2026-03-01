@@ -1,6 +1,6 @@
-import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 interface CheckovFailedCheck {
   check_id: string;
@@ -63,7 +63,12 @@ export async function scanCheckov(projectPath: string): Promise<ScannerResult> {
       if (output.results?.failed_checks) {
         for (const check of output.results.failed_checks) {
           findings.push({
-            id: `checkov-${crypto.randomUUID().slice(0, 8)}`,
+            id: deterministicFindingId(
+              "checkov",
+              check.check_id,
+              check.file_path,
+              check.resource || "",
+            ),
             tool: "checkov",
             severity: mapSeverity(check.severity),
             category: "IAC",

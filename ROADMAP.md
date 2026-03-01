@@ -22,7 +22,7 @@ All eight phases are complete. DojOps v1.0.0 ships with 12 built-in DevOps tools
 ## Phase 1 — Core Intelligence Layer (DONE)
 
 - **Structured output enforcement** — LLM responses constrained to JSON via provider-native modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, DeepSeek `response_format`, Gemini `responseMimeType`)
-- **5 LLM providers** — OpenAI, Anthropic, Ollama, DeepSeek (OpenAI-compatible), Google Gemini (`@google/genai`)
+- **6 LLM providers** — OpenAI, Anthropic, Ollama, DeepSeek (OpenAI-compatible), Google Gemini (`@google/genai`), GitHub Copilot (OpenAI-compatible with OAuth Device Flow + JWT auth)
 - **Dynamic model selection** — `dojops config` fetches available models from provider APIs via `listModels()` for interactive selection
 - **Zod schema validation** — Every tool input and LLM output validated with Zod schemas via `parseAndValidate()`
 - **Planner engine** — `TaskGraph` decomposition via LLM, `PlannerExecutor` with Kahn's topological sort, `$ref:<taskId>` input wiring, failure cascading, `completedTaskIds` for resume

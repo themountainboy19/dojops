@@ -221,11 +221,16 @@ export function saveCopilotAuth(auth: StoredCopilotAuth): void {
   fs.writeFileSync(getTokenFile(), JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 });
 }
 
+// Validate GitHub token format (ghu_, gho_, ghp_ prefixes, or legacy tokens)
+const GITHUB_TOKEN_PATTERN = /^(gh[uposr]_[A-Za-z0-9_]{4,}|[a-f0-9]{40})$/;
+
 export function loadCopilotAuth(): StoredCopilotAuth | null {
   try {
     if (!fs.existsSync(getTokenFile())) return null;
     const data = JSON.parse(fs.readFileSync(getTokenFile(), "utf-8"));
     if (typeof data !== "object" || data === null || !data.github_token) return null;
+    // Validate token format to prevent using malformed tokens
+    if (!GITHUB_TOKEN_PATTERN.test(data.github_token)) return null;
     return data as StoredCopilotAuth;
   } catch {
     return null;
@@ -293,16 +298,29 @@ export async function copilotLogin(callbacks: LoginCallbacks): Promise<StoredCop
 
 // ─── High-Level: Get Valid Copilot Token (auto-refresh) ──────────────────────
 
+// Module-level JWT cache for env-var-based token path (avoids exchanging on every generate() call)
+let envTokenCache: { token: string; apiBaseUrl: string; expiresAt: number } | null = null;
+
+/** Reset the env token cache (for testing only). */
+export function resetEnvTokenCache(): void {
+  envTokenCache = null;
+}
+
 export async function getValidCopilotToken(): Promise<{ token: string; apiBaseUrl: string }> {
   // Allow env-var-based token for CI/CD
   const envToken = process.env.GITHUB_COPILOT_TOKEN;
   if (envToken) {
+    const now = Math.floor(Date.now() / 1000);
+    const bufferSeconds = 60;
+    // Return cached JWT if still valid
+    if (envTokenCache && envTokenCache.expiresAt - bufferSeconds > now) {
+      return { token: envTokenCache.token, apiBaseUrl: envTokenCache.apiBaseUrl };
+    }
     // Env var provides a GitHub OAuth token; exchange it for a Copilot JWT
     const copilotToken = await getCopilotToken(envToken);
-    return {
-      token: copilotToken.token,
-      apiBaseUrl: copilotToken.endpoints?.api || "https://api.githubcopilot.com",
-    };
+    const apiBaseUrl = copilotToken.endpoints?.api || "https://api.githubcopilot.com";
+    envTokenCache = { token: copilotToken.token, apiBaseUrl, expiresAt: copilotToken.expires_at };
+    return { token: copilotToken.token, apiBaseUrl };
   }
 
   const auth = loadCopilotAuth();

@@ -41,11 +41,11 @@ packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
   tool-registry/    Tool registry + custom tool system (built-in + custom tool discovery)
-  core/             LLM providers (5) + specialist agents (16) + CI debugger + infra diff + DevOps checker
+  core/             LLM providers (6) + specialist agents (16) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   tools/            12 built-in DevOps tools
-  scanner/          8 security scanners + remediation engine
+  scanner/          9 security scanners + remediation engine
   session/          Chat session management + memory + context injection
   sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
@@ -109,23 +109,23 @@ Key conventions:
 
 DojOps uses Vitest for testing. Current coverage:
 
-| Package                 | Tests   |
-| ----------------------- | ------- |
-| `@dojops/core`          | 238     |
-| `@dojops/cli`           | 174     |
-| `@dojops/tool-registry` | 148     |
-| `@dojops/tools`         | 139     |
-| `@dojops/api`           | 118     |
-| `@dojops/executor`      | 50      |
-| `@dojops/scanner`       | 49      |
-| `@dojops/planner`       | 28      |
-| `@dojops/session`       | 28      |
-| `@dojops/sdk`           | 20      |
-| **Total**               | **992** |
+| Package                 | Tests    |
+| ----------------------- | -------- |
+| `@dojops/runtime`       | 481      |
+| `@dojops/core`          | 465      |
+| `@dojops/cli`           | 247      |
+| `@dojops/api`           | 236      |
+| `@dojops/tool-registry` | 224      |
+| `@dojops/scanner`       | 110      |
+| `@dojops/executor`      | 67       |
+| `@dojops/planner`       | 39       |
+| `@dojops/session`       | 38       |
+| `@dojops/sdk`           | 24       |
+| **Total**               | **1931** |
 
 ### Writing Tests
 
-- Place test files adjacent to source files: `foo.ts` -> `foo.test.ts`
+- Place test files in `__tests__/` directories mirroring the source structure: `src/foo.ts` -> `src/__tests__/foo.test.ts`
 - Mock LLM providers for deterministic tests
 - Use `supertest` for API endpoint integration tests
 - Test both success and error paths

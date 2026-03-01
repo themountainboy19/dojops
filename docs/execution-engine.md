@@ -156,10 +156,10 @@ Tools that implement `verify()` can validate their generated output with externa
 
 ## Audit Trail
 
-Every operation produces an `AuditEntry`:
+Every operation produces an `ExecutionAuditEntry`:
 
 ```typescript
-interface AuditEntry {
+interface ExecutionAuditEntry {
   seq: number; // Sequential entry number
   timestamp: string; // ISO 8601
   command: string; // "generate" | "apply" | "scan" | etc.

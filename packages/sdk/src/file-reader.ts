@@ -21,8 +21,23 @@ export function atomicWriteFileSync(filePath: string, content: string): void {
   }
 }
 
-export function restoreBackup(filePath: string): boolean {
-  const bakPath = `${filePath}.bak`;
+/**
+ * Restore a backup file. By default restores the latest `.bak`.
+ * If `level` is specified (0 = latest versioned, 1 = previous, etc.),
+ * restores from the versioned backup chain.
+ */
+export function restoreBackup(filePath: string, level?: number): boolean {
+  let bakPath: string;
+
+  if (level !== undefined) {
+    // Restore from versioned backup chain
+    const backups = listBackups(filePath);
+    if (level >= backups.length) return false;
+    bakPath = backups[level];
+  } else {
+    bakPath = `${filePath}.bak`;
+  }
+
   if (!fs.existsSync(bakPath)) return false;
   // Reject symlinks to prevent overwriting arbitrary targets
   try {
@@ -57,6 +72,11 @@ export function readExistingConfig(filePath: string): string | null {
   }
 }
 
+/**
+ * Create a backup of a file before overwriting.
+ * Uses timestamped naming (`.bak.{timestamp}`) for multi-level rollback support.
+ * Also maintains a `.bak` symlink/copy pointing to the latest backup for backward compatibility.
+ */
 export function backupFile(filePath: string): void {
   try {
     const stat = fs.lstatSync(filePath);
@@ -68,5 +88,28 @@ export function backupFile(filePath: string): void {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
     throw err;
   }
+  // Create timestamped backup for multi-level support
+  const timestamp = Date.now();
+  const versionedPath = `${filePath}.bak.${timestamp}`;
+  fs.copyFileSync(filePath, versionedPath);
+  // Maintain `.bak` as latest backup for backward compat
   fs.copyFileSync(filePath, `${filePath}.bak`);
+}
+
+/**
+ * List all versioned backups for a file, sorted newest first.
+ */
+export function listBackups(filePath: string): string[] {
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  try {
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.startsWith(`${base}.bak.`) && /\.\d+$/.test(f))
+      .sort()
+      .reverse()
+      .map((f) => path.join(dir, f));
+  } catch {
+    return [];
+  }
 }

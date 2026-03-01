@@ -42,11 +42,11 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/tool-registry  Tool registry + custom tool system (discovers built-in + custom tools)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+@dojops/runtime        12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner        8 security scanners + remediation engine
+@dojops/scanner        9 security scanners + remediation engine
 @dojops/session        Chat session management + memory + context injection
-@dojops/core           LLM abstraction + 5 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 6 providers + 16 specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
 ```
 
@@ -56,7 +56,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/cli
   +-- @dojops/api
   |     +-- @dojops/tool-registry
-  |     |     +-- @dojops/tools
+  |     |     +-- @dojops/runtime
   |     |     |     +-- @dojops/core
   |     |     |     +-- @dojops/sdk
   |     |     +-- @dojops/core
@@ -74,7 +74,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 **Simplified linear flow:**
 
 ```
-cli -> api -> tool-registry -> tools -> core -> sdk
+cli -> api -> tool-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
           -> session -> core
@@ -86,15 +86,16 @@ cli -> api -> tool-registry -> tools -> core -> sdk
 
 ### 1. LLM Layer (`@dojops/core`)
 
-Abstraction over five LLM providers with structured JSON output:
+Abstraction over six LLM providers with structured JSON output:
 
-| Provider  | JSON Mode Mechanism                         | SDK                 |
-| --------- | ------------------------------------------- | ------------------- |
-| OpenAI    | `response_format: { type: "json_object" }`  | `openai`            |
-| Anthropic | JSON prefill technique                      | `@anthropic-ai/sdk` |
-| Ollama    | `format: "json"`                            | `ollama`            |
-| DeepSeek  | OpenAI-compatible API with custom `baseURL` | `openai`            |
-| Gemini    | `responseMimeType: "application/json"`      | `@google/genai`     |
+| Provider       | JSON Mode Mechanism                                     | SDK                 |
+| -------------- | ------------------------------------------------------- | ------------------- |
+| OpenAI         | `response_format: { type: "json_object" }`              | `openai`            |
+| Anthropic      | JSON prefill technique                                  | `@anthropic-ai/sdk` |
+| Ollama         | `format: "json"`                                        | `ollama`            |
+| DeepSeek       | OpenAI-compatible API with custom `baseURL`             | `openai`            |
+| Gemini         | `responseMimeType: "application/json"`                  | `@google/genai`     |
+| GitHub Copilot | OpenAI-compatible API with Copilot `baseURL` + JWT auth | `openai`            |
 
 Key interface:
 
@@ -106,7 +107,7 @@ interface LLMProvider {
 }
 ```
 
-All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 5 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`).
+All responses pass through `parseAndValidate()` — strips markdown fences, `JSON.parse`, Zod `safeParse` — ensuring every LLM output conforms to the expected schema. All 6 providers support `temperature` passthrough for deterministic reproducibility (conditionally included in API calls only when explicitly set). A `DeterministicProvider` wrapper forces `temperature: 0` on every call for replay mode (`apply --replay`). The `GitHubCopilotProvider` creates a new OpenAI client per `generate()` call to use the freshest JWT (tokens expire every ~30 min).
 
 ### 2. Multi-Agent System (`@dojops/core`)
 
@@ -164,7 +165,7 @@ The DOPS runtime processes `.dops` module files — a declarative format combini
 - **Scope enforcement** — `writeFiles()` validates resolved paths against `scope.write` patterns after `{var}` expansion; out-of-scope writes throw
 - **Update strategy** — `preserve_structure` injects additional prompt instructions to maintain existing config organization
 
-### 5. DevOps Tools (`@dojops/tools`)
+### 5. DevOps Tools (`@dojops/runtime`)
 
 12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. Each follows the same file pattern: `schemas.ts` -> `detector.ts` -> `generator.ts` -> `verifier.ts` -> `*-tool.ts`. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. YAML generators use sorted keys for idempotent output. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
@@ -190,7 +191,7 @@ See [Execution Engine](execution-engine.md) for details.
 
 ### 7. Security Scanner (`@dojops/scanner`)
 
-8 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom) with LLM-powered remediation.
+9 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, semgrep) with LLM-powered remediation and scan comparison (`--compare`).
 
 See [Security Scanning](security-scanning.md) for details.
 
@@ -200,7 +201,7 @@ Multi-turn conversation management with memory windowing, LLM-generated summarie
 
 ### 9. REST API & Dashboard (`@dojops/api`)
 
-Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/tool-registry` to load all built-in + custom tools. 19 endpoints exposing all capabilities over HTTP. Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customToolCount`.
+Express-based API with dependency injection via `createApp(deps)`. Uses `@dojops/tool-registry` to load all built-in + custom tools. 19 endpoints exposing all capabilities over HTTP with API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias, `X-API-Version: 1` header on v1 routes). Vanilla web dashboard with 5 tabs (Overview, Security, Audit, Agents, History). Health endpoint reports `customToolCount`.
 
 See [API Reference](api-reference.md) and [Web Dashboard](dashboard.md).
 

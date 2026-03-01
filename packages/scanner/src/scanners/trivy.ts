@@ -1,6 +1,6 @@
-import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity, ScanCategory } from "../types";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 interface TrivyCVSS {
   V3Score?: number;
@@ -90,7 +90,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
         if (result.Vulnerabilities) {
           for (const vuln of result.Vulnerabilities) {
             findings.push({
-              id: `trivy-${crypto.randomUUID().slice(0, 8)}`,
+              id: deterministicFindingId("trivy", vuln.VulnerabilityID, vuln.PkgName),
               tool: "trivy",
               severity: mapSeverity(vuln.Severity),
               category: "SECURITY",
@@ -111,7 +111,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
         if (result.Misconfigurations) {
           for (const misconfig of result.Misconfigurations) {
             findings.push({
-              id: `trivy-${crypto.randomUUID().slice(0, 8)}`,
+              id: deterministicFindingId("trivy", misconfig.ID, result.Target),
               tool: "trivy",
               severity: mapSeverity(misconfig.Severity),
               category: "IAC",
@@ -127,7 +127,7 @@ export async function scanTrivy(projectPath: string): Promise<ScannerResult> {
         if (result.Secrets) {
           for (const secret of result.Secrets) {
             findings.push({
-              id: `trivy-${crypto.randomUUID().slice(0, 8)}`,
+              id: deterministicFindingId("trivy", secret.RuleID, String(secret.StartLine)),
               tool: "trivy",
               severity: "CRITICAL",
               category: "SECRETS",

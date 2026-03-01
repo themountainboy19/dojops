@@ -12,7 +12,7 @@ import {
   backupFile,
   atomicWriteFileSync,
 } from "@dojops/sdk";
-import { LLMProvider, sanitizeSystemPrompt } from "@dojops/core";
+import { LLMProvider, sanitizeSystemPrompt, sanitizeUserInput } from "@dojops/core";
 import { ToolManifest, ToolSource } from "./types";
 import { jsonSchemaToZod, JSONSchemaObject } from "./json-schema-to-zod";
 import { serialize } from "./serializers";
@@ -274,7 +274,9 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
       let result = template;
       for (const [key, value] of Object.entries(input)) {
         if (key === "existingContent") continue;
-        const replacement = typeof value === "string" ? value : JSON.stringify(value);
+        const raw = typeof value === "string" ? value : JSON.stringify(value);
+        // Sanitize user input to prevent prompt injection via Unicode direction overrides
+        const replacement = sanitizeUserInput(raw);
         result = result.replaceAll(`{${key}}`, replacement);
       }
       return result;
@@ -283,7 +285,8 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     const parts: string[] = [];
     for (const [key, value] of Object.entries(input)) {
       if (key === "existingContent") continue;
-      parts.push(`${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`);
+      const raw = typeof value === "string" ? value : JSON.stringify(value);
+      parts.push(`${key}: ${sanitizeUserInput(raw)}`);
     }
     return parts.join("\n");
   }

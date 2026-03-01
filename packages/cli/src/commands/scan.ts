@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { runScan, planRemediation, applyFixes } from "@dojops/scanner";
+import { runScan, planRemediation, applyFixes, compareScanReports } from "@dojops/scanner";
 import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
 import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
@@ -33,6 +33,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
   const fixMode = hasFlag(args, "--fix");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const targetDir = extractFlagValue(args, "--target");
+  const compareMode = hasFlag(args, "--compare");
   const failOnArg = extractFlagValue(args, "--fail-on");
   const failOnSeverity = failOnArg?.toUpperCase() as
     | "CRITICAL"
@@ -155,6 +156,39 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     p.log.info(`Report saved: ${pc.dim(report.id)}`);
   } catch {
     // Non-fatal
+  }
+
+  // --compare: show delta against previous scan
+  if (compareMode) {
+    const previousReports = listScanReports(root);
+    const previous = previousReports.find(
+      (r) => (r as Record<string, unknown>).id !== report.id,
+    ) as ScanReport | undefined;
+
+    if (previous) {
+      const { newFindings, resolvedFindings } = compareScanReports(report, previous);
+      console.log();
+      if (newFindings.length > 0) {
+        p.log.warn(`${pc.bold(pc.red(`${newFindings.length} new`))} finding(s) since last scan:`);
+        for (const f of newFindings) {
+          console.log(`  ${pc.red("+")} ${severityLabel(f.severity)}  ${f.message}`);
+        }
+      }
+      if (resolvedFindings.length > 0) {
+        p.log.success(
+          `${pc.bold(pc.green(`${resolvedFindings.length} resolved`))} finding(s) since last scan:`,
+        );
+        for (const f of resolvedFindings) {
+          console.log(`  ${pc.green("-")} ${severityLabel(f.severity)}  ${f.message}`);
+        }
+      }
+      if (newFindings.length === 0 && resolvedFindings.length === 0) {
+        p.log.info("No changes since last scan.");
+      }
+      console.log();
+    } else {
+      p.log.info("No previous scan to compare against.");
+    }
   }
 
   // Save SBOM outputs with hash tracking

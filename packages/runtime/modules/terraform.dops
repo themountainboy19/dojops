@@ -207,6 +207,8 @@ IMPORTANT:
 - "provider" must be an object with "name" (string), optional "region", and "config" (object)
 - "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
 - Each resource must have "type", "name", and "config" fields
+- Always include a "terraform" block with "required_providers" specifying source and version constraints (e.g., "hashicorp/aws" with "~> 5.0")
+- Pin provider versions using pessimistic constraint (~>) to prevent breaking changes
 - Respond with valid JSON only, no markdown
 
 ## Update Prompt
@@ -238,6 +240,8 @@ IMPORTANT:
 - "variables", "resources", and "outputs" must be ARRAYS of objects, not objects/maps
 - Each resource must have "type", "name", and "config" fields
 - Preserve ALL existing resources unless explicitly asked to remove them
+- Always include a "terraform" block with "required_providers" specifying source and version constraints
+- Pin provider versions using pessimistic constraint (~>) to prevent breaking changes
 - Respond with valid JSON only, no markdown
 
 ## Examples

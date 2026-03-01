@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 interface GitleaksResult {
   RuleID: string;
@@ -78,7 +79,7 @@ export async function scanGitleaks(projectPath: string): Promise<ScannerResult> 
     const results: GitleaksResult[] = JSON.parse(rawOutput);
     for (const leak of results) {
       findings.push({
-        id: `gitleaks-${crypto.randomUUID().slice(0, 8)}`,
+        id: deterministicFindingId("gitleaks", leak.RuleID, leak.File, String(leak.StartLine)),
         tool: "gitleaks",
         severity: "CRITICAL",
         category: "SECRETS",

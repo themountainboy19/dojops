@@ -115,7 +115,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **CI debugging** — Paste CI logs, get structured diagnosis with error type, root cause, affected files, and suggested fixes with confidence scores
 - **Infra diff analysis** — Risk level, cost impact, security implications, rollback complexity, and actionable recommendations for infrastructure changes
 - **DevOps config checker** — LLM-powered quality analysis of detected DevOps files with maturity scoring (0-100), severity-ranked findings, and missing file recommendations
-- **5 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini — with dynamic model selection via provider API and temperature passthrough for deterministic reproducibility
+- **6 LLM providers** — OpenAI, Anthropic, Ollama (local), DeepSeek, Google Gemini, GitHub Copilot — with dynamic model selection via provider API and temperature passthrough for deterministic reproducibility
 
 ### Tools
 
@@ -154,7 +154,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Platform
 
-- **REST API** — 19 endpoints exposing all capabilities over HTTP with Zod request validation
+- **REST API** — 19 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
 - **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
 - **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
@@ -169,12 +169,12 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @dojops/tool-registry  Tool registry + custom tool system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/tools          12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
+@dojops/runtime        12 built-in DevOps tools (GitHub Actions, Terraform, K8s, Helm, Ansible,
                        Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd)
-@dojops/scanner        8 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
-                       shellcheck, trivy-sbom) + remediation
+@dojops/scanner        9 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
+                       shellcheck, trivy-sbom, semgrep) + remediation
 @dojops/session        Chat session management + memory + context injection
-@dojops/core           LLM abstraction + 5 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
+@dojops/core           LLM abstraction + 6 providers + 16 built-in specialist agents + CI debugger + infra diff + DevOps checker
 @dojops/sdk            BaseTool<T> abstract class with Zod validation + optional verify() + file-reader utilities
                        + atomicWriteFileSync + restoreBackup
 ```
@@ -182,7 +182,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 ### Package Dependency Flow
 
 ```
-cli -> api -> tool-registry -> tools -> core -> sdk
+cli -> api -> tool-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
           -> session -> core
@@ -226,6 +226,7 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
 | `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
+| `dojops scan --compare`      | Compare findings with previous scan report            |
 
 #### Interactive
 
@@ -294,20 +295,20 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Global Options
 
-| Option              | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini` |
-| `--model=NAME`      | LLM model override                                                  |
-| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility             |
-| `--profile=NAME`    | Use named config profile                                            |
-| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
-| `--verbose`         | Verbose output                                                      |
-| `--debug`           | Debug-level output with stack traces                                |
-| `--quiet`           | Suppress non-essential output                                       |
-| `--no-color`        | Disable color output                                                |
-| `--non-interactive` | Disable interactive prompts                                         |
-| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)        |
-| `--help, -h`        | Show help message                                                   |
+| Option              | Description                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini`, `github-copilot` |
+| `--model=NAME`      | LLM model override                                                                    |
+| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
+| `--profile=NAME`    | Use named config profile                                                              |
+| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
+| `--verbose`         | Verbose output                                                                        |
+| `--debug`           | Debug-level output with stack traces                                                  |
+| `--quiet`           | Suppress non-essential output                                                         |
+| `--no-color`        | Disable color output                                                                  |
+| `--non-interactive` | Disable interactive prompts                                                           |
+| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)                          |
+| `--help, -h`        | Show help message                                                                     |
 
 ### Exit Codes
 
@@ -356,6 +357,7 @@ dojops check --output json
 dojops scan
 dojops scan --security
 dojops scan --fix --yes
+dojops scan --compare
 
 # Interactive chat
 dojops chat
@@ -514,13 +516,14 @@ curl -X POST http://localhost:3000/api/diff \
 
 ### Supported Providers
 
-| Provider  | `DOJOPS_PROVIDER` | Required Env Var    | Default Model                |
-| --------- | ----------------- | ------------------- | ---------------------------- |
-| OpenAI    | `openai`          | `OPENAI_API_KEY`    | `gpt-4o-mini`                |
-| Anthropic | `anthropic`       | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
-| Ollama    | `ollama`          | _(none --- local)_  | `llama3`                     |
-| DeepSeek  | `deepseek`        | `DEEPSEEK_API_KEY`  | `deepseek-chat`              |
-| Gemini    | `gemini`          | `GEMINI_API_KEY`    | `gemini-2.5-flash`           |
+| Provider       | `DOJOPS_PROVIDER` | Required Env Var      | Default Model                |
+| -------------- | ----------------- | --------------------- | ---------------------------- |
+| OpenAI         | `openai`          | `OPENAI_API_KEY`      | `gpt-4o-mini`                |
+| Anthropic      | `anthropic`       | `ANTHROPIC_API_KEY`   | `claude-sonnet-4-5-20250929` |
+| Ollama         | `ollama`          | _(none --- local)_    | `llama3`                     |
+| DeepSeek       | `deepseek`        | `DEEPSEEK_API_KEY`    | `deepseek-chat`              |
+| Gemini         | `gemini`          | `GEMINI_API_KEY`      | `gemini-2.5-flash`           |
+| GitHub Copilot | `github-copilot`  | _(OAuth Device Flow)_ | `gpt-4o`                     |
 
 ### Model Selection
 
@@ -574,7 +577,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 992 tests
+pnpm test               # Run all 1931 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -582,7 +585,7 @@ pnpm format:check       # Prettier check (CI)
 # Per-package
 pnpm --filter @dojops/core test
 pnpm --filter @dojops/api build
-pnpm --filter @dojops/tools lint
+pnpm --filter @dojops/runtime lint
 
 # Run locally (no global install)
 pnpm dojops -- "Create a Terraform config for S3"
@@ -596,11 +599,11 @@ packages/
   cli/              CLI entry point + TUI (@clack/prompts)
   api/              REST API (Express) + web dashboard
   tool-registry/    Tool registry + custom tool system + custom agent discovery
-  core/             LLM providers (5) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
+  core/             LLM providers (6) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
   tools/            12 built-in DevOps tools
-  scanner/          8 security scanners + LLM-powered remediation
+  scanner/          9 security scanners + LLM-powered remediation
   session/          Chat session management + memory + context injection
   sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
@@ -609,17 +612,17 @@ packages/
 
 | Package                 | Tests    |
 | ----------------------- | -------- |
-| `@dojops/core`          | 238      |
-| `@dojops/cli`           | 197      |
-| `@dojops/tool-registry` | 148      |
-| `@dojops/tools`         | 139      |
-| `@dojops/api`           | 118      |
-| `@dojops/executor`      | 50       |
-| `@dojops/scanner`       | 49       |
-| `@dojops/planner`       | 28       |
-| `@dojops/session`       | 28       |
-| `@dojops/sdk`           | 20       |
-| **Total**               | **1015** |
+| `@dojops/runtime`       | 481      |
+| `@dojops/core`          | 465      |
+| `@dojops/cli`           | 247      |
+| `@dojops/api`           | 236      |
+| `@dojops/tool-registry` | 224      |
+| `@dojops/scanner`       | 110      |
+| `@dojops/executor`      | 67       |
+| `@dojops/planner`       | 39       |
+| `@dojops/session`       | 38       |
+| `@dojops/sdk`           | 24       |
+| **Total**               | **1931** |
 
 ---
 

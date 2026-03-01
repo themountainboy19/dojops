@@ -37,6 +37,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
 | `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
+| `dojops scan --compare`      | Compare findings with previous scan report            |
 
 ### Interactive
 
@@ -109,20 +110,20 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ## Global Options
 
-| Option              | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini` |
-| `--model=NAME`      | LLM model override                                                  |
-| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility             |
-| `--profile=NAME`    | Use named config profile                                            |
-| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                           |
-| `--verbose`         | Verbose output                                                      |
-| `--debug`           | Debug-level output with stack traces                                |
-| `--quiet`           | Suppress non-essential output                                       |
-| `--no-color`        | Disable color output                                                |
-| `--non-interactive` | Disable interactive prompts                                         |
-| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)        |
-| `--help, -h`        | Show help message                                                   |
+| Option              | Description                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini`, `github-copilot` |
+| `--model=NAME`      | LLM model override                                                                    |
+| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
+| `--profile=NAME`    | Use named config profile                                                              |
+| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
+| `--verbose`         | Verbose output                                                                        |
+| `--debug`           | Debug-level output with stack traces                                                  |
+| `--quiet`           | Suppress non-essential output                                                         |
+| `--no-color`        | Disable color output                                                                  |
+| `--non-interactive` | Disable interactive prompts                                                           |
+| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)                          |
+| `--help, -h`        | Show help message                                                                     |
 
 ---
 
@@ -215,6 +216,9 @@ dojops scan --security          # trivy + gitleaks
 dojops scan --deps              # npm-audit + pip-audit
 dojops scan --iac               # checkov + hadolint
 dojops scan --sbom              # generate SBOM with hash tracking
+
+# Compare with previous scan
+dojops scan --compare
 
 # Auto-remediation
 dojops scan --fix --yes

@@ -1,6 +1,6 @@
-import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding, ScanSeverity } from "../types";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 interface TrivyLicenseResult {
   Target: string;
@@ -64,7 +64,7 @@ export async function scanTrivyLicense(projectPath: string): Promise<ScannerResu
         if (result.Licenses) {
           for (const lic of result.Licenses) {
             findings.push({
-              id: `trivy-lic-${crypto.randomUUID().slice(0, 8)}`,
+              id: deterministicFindingId("trivy-lic", lic.PkgName, lic.Name, lic.Category),
               tool: "trivy-license",
               severity: mapSeverity(lic.Severity),
               category: "LICENSE",

@@ -89,10 +89,10 @@ export function validateBody(schema: ZodSchema) {
  * Timing-safe comparison of a provided key against one expected key.
  */
 function timingSafeCompare(expected: string, actual: string): boolean {
-  const expectedBuf = Buffer.from(expected, "utf8");
-  const actualBuf = Buffer.from(actual, "utf8");
-  if (expectedBuf.length !== actualBuf.length) return false;
-  return crypto.timingSafeEqual(expectedBuf, actualBuf);
+  // Hash both to equalize lengths before comparing — prevents length-based timing oracle
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
+  const actualHash = crypto.createHash("sha256").update(actual).digest();
+  return crypto.timingSafeEqual(expectedHash, actualHash);
 }
 
 /**
@@ -125,13 +125,14 @@ export function authMiddleware(apiKey?: string | string[]) {
     res.locals.authenticated = false;
 
     if (keys.length === 0) {
-      // No server-side auth configured — mark as unauthenticated
+      // No server-side auth configured — treat as authenticated (no auth barrier to enforce)
+      res.locals.authenticated = true;
       next();
       return;
     }
 
-    // Health check is always public
-    if (req.path === "/health" || req.path === "/api/health") {
+    // Health check is always public (supports /api/health and /api/v1/health)
+    if (req.path === "/health" || req.path === "/api/health" || req.path === "/v1/health") {
       next();
       return;
     }

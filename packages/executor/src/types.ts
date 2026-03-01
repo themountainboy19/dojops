@@ -44,10 +44,10 @@ export interface ExecutionResult {
   error?: string;
   verification?: VerificationResult;
   durationMs: number;
-  auditLog: AuditEntry;
+  auditLog: ExecutionAuditEntry;
 }
 
-export interface AuditEntry {
+export interface ExecutionAuditEntry {
   taskId: string;
   toolName: string;
   timestamp: string;

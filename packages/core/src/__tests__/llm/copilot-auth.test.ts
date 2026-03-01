@@ -8,11 +8,14 @@ vi.mock("node:os");
 const mockHome = "/home/testuser";
 
 describe("copilot-auth", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(os.homedir).mockReturnValue(mockHome);
     // Reset env
     delete process.env.GITHUB_COPILOT_TOKEN;
+    // Reset module-level JWT cache
+    const { resetEnvTokenCache } = await import("../../llm/copilot-auth");
+    resetEnvTokenCache();
   });
 
   afterEach(() => {

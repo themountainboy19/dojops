@@ -19,11 +19,34 @@ input:
     nodeVersion:
       type: string
       default: "20"
+      description: "Node.js version for setup-node action"
     defaultBranch:
       type: string
       default: "main"
+      description: "Default branch for push/PR triggers"
     environment:
       type: string
+      description: "Target deployment environment (e.g. 'production', 'staging')"
+    language:
+      type: string
+      description: "Primary language/runtime (e.g. 'node', 'python', 'go', 'java', 'rust')"
+    packageManager:
+      type: string
+      description: "Package manager to use (e.g. 'npm', 'pnpm', 'yarn', 'pip', 'poetry')"
+    testFramework:
+      type: string
+      description: "Test framework (e.g. 'jest', 'vitest', 'pytest', 'go test')"
+    deployTarget:
+      type: string
+      description: "Deployment target (e.g. 'aws', 'vercel', 'docker', 'kubernetes', 'github-pages')"
+    dockerBuild:
+      type: boolean
+      default: false
+      description: "Include Docker build and push step"
+    cacheEnabled:
+      type: boolean
+      default: true
+      description: "Enable dependency caching"
 
 output:
   type: object

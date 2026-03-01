@@ -7,8 +7,10 @@ export class AnthropicProvider implements LLMProvider {
   name = "anthropic";
   private client: Anthropic;
   private model: string;
+  private apiKey: string;
 
   constructor(apiKey: string, model = "claude-sonnet-4-5-20250929") {
+    this.apiKey = apiKey;
     this.client = new Anthropic({ apiKey });
     this.model = model;
   }
@@ -100,7 +102,7 @@ export class AnthropicProvider implements LLMProvider {
       // SDK v0.20.x lacks client.models.list() — use raw fetch with SDK-managed key
       const response = await fetch("https://api.anthropic.com/v1/models", {
         headers: {
-          "x-api-key": this.client.apiKey ?? "",
+          "x-api-key": this.apiKey,
           "anthropic-version": "2023-06-01",
         },
       });

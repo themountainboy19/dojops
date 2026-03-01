@@ -153,7 +153,7 @@ export function createApp(deps: AppDependencies): Express {
   const PROVIDER_CHECK_TTL = 60_000;
   const authRequired = !!apiKey;
 
-  app.get("/api/health", async (req, res) => {
+  const healthHandler = async (req: Request, res: Response) => {
     if (deps.provider.listModels && Date.now() - lastProviderCheck > PROVIDER_CHECK_TTL) {
       try {
         await deps.provider.listModels();
@@ -207,7 +207,11 @@ export function createApp(deps: AppDependencies): Express {
       uptime: process.uptime(),
       timestamp,
     });
-  });
+  };
+
+  // Mount health at both /api/ and /api/v1/ paths
+  app.get("/api/health", healthHandler);
+  app.get("/api/v1/health", healthHandler);
 
   // Per-route rate limiters (E-6) — more restrictive limits for expensive endpoints
   const FIFTEEN_MIN = 15 * 60 * 1000;
@@ -215,19 +219,35 @@ export function createApp(deps: AppDependencies): Express {
   const planLimiter = createRateLimiter(FIFTEEN_MIN, 10); // most expensive
   const scanLimiter = createRateLimiter(FIFTEEN_MIN, 5); // scanner invocations
 
-  // API routes (with per-route rate limiters on expensive endpoints)
-  app.use("/api/generate", llmLimiter, createGenerateRouter(deps.router, deps.store));
-  app.use("/api/plan", planLimiter, createPlanRouter(deps.provider, deps.tools, deps.store));
-  app.use("/api/debug-ci", llmLimiter, createDebugCIRouter(deps.debugger, deps.store));
-  app.use("/api/diff", llmLimiter, createDiffRouter(deps.diffAnalyzer, deps.store));
-  app.use("/api/agents", createAgentsRouter(deps.router, deps.customAgentNames));
-  app.use("/api/history", createHistoryRouter(deps.store));
-  app.use("/api/scan", scanLimiter, createScanRouter(deps.store, deps.rootDir));
-  app.use(
-    "/api/chat",
-    llmLimiter,
-    createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir),
-  );
+  // Create route handler instances once (shared between /api/ and /api/v1/)
+  const generateRouter = createGenerateRouter(deps.router, deps.store);
+  const planRouter = createPlanRouter(deps.provider, deps.tools, deps.store);
+  const debugCIRouter = createDebugCIRouter(deps.debugger, deps.store);
+  const diffRouter = createDiffRouter(deps.diffAnalyzer, deps.store);
+  const agentsRouter = createAgentsRouter(deps.router, deps.customAgentNames);
+  const historyRouter = createHistoryRouter(deps.store);
+  const scanRouter = createScanRouter(deps.store, deps.rootDir);
+  const chatRouter = createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir);
+
+  // Mount routes at both /api/ (backward compat) and /api/v1/ (versioned)
+  const mountRoutes = (prefix: string) => {
+    app.use(`${prefix}/generate`, llmLimiter, generateRouter);
+    app.use(`${prefix}/plan`, planLimiter, planRouter);
+    app.use(`${prefix}/debug-ci`, llmLimiter, debugCIRouter);
+    app.use(`${prefix}/diff`, llmLimiter, diffRouter);
+    app.use(`${prefix}/agents`, agentsRouter);
+    app.use(`${prefix}/history`, historyRouter);
+    app.use(`${prefix}/scan`, scanLimiter, scanRouter);
+    app.use(`${prefix}/chat`, llmLimiter, chatRouter);
+  };
+
+  // #27: API versioning — /api/v1/ is the canonical prefix
+  app.use("/api/v1/", (_req, res, next) => {
+    res.setHeader("X-API-Version", "1");
+    next();
+  });
+  mountRoutes("/api/v1");
+  mountRoutes("/api");
 
   // Token budget tracker (E-7)
   const tokenTracker = new TokenTracker();
@@ -261,17 +281,19 @@ export function createApp(deps: AppDependencies): Express {
   };
 
   // Token metrics endpoint (E-7) — must be registered before the catch-all /api/metrics router
-  app.get("/api/metrics/tokens", (_req: express.Request, res: express.Response) => {
+  const tokenHandler = (_req: express.Request, res: express.Response) => {
     res.json(tokenTracker.getSummary());
-  });
+  };
+  app.get("/api/metrics/tokens", tokenHandler);
+  app.get("/api/v1/metrics/tokens", tokenHandler);
 
-  if (aggregator) {
-    app.use("/api/metrics", createMetricsRouter(aggregator));
-  } else {
-    app.use("/api/metrics", (_req: express.Request, res: express.Response) => {
-      res.status(404).json({ error: "Metrics not available: no project root configured" });
-    });
-  }
+  const metricsRouter = aggregator
+    ? createMetricsRouter(aggregator)
+    : (_req: express.Request, res: express.Response) => {
+        res.status(404).json({ error: "Metrics not available: no project root configured" });
+      };
+  app.use("/api/metrics", metricsRouter);
+  app.use("/api/v1/metrics", metricsRouter);
 
   // Error handler (must be last)
   app.use(errorHandler);

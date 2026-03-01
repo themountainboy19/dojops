@@ -108,9 +108,24 @@ export function downloadToTemp(url: string): Promise<string> {
         return;
       }
 
-      // Security: reject HTTP downgrade — all binary downloads must stay on HTTPS
-      if (!currentUrl.startsWith("https")) {
-        reject(new Error(`Refusing to download over insecure HTTP: ${currentUrl}`));
+      // Security: validate redirect URL as a proper HTTPS URL
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(currentUrl);
+      } catch {
+        reject(new Error(`Invalid redirect URL: ${currentUrl}`));
+        return;
+      }
+      if (parsedUrl.protocol !== "https:") {
+        reject(new Error(`Refusing to download over insecure protocol: ${currentUrl}`));
+        return;
+      }
+      // SSRF protection: block cloud metadata and link-local endpoints
+      const blockedHosts = ["169.254.169.254", "metadata.google.internal", "100.100.100.200"];
+      if (blockedHosts.includes(parsedUrl.hostname)) {
+        reject(
+          new Error(`SSRF protection: blocked download to metadata endpoint ${parsedUrl.hostname}`),
+        );
         return;
       }
       https
@@ -122,7 +137,15 @@ export function downloadToTemp(url: string): Promise<string> {
             res.headers.location
           ) {
             res.resume();
-            follow(res.headers.location, hops + 1);
+            // Resolve relative Location headers against the current URL
+            let redirectTarget: string;
+            try {
+              redirectTarget = new URL(res.headers.location, currentUrl).href;
+            } catch {
+              reject(new Error(`Invalid redirect Location header: ${res.headers.location}`));
+              return;
+            }
+            follow(redirectTarget, hops + 1);
             return;
           }
 

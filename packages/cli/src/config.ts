@@ -185,7 +185,18 @@ function metaFile(): string {
   return path.join(configDir(), "meta.json");
 }
 
+const SAFE_PROFILE_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+
+function validateProfileName(name: string): void {
+  if (!SAFE_PROFILE_NAME.test(name)) {
+    throw new Error(
+      `Invalid profile name: "${name}". Only alphanumeric, dash, and underscore allowed (max 64 chars).`,
+    );
+  }
+}
+
 export function loadProfile(name: string): DojOpsConfig | null {
+  validateProfileName(name);
   const file = path.join(profilesDir(), `${name}.json`);
   try {
     return JSON.parse(fs.readFileSync(file, "utf-8")) as DojOpsConfig;
@@ -195,6 +206,7 @@ export function loadProfile(name: string): DojOpsConfig | null {
 }
 
 export function saveProfile(name: string, config: DojOpsConfig): void {
+  validateProfileName(name);
   const dir = profilesDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -206,6 +218,7 @@ export function saveProfile(name: string, config: DojOpsConfig): void {
 }
 
 export function deleteProfile(name: string): boolean {
+  validateProfileName(name);
   const file = path.join(profilesDir(), `${name}.json`);
   if (!fs.existsSync(file)) return false;
   fs.unlinkSync(file);

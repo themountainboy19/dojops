@@ -94,6 +94,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--sbom")}             Generate Software Bill of Materials`);
   console.log(`  ${pc.cyan("--license")}          License compliance scan only`);
   console.log(`  ${pc.cyan("--fix")}              Auto-remediate HIGH/CRITICAL findings`);
+  console.log(
+    `  ${pc.cyan("--compare")}          Compare with previous scan (show new/resolved findings)`,
+  );
   console.log(`  ${pc.cyan("--target=<dir>")}     Target directory for scanning`);
   console.log(
     `  ${pc.cyan("--fail-on <sev>")}    Exit non-zero at severity threshold: CRITICAL, HIGH ${pc.dim("(default)")}, MEDIUM, LOW`,
@@ -679,6 +682,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--iac")}          Run IaC scanners only (checkov, hadolint)`);
       console.log(`  ${pc.cyan("--sbom")}         Generate Software Bill of Materials (CycloneDX)`);
       console.log(`  ${pc.cyan("--fix")}          Generate and apply LLM-powered remediation`);
+      console.log(
+        `  ${pc.cyan("--compare")}      Compare with previous scan (new/resolved findings)`,
+      );
       console.log(
         `  ${pc.cyan("--yes")}          Auto-approve remediation ${pc.dim("(requires --fix)")}`,
       );

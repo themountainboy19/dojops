@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 interface NpmVulnerability {
   severity: string;
@@ -169,7 +169,7 @@ function parseNpmAudit(
 
       const prefix = subProject ? `${subProject}: ` : "";
       findings.push({
-        id: `npm-${crypto.randomUUID().slice(0, 8)}`,
+        id: deterministicFindingId("npm", name, severity),
         tool: "npm-audit",
         severity,
         category: "DEPENDENCY",
@@ -204,7 +204,7 @@ function parseYarnAudit(
       const advisory = entry.data.advisory;
       const prefix = subProject ? `${subProject}: ` : "";
       findings.push({
-        id: `yarn-${crypto.randomUUID().slice(0, 8)}`,
+        id: deterministicFindingId("yarn", advisory.module_name ?? "", advisory.severity ?? ""),
         tool: "npm-audit",
         severity: mapSeverity(advisory.severity ?? "moderate"),
         category: "DEPENDENCY",
@@ -246,7 +246,7 @@ function parsePnpmAudit(
     const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
 
     findings.push({
-      id: `pnpm-${crypto.randomUUID().slice(0, 8)}`,
+      id: deterministicFindingId("pnpm", moduleName, severity),
       tool: "npm-audit",
       severity,
       category: "DEPENDENCY",

@@ -1,5 +1,6 @@
 import { LLMProvider, LLMRequest, LLMResponse } from "./provider";
 import { JsonValidationError } from "./json-validator";
+import { redactSecrets } from "./redact";
 
 export interface RetryOptions {
   maxRetries?: number;
@@ -60,7 +61,8 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
           lastError = err;
 
           // Schema validation retry: re-send with stricter instructions
-          // Schema retries do NOT count against the network retry budget
+          // Schema retries do NOT count against the network retry budget.
+          // The schemaAttempt counter prevents infinite loops (capped at schemaRetries).
           if (request.schema && isSchemaValidationError(err) && schemaAttempt < schemaRetries) {
             schemaAttempt++;
             const validationErr = err as JsonValidationError;
@@ -77,6 +79,13 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
             const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + jitter, maxDelayMs);
             await sleep(delay);
             continue;
+          }
+          // Redact any API keys from error messages before propagating
+          if (err instanceof Error) {
+            const redacted = redactSecrets(err.message);
+            if (redacted !== err.message) {
+              throw new Error(redacted, { cause: err });
+            }
           }
           throw err;
         }

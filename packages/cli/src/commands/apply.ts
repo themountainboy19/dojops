@@ -203,7 +203,12 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
         }
 
         try {
-          const result = await tool.generate({ prompt: task.description });
+          // Use structured task input when available, fallback to prompt-only
+          const input =
+            task.input && Object.keys(task.input).length > 0
+              ? task.input
+              : { prompt: task.description };
+          const result = await tool.generate(input);
           const preview = typeof result === "string" ? result : JSON.stringify(result, null, 2);
           const truncated =
             preview.length > 2000 ? preview.slice(0, 2000) + "\n... (truncated)" : preview;

@@ -1,5 +1,5 @@
 import { DevOpsTool, ToolOutput, VerificationResult } from "@dojops/sdk";
-import { ExecutionPolicy, ExecutionResult, AuditEntry, ApprovalDecision } from "./types";
+import { ExecutionPolicy, ExecutionResult, ExecutionAuditEntry, ApprovalDecision } from "./types";
 import { ApprovalHandler, AutoApproveHandler, buildPreview } from "./approval";
 import { DEFAULT_POLICY, PolicyViolationError, checkWriteAllowed } from "./policy";
 import { withTimeout } from "./sandbox";
@@ -12,7 +12,7 @@ export interface SafeExecutorOptions {
 export class SafeExecutor {
   private policy: ExecutionPolicy;
   private approvalHandler: ApprovalHandler;
-  private auditLog: AuditEntry[] = [];
+  private auditLog: ExecutionAuditEntry[] = [];
   private tokenUsage = { prompt: 0, completion: 0, total: 0 };
 
   constructor(options: SafeExecutorOptions = {}) {
@@ -160,6 +160,43 @@ export class SafeExecutor {
       approval = "approved";
     }
 
+    // Pre-execution policy check: validate declared output file paths BEFORE execution.
+    // This prevents tools from writing to unauthorized locations.
+    if (this.policy.allowWrite && generateOutput.data) {
+      const declaredPaths: string[] = [];
+      const data = generateOutput.data as Record<string, unknown>;
+      // Extract file paths from common tool output patterns
+      if (typeof data.filePath === "string") declaredPaths.push(data.filePath);
+      if (typeof data.outputPath === "string") declaredPaths.push(data.outputPath);
+      if (Array.isArray(data.files)) {
+        for (const f of data.files) {
+          if (typeof f === "string") declaredPaths.push(f);
+          if (
+            f &&
+            typeof f === "object" &&
+            typeof (f as Record<string, unknown>).path === "string"
+          ) {
+            declaredPaths.push((f as Record<string, unknown>).path as string);
+          }
+        }
+      }
+      for (const filePath of declaredPaths) {
+        try {
+          checkWriteAllowed(filePath, this.policy);
+        } catch (policyErr) {
+          return this.buildResult(taskId, tool.name, "failed", startTime, {
+            error: `Pre-execution policy violation on declared output path: ${policyErr instanceof Error ? policyErr.message : String(policyErr)}`,
+            output: generateOutput.data,
+            approval,
+            verification,
+            filesWritten,
+            usage: generateOutput.usage,
+            metadata: meta,
+          });
+        }
+      }
+    }
+
     try {
       const executeOutput = await withTimeout(
         tool.execute(input as never),
@@ -171,9 +208,8 @@ export class SafeExecutor {
       if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
       if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
 
-      // Post-hoc policy enforcement: validate all written/modified files against policy.
-      // Tools write files directly (not through SandboxedFs), so we enforce the policy
-      // after execution by checking each file path against the configured policy.
+      // Post-hoc policy enforcement: secondary check on actually written files.
+      // Pre-execution check validates declared paths, this catches any additional writes.
       if (this.policy.allowWrite) {
         const allFiles = [...filesWritten, ...filesModified];
         for (const filePath of allFiles) {
@@ -235,7 +271,7 @@ export class SafeExecutor {
     }
   }
 
-  getAuditLog(): AuditEntry[] {
+  getAuditLog(): ExecutionAuditEntry[] {
     return [...this.auditLog];
   }
 
@@ -262,7 +298,7 @@ export class SafeExecutor {
     const durationMs = Date.now() - startTime;
     const approval = details.approval ?? "skipped";
 
-    const auditEntry: AuditEntry = {
+    const auditEntry: ExecutionAuditEntry = {
       taskId,
       toolName,
       timestamp: new Date().toISOString(),
@@ -284,8 +320,9 @@ export class SafeExecutor {
     // Enrich audit entry with tool metadata if provided
     const meta = details.metadata;
     if (meta) {
-      if (meta.toolType) auditEntry.toolType = meta.toolType as AuditEntry["toolType"];
-      if (meta.toolSource) auditEntry.toolSource = meta.toolSource as AuditEntry["toolSource"];
+      if (meta.toolType) auditEntry.toolType = meta.toolType as ExecutionAuditEntry["toolType"];
+      if (meta.toolSource)
+        auditEntry.toolSource = meta.toolSource as ExecutionAuditEntry["toolSource"];
       if (meta.toolVersion) auditEntry.toolVersion = meta.toolVersion as string;
       if (meta.toolHash) auditEntry.toolHash = meta.toolHash as string;
     }

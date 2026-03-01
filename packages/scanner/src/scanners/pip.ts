@@ -1,9 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as crypto from "node:crypto";
 import { ScannerResult, ScanFinding } from "../types";
 import { discoverProjectDirs } from "../discovery";
 import { execFileAsync } from "../exec-async";
+import { deterministicFindingId } from "../finding-id";
 
 const PIP_INDICATORS = ["requirements.txt", "Pipfile", "setup.py", "pyproject.toml"];
 
@@ -118,7 +118,7 @@ async function auditDir(dir: string, rootPath: string): Promise<ScannerResult> {
       for (const vuln of pkg.vulns) {
         const prefix = subProject ? `${subProject}: ` : "";
         findings.push({
-          id: `pip-${crypto.randomUUID().slice(0, 8)}`,
+          id: deterministicFindingId("pip", pkg.name, vuln.id),
           tool: "pip-audit",
           severity: mapPipSeverity(vuln.id, vuln.description),
           category: "DEPENDENCY",

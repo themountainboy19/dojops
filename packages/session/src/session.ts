@@ -85,11 +85,11 @@ export class ChatSession {
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
       try {
-        const oldMessages = this.state.messages.slice(
-          0,
-          this.state.messages.length - this.memoryManager["maxMessages"],
-        );
+        const keepCount = this.memoryManager["maxMessages"] as number;
+        const oldMessages = this.state.messages.slice(0, this.state.messages.length - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
+        // Trim old messages after successful summarization to prevent memory leak
+        this.state.messages = this.state.messages.slice(-keepCount);
       } catch (err) {
         console.warn(
           "Session summarization failed, continuing without summary:",

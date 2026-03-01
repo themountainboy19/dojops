@@ -46,7 +46,7 @@ dojops config
 
 The interactive wizard will:
 
-1. Ask you to select a provider (OpenAI, Anthropic, Ollama, DeepSeek, Gemini)
+1. Ask you to select a provider (OpenAI, Anthropic, Ollama, DeepSeek, Gemini, GitHub Copilot)
 2. Prompt for your API key
 3. Fetch available models from the provider's API
 4. Let you pick a model with an interactive selector
@@ -57,7 +57,7 @@ The interactive wizard will:
 Alternatively, set environment variables directly:
 
 ```bash
-export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini
+export DOJOPS_PROVIDER=openai          # openai | anthropic | ollama | deepseek | gemini | github-copilot
 export OPENAI_API_KEY=sk-...        # your API key
 ```
 
@@ -198,9 +198,10 @@ dojops scan --security       # Security scanners only (trivy, gitleaks)
 dojops scan --deps           # Dependency audit only (npm, pip)
 dojops scan --sbom           # Generate SBOM (CycloneDX) with hash tracking
 dojops scan --fix            # Generate and apply LLM-powered remediation
+dojops scan --compare        # Compare findings with previous scan
 ```
 
-See [Security Scanning](security-scanning.md) for details on all 8 scanners.
+See [Security Scanning](security-scanning.md) for details on all 9 scanners.
 
 ---
 

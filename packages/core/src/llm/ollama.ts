@@ -26,15 +26,30 @@ export class OllamaProvider implements LLMProvider {
     private tlsRejectUnauthorized?: boolean,
   ) {
     this.model = model;
-    // Warn about plain HTTP to non-localhost endpoints
+    // Validate URL and block SSRF targets
     try {
       const url = new URL(this.baseUrl);
-      if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && url.protocol === "http:") {
+      const hostname = url.hostname;
+      // Block cloud metadata and link-local endpoints
+      const blockedHosts = [
+        "169.254.169.254",
+        "metadata.google.internal",
+        "100.100.100.200",
+        "fd00::1",
+      ];
+      if (blockedHosts.includes(hostname)) {
+        throw new Error(
+          `SSRF protection: Ollama host "${hostname}" is a blocked metadata endpoint`,
+        );
+      }
+      // Warn about plain HTTP to non-localhost endpoints
+      if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname) && url.protocol === "http:") {
         console.error(
           "[WARN] Ollama connection uses plain HTTP to non-localhost endpoint. Consider using HTTPS.",
         );
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("SSRF")) throw e;
       // invalid URL — will fail at request time
     }
   }

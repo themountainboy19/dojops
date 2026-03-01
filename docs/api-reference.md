@@ -7,10 +7,11 @@ DojOps exposes a REST API via Express with 19 endpoints covering generation, pla
 ## Base URL
 
 ```
-http://localhost:3000/api
+http://localhost:3000/api       # Backward-compatible (no version prefix)
+http://localhost:3000/api/v1    # Versioned (includes X-API-Version: 1 header)
 ```
 
-The port is configurable via `--port` flag or `DOJOPS_API_PORT` environment variable.
+Both prefixes route to the same handlers. The `/api/v1/` prefix sets the `X-API-Version: 1` response header for clients that need explicit version negotiation. The port is configurable via `--port` flag or `DOJOPS_API_PORT` environment variable.
 
 ---
 

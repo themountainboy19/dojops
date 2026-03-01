@@ -4,6 +4,7 @@ import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } 
 import { DevOpsTool } from "@dojops/sdk";
 import { createApp, AppDependencies } from "../app";
 import { HistoryStore } from "../store";
+import { resetFailureTracker } from "../middleware";
 
 /**
  * Integration tests that exercise full request-to-response workflows
@@ -39,6 +40,7 @@ describe("API integration", () => {
 
   beforeEach(() => {
     deps = createMockDeps();
+    resetFailureTracker();
   });
 
   describe("history tracking across operations", () => {
@@ -251,13 +253,14 @@ describe("API integration", () => {
   });
 
   describe("autoApprove auth bypass prevention", () => {
-    it("returns 403 when autoApprove used without authenticated request", async () => {
-      const app = createApp(deps);
+    it("returns 401 when autoApprove used without authentication (apiKey set)", async () => {
+      // When apiKey IS configured, unauthenticated autoApprove should be blocked
+      const app = createApp({ ...deps, apiKey: "test-key-123" });
       const res = await request(app)
         .post("/api/plan")
         .send({ goal: "deploy app", autoApprove: true });
-      expect(res.status).toBe(403);
-      expect(res.body.error).toMatch(/autoApprove/);
+      // Unauthenticated request blocked at auth middleware (401)
+      expect(res.status).toBe(401);
     });
 
     it("allows autoApprove when request is authenticated", async () => {

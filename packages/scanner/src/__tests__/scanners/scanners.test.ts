@@ -715,3 +715,162 @@ describe("scanTrivySbom", () => {
     expect(result.findings).toHaveLength(0);
   });
 });
+
+// ── semgrep ──────────────────────────────────────────────────────
+
+describe("scanSemgrep", () => {
+  it("skips when semgrep not found (ENOENT)", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    const err = new Error("ENOENT") as NodeJS.ErrnoException;
+    err.code = "ENOENT";
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    const result = await scanSemgrep("/project");
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toContain("semgrep not found");
+  });
+
+  it("skips on execution failure with no stdout", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    const err = Object.assign(new Error("exec fail"), {
+      stdout: "",
+      stderr: "error running semgrep",
+    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    const result = await scanSemgrep("/project");
+    expect(result.skipped).toBe(true);
+    expect(result.skipReason).toContain("semgrep failed");
+  });
+
+  it("parses semgrep JSON output", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    mockExecFileSuccess(
+      JSON.stringify({
+        results: [
+          {
+            check_id: "python.lang.security.audit.exec-detected",
+            path: "app.py",
+            start: { line: 42, col: 1 },
+            end: { line: 42, col: 20 },
+            extra: {
+              message:
+                "Detected the use of exec(). Avoid using exec() as it can lead to code injection.",
+              severity: "ERROR",
+              metadata: {
+                cwe: ["CWE-94"],
+                owasp: ["A03:2021"],
+              },
+            },
+          },
+          {
+            check_id: "javascript.lang.security.detect-eval",
+            path: "src/index.js",
+            start: { line: 10, col: 5 },
+            end: { line: 10, col: 30 },
+            extra: {
+              message:
+                "Detected the use of eval(). Avoid using eval() as it can lead to code injection.",
+              severity: "WARNING",
+              metadata: {
+                cwe: ["CWE-95"],
+                references: ["https://owasp.org/Top10/A03_2021-Injection/"],
+              },
+              fix: "Use JSON.parse() instead",
+            },
+          },
+        ],
+        errors: [],
+      }),
+    );
+
+    const result = await scanSemgrep("/project");
+    expect(result.skipped).toBeUndefined();
+    expect(result.findings).toHaveLength(2);
+
+    const [f1, f2] = result.findings;
+    expect(f1.tool).toBe("semgrep");
+    expect(f1.severity).toBe("HIGH"); // ERROR → HIGH
+    expect(f1.file).toBe("app.py");
+    expect(f1.line).toBe(42);
+    expect(f1.cwe).toBe("CWE-94");
+    expect(f1.autoFixAvailable).toBe(false);
+
+    expect(f2.severity).toBe("MEDIUM"); // WARNING → MEDIUM
+    expect(f2.file).toBe("src/index.js");
+    expect(f2.autoFixAvailable).toBe(true);
+    expect(f2.recommendation).toContain("Suggested fix");
+  });
+
+  it("parses results from non-zero exit (semgrep exits 1 when findings exist)", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    const output = JSON.stringify({
+      results: [
+        {
+          check_id: "generic.secrets.gitleaks.generic-api-key",
+          path: "config.yaml",
+          start: { line: 5, col: 1 },
+          end: { line: 5, col: 40 },
+          extra: {
+            message: "Generic API key detected",
+            severity: "WARNING",
+            metadata: {},
+          },
+        },
+      ],
+      errors: [],
+    });
+    const err = Object.assign(new Error("exit 1"), {
+      stdout: output,
+      stderr: "",
+      status: 1,
+    });
+    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+
+    const result = await scanSemgrep("/project");
+    expect(result.skipped).toBeUndefined();
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].tool).toBe("semgrep");
+  });
+
+  it("returns empty findings when no results", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    mockExecFileSuccess(JSON.stringify({ results: [], errors: [] }));
+    const result = await scanSemgrep("/project");
+    expect(result.findings).toHaveLength(0);
+    expect(result.skipped).toBeUndefined();
+  });
+
+  it("handles malformed JSON output", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    mockExecFileSuccess("not valid json");
+    const result = await scanSemgrep("/project");
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].message).toContain("Failed to parse");
+  });
+
+  it("uses deterministic finding IDs", async () => {
+    const { scanSemgrep } = await import("../../scanners/semgrep");
+    const output = JSON.stringify({
+      results: [
+        {
+          check_id: "python.lang.security.audit.exec-detected",
+          path: "app.py",
+          start: { line: 42, col: 1 },
+          end: { line: 42, col: 20 },
+          extra: {
+            message: "Detected exec()",
+            severity: "ERROR",
+          },
+        },
+      ],
+      errors: [],
+    });
+    mockExecFileSuccess(output);
+
+    const result1 = await scanSemgrep("/project");
+    mockExecFileSuccess(output);
+    const result2 = await scanSemgrep("/project");
+
+    expect(result1.findings[0].id).toBe(result2.findings[0].id);
+    expect(result1.findings[0].id).toMatch(/^semgrep-/);
+  });
+});

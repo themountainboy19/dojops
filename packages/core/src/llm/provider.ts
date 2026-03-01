@@ -20,9 +20,9 @@ export interface LLMUsage {
   totalTokens: number;
 }
 
-export interface LLMResponse {
+export interface LLMResponse<T = unknown> {
   content: string;
-  parsed?: unknown;
+  parsed?: T;
   usage?: LLMUsage;
 }
 

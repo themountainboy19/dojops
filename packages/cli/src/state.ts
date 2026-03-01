@@ -496,9 +496,12 @@ function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): numbe
           // stat failed — file may already be gone, retry
           continue;
         }
-        // Active lock — wait and retry
-        const sab = new SharedArrayBuffer(4);
-        Atomics.wait(new Int32Array(sab), 0, 0, delayMs * Math.pow(2, attempt));
+        // Active lock — busy-wait with exponential backoff (synchronous sleep via loop)
+        const waitMs = delayMs * Math.pow(2, attempt);
+        const end = Date.now() + waitMs;
+        while (Date.now() < end) {
+          /* spin */
+        }
         continue;
       }
       throw err;
@@ -515,22 +518,49 @@ const DEFAULT_AUDIT_MAX_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
  * Rotate the audit log if it exceeds the configured max size.
  * Renames audit.jsonl -> audit.jsonl.1 (overwrites existing .1) and starts fresh.
  */
-function rotateAuditIfNeeded(file: string): void {
+/**
+ * Rotate the audit log if it exceeds the configured max size.
+ * Preserves hash chain continuity by recording the last hash from the
+ * rotated file as the genesis link in the new chain.
+ * Returns the last hash from the rotated chain (or null if no rotation occurred).
+ */
+function rotateAuditIfNeeded(file: string): string | null {
   const maxSizeEnv = process.env.DOJOPS_AUDIT_MAX_SIZE_MB;
   const maxBytes = maxSizeEnv ? parseFloat(maxSizeEnv) * 1024 * 1024 : DEFAULT_AUDIT_MAX_SIZE_BYTES;
 
-  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return;
+  if (!Number.isFinite(maxBytes) || maxBytes <= 0) return null;
 
   try {
     const stat = fs.statSync(file);
     if (stat.size > maxBytes) {
+      // Read the last entry's hash before rotating, to link chains
+      let lastHash = "genesis";
+      try {
+        const content = fs.readFileSync(file, "utf-8").trimEnd();
+        const lines = content.split("\n");
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try {
+            const entry = JSON.parse(lines[i]);
+            if (entry.hash) {
+              lastHash = entry.hash;
+              break;
+            }
+          } catch {
+            continue;
+          }
+        }
+      } catch {
+        // Could not read last hash — use genesis
+      }
+
       const rotated = file + ".1";
-      // Rename current to .1 (overwrites existing .1)
       fs.renameSync(file, rotated);
+      return lastHash;
     }
   } catch {
     // File doesn't exist yet or stat failed — nothing to rotate
   }
+  return null;
 }
 
 export function appendAudit(rootDir: string, entry: AuditEntry): void {
@@ -538,8 +568,9 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  // E-5: Rotate before appending if file exceeds size limit
-  rotateAuditIfNeeded(file);
+  // E-5: Rotate before appending if file exceeds size limit.
+  // Returns the last hash from the rotated chain to preserve chain continuity.
+  const rotatedLastHash = rotateAuditIfNeeded(file);
 
   // A5: Load HMAC key for audit hash chain
   const hmacKey = loadAuditKey(rootDir);
@@ -561,8 +592,9 @@ export function appendAudit(rootDir: string, entry: AuditEntry): void {
   }
 
   try {
-    let previousHash = "genesis";
-    let seq = 1;
+    // If rotation just occurred, use the last hash from the rotated chain as genesis link
+    let previousHash = rotatedLastHash ?? "genesis";
+    let seq = rotatedLastHash ? 1 : 1;
 
     if (fs.existsSync(file)) {
       const content = fs.readFileSync(file, "utf-8").trimEnd();

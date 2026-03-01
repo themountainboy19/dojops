@@ -53,13 +53,14 @@ DojOps implements defense-in-depth with seven layers between LLM output and infr
 
 Every LLM request uses provider-native JSON modes to constrain output format:
 
-| Provider  | Mechanism                                         |
-| --------- | ------------------------------------------------- |
-| OpenAI    | `response_format: { type: "json_object" }`        |
-| Anthropic | JSON prefill technique (assistant message prefix) |
-| Ollama    | `format: "json"`                                  |
-| DeepSeek  | OpenAI-compatible `response_format`               |
-| Gemini    | `responseMimeType: "application/json"`            |
+| Provider       | Mechanism                                           |
+| -------------- | --------------------------------------------------- |
+| OpenAI         | `response_format: { type: "json_object" }`          |
+| Anthropic      | JSON prefill technique (assistant message prefix)   |
+| Ollama         | `format: "json"`                                    |
+| DeepSeek       | OpenAI-compatible `response_format`                 |
+| Gemini         | `responseMimeType: "application/json"`              |
+| GitHub Copilot | OpenAI-compatible `response_format` via Copilot API |
 
 This prevents free-text responses and ensures the LLM produces parseable JSON.
 
@@ -207,7 +208,7 @@ PID-based execution locking prevents concurrent mutations:
 
 Beyond the execution pipeline, DojOps provides proactive security scanning via `@dojops/scanner`:
 
-- 8 scanners covering vulnerabilities, dependencies, IaC issues, secrets, shell scripts, and SBOM generation
+- 9 scanners covering vulnerabilities, dependencies, IaC issues, secrets, shell scripts, SAST, and SBOM generation
 - Exit codes 6 (HIGH) and 7 (CRITICAL) for CI/CD integration
 - LLM-powered remediation with path-traversal protection
 

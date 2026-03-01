@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import { ExecutionPolicy } from "./types";
 import { checkWriteAllowed, checkFileSize, PolicyViolationError } from "./policy";
 
@@ -17,7 +18,7 @@ export function createSandboxedFs(policy: ExecutionPolicy): SandboxedFs {
       checkFileSize(Buffer.byteLength(content, "utf-8"), policy);
       const dir = path.dirname(filePath);
       fs.mkdirSync(dir, { recursive: true });
-      const tmpPath = `${filePath}.tmp`;
+      const tmpPath = `${filePath}.${crypto.randomBytes(4).toString("hex")}.tmp`;
       try {
         fs.writeFileSync(tmpPath, content, "utf-8");
         fs.renameSync(tmpPath, filePath);

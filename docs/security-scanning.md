@@ -1,6 +1,6 @@
 # Security Scanning
 
-DojOps's `@dojops/scanner` package provides automated security scanning with 8 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, secret detection, shell script analysis, and SBOM generation. Findings can be automatically remediated using LLM-powered fix generation.
+DojOps's `@dojops/scanner` package provides automated security scanning with 9 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, secret detection, shell script analysis, SAST, and SBOM generation. Findings can be automatically remediated using LLM-powered fix generation.
 
 ---
 
@@ -18,26 +18,29 @@ The scanner system:
 
 ## Scanners
 
-| Scanner     | Binary      | Categories        | Applicability                                                                     |
-| ----------- | ----------- | ----------------- | --------------------------------------------------------------------------------- |
-| `npm-audit` | `npm`       | `DEPENDENCY`      | Node.js projects (has `package-lock.json`)                                        |
-| `pip-audit` | `pip-audit` | `DEPENDENCY`      | Python projects (has `requirements.txt`, `Pipfile`, `setup.py`, `pyproject.toml`) |
-| `trivy`     | `trivy`     | `SECURITY`        | Always applicable (vulnerabilities, secrets, misconfigurations)                   |
-| `gitleaks`  | `gitleaks`  | `SECRETS`         | Always applicable (hardcoded secrets and credentials)                             |
-| `checkov`   | `checkov`   | `IAC`             | Projects with Terraform, Kubernetes, Helm, or Ansible files                       |
-| `hadolint`  | `hadolint`  | `IAC`, `SECURITY` | Projects that have a `Dockerfile`                                                 |
+| Scanner      | Binary       | Categories        | Applicability                                                                     |
+| ------------ | ------------ | ----------------- | --------------------------------------------------------------------------------- |
+| `npm-audit`  | `npm`        | `DEPENDENCY`      | Node.js projects (has `package-lock.json`)                                        |
+| `pip-audit`  | `pip-audit`  | `DEPENDENCY`      | Python projects (has `requirements.txt`, `Pipfile`, `setup.py`, `pyproject.toml`) |
+| `trivy`      | `trivy`      | `SECURITY`        | Always applicable (vulnerabilities, secrets, misconfigurations)                   |
+| `gitleaks`   | `gitleaks`   | `SECRETS`         | Always applicable (hardcoded secrets and credentials)                             |
+| `checkov`    | `checkov`    | `IAC`             | Projects with Terraform, Kubernetes, Helm, or Ansible files                       |
+| `hadolint`   | `hadolint`   | `IAC`, `SECURITY` | Projects that have a `Dockerfile`                                                 |
+| `shellcheck` | `shellcheck` | `IAC`, `SECURITY` | Projects with shell scripts (`.sh` files)                                         |
+| `trivy-sbom` | `trivy`      | `SBOM`            | Always applicable (generates CycloneDX SBOM)                                      |
+| `semgrep`    | `semgrep`    | `SECURITY`        | Always applicable (SAST — static application security testing)                    |
 
 ---
 
 ## Scan Types
 
-| Type       | Scanners Run         | Description                                    |
-| ---------- | -------------------- | ---------------------------------------------- |
-| `all`      | All applicable       | Full project scan (default)                    |
-| `security` | trivy, gitleaks      | Security vulnerabilities and secret detection  |
-| `deps`     | npm-audit, pip-audit | Dependency vulnerability audit                 |
-| `iac`      | checkov, hadolint    | Infrastructure-as-code linting and validation  |
-| `sbom`     | trivy-sbom           | SBOM generation (CycloneDX) with hash tracking |
+| Type       | Scanners Run                  | Description                                    |
+| ---------- | ----------------------------- | ---------------------------------------------- |
+| `all`      | All applicable                | Full project scan (default)                    |
+| `security` | trivy, gitleaks, semgrep      | Security vulnerabilities, secrets, and SAST    |
+| `deps`     | npm-audit, pip-audit          | Dependency vulnerability audit                 |
+| `iac`      | checkov, hadolint, shellcheck | Infrastructure-as-code linting and validation  |
+| `sbom`     | trivy-sbom                    | SBOM generation (CycloneDX) with hash tracking |
 
 ---
 
@@ -84,6 +87,19 @@ dojops scan --security       # trivy + gitleaks only
 dojops scan --deps           # npm-audit + pip-audit only
 dojops scan --iac            # checkov + hadolint only
 ```
+
+### Scan Comparison
+
+```bash
+dojops scan --compare        # Compare findings with previous scan report
+```
+
+The `--compare` flag runs the scan and then compares the results against the most recent previous scan report. It shows:
+
+- **New findings** — Issues that appeared since the last scan
+- **Resolved findings** — Issues that were present in the previous scan but are now fixed
+
+Finding comparison uses deterministic IDs (based on tool, rule, file, and line) to accurately track which findings are new vs resolved.
 
 ### Auto-Remediation
 

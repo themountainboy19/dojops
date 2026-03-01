@@ -18,12 +18,28 @@ export class AgentRouter {
     this.agents = configs.map((c) => new SpecialistAgent(provider, c));
   }
 
+  /**
+   * Check if a keyword matches in the prompt using word boundary awareness.
+   * Multi-word keywords use substring match (already specific enough).
+   * Single-word keywords use word boundary regex to avoid false positives
+   * (e.g., "ci" shouldn't match "circuit").
+   */
+  private matchesKeyword(lower: string, kw: string): boolean {
+    if (kw.includes(" ")) {
+      // Multi-word keywords are specific enough for substring match
+      return lower.includes(kw);
+    }
+    // Single-word: use word boundary matching
+    // \b handles punctuation, hyphens, and whitespace boundaries
+    return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower);
+  }
+
   route(prompt: string): RouteResult {
     const lower = prompt.toLowerCase();
     const scored: Array<{ agent: SpecialistAgent; confidence: number; keywords: string[] }> = [];
 
     for (const agent of this.agents) {
-      const matchedKeywords = agent.keywords.filter((kw) => lower.includes(kw));
+      const matchedKeywords = agent.keywords.filter((kw) => this.matchesKeyword(lower, kw));
       if (matchedKeywords.length === 0) continue;
 
       const matchRatio = matchedKeywords.length / agent.keywords.length;

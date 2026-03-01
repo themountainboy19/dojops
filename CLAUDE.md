@@ -12,7 +12,7 @@ DojOps (AI DevOps Automation Engine) is an enterprise-grade AI DevOps automation
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
 pnpm lint               # ESLint across all packages
-pnpm test               # Vitest across all packages (1924 tests)
+pnpm test               # Vitest across all packages (1931 tests)
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
 
@@ -60,7 +60,7 @@ pnpm dojops -- serve                 # in-repo alternative
 @dojops/sdk            -> BaseTool<T> abstract class with Zod inputSchema validation + file-reader utilities
 ```
 
-**API endpoints** (`@dojops/api`):
+**API endpoints** (`@dojops/api`, available at both `/api/` and `/api/v1/` with `X-API-Version: 1` header on v1 routes):
 
 | Method | Path                    | Description                                          |
 | ------ | ----------------------- | ---------------------------------------------------- |
@@ -147,12 +147,12 @@ verifier.ts    -> (optional) external tool validation (terraform validate, hadol
 - `@dojops/tools` — 12 tools: GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd (each with schemas, generator, optional detector, optional verifier, tool class, tests). All tools support updating existing configs via auto-detection + `existingContent` input field + `.bak` backup before overwrite. Terraform, Dockerfile, and Kubernetes tools implement `verify()` for external validation
 - `@dojops/tool-registry` — Unified tool registry combining 12 built-in tools + custom tools discovered from `~/.dojops/tools/` (global) and `.dojops/tools/` (project). Tool manifests (`tool.yaml` + JSON Schema) converted to `DevOpsTool` at runtime. Tool policy via `.dojops/policy.yaml`. Audit enrichment with `toolType`/`toolSource`/`toolVersion`/`toolHash`/`systemPromptHash`. Tool isolation: verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention on manifest file paths. Custom agent discovery: parses structured README.md from `.dojops/agents/` (project) and `~/.dojops/agents/` (global), converts to `SpecialistConfig` for `AgentRouter`
 - `@dojops/executor` — `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size/verification restrictions), `ApprovalHandler` interface (auto-approve, auto-deny, callback), `SandboxedFs` for restricted file ops, `AuditEntry` logging with verification results + custom tool metadata, `withTimeout()` for execution limits
-- `@dojops/scanner` — Security scanning engine with 8 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom), supports `--security`, `--deps`, `--iac`, `--sbom` scan modes, produces structured scan reports saved to `.dojops/scans/`, SBOM CycloneDX output saved to `.dojops/sbom/`
+- `@dojops/scanner` — Security scanning engine with 9 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, semgrep), supports `--security`, `--deps`, `--iac`, `--sbom` scan modes, `--compare` flag for finding deltas between scans, produces structured scan reports saved to `.dojops/scans/`, SBOM CycloneDX output saved to `.dojops/sbom/`
 - `@dojops/session` — Interactive AI chat session management with multi-turn conversation support, session persistence, agent routing within chat context
 - `@dojops/cli` — Full lifecycle: `init` (writes `context.json` + `context.md` + user review prompt), `plan`, `validate`, `apply` (`--dry-run`, `--resume`, `--replay`, `--yes`), `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `inspect` (`config`, `session`), `agents` (`list`, `info`, `create`, `remove`), `history` (`list`, `show`, `verify`), `status`/`doctor`, `config`, `auth`, `serve` (`credentials`), `chat`, `check`, `scan` (`--security`, `--deps`, `--iac`, `--sbom`), `tools` (`list/validate/init`), `toolchain` (`list/install/remove/clean`). `--temperature` global flag. Deterministic replay mode (`--replay`): wraps provider in `DeterministicProvider` (temperature=0), validates provider/model/systemPromptHash match via `validateReplayIntegrity()`. Execution locking, hash-chained audit logs, plan persistence with tool version pinning + execution context (provider/model/temperature) + `systemPromptHash` tracking, tool integrity validation on resume (extracted to `checkToolIntegrity()`), tool metadata passed to SafeExecutor for audit enrichment, `resolveTemperature()` config resolution (CLI > env > config > undefined), rich TUI via `@clack/prompts`
 - `@dojops/api` — REST API (Express + cors) exposing all capabilities via 19 HTTP endpoints, Zod request validation middleware, in-memory `HistoryStore` (random UUID IDs, O(1) lookup), API key authentication (Bearer/X-API-Key with timing-safe compare), dependency injection via `createApp(deps)`, `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with bounded reads (10MB file cap, 10K audit line cap), vanilla web dashboard (dark theme, 5 tabs + login overlay for auth), 30s auto-refresh on metrics tabs, `supertest` integration tests
 - Specifications — `docs/TOOL_SPEC_v1.md` freezes the v1 custom tool contract (manifest schema, discovery, security constraints, compatibility promise)
-- Dev tooling — Vitest (1924 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
+- Dev tooling — Vitest (1931 tests), ESLint, Prettier, Husky + lint-staged, per-package tsconfig.json
 
 ## Roadmap
 
