@@ -44,7 +44,7 @@ tool-name/
 ```typescript
 abstract class BaseTool<TInput> {
   abstract name: string;
-  abstract inputSchema: ZodSchema<TInput>;
+  abstract inputSchema: z.ZodType<TInput>;
 
   // Zod validation of raw input
   validate(input: unknown): TInput;

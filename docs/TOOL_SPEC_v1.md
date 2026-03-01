@@ -175,7 +175,7 @@ The `input.schema.json` file uses standard JSON Schema (draft-07 compatible subs
 ### Property handling
 
 - Properties listed in `required` are mandatory; others are optional (unless they have a `default`)
-- Objects without `properties` become `z.record(z.unknown())`
+- Objects without `properties` become `z.record(z.string(), z.unknown())`
 - The `description` field is preserved via `.describe()`
 - The `default` field is preserved via `.default()`
 - Nested objects and arrays are recursively converted

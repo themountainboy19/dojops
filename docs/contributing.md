@@ -6,7 +6,7 @@ Contributions to DojOps are welcome. This guide covers development setup, coding
 
 ## Prerequisites
 
-- **Node.js** >= 18
+- **Node.js** >= 20
 - **pnpm** >= 8
 - **TypeScript** >= 5.4
 
