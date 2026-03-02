@@ -64,6 +64,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
 | `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
 | `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
+| `dojops tools search <query>`     | Search the DojOps Hub for tools                       |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -118,6 +119,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--model=NAME`      | LLM model override                                                                    |
 | `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--profile=NAME`    | Use named config profile                                                              |
+| `--tool=NAME`       | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
 | `--verbose`         | Verbose output                                                                        |
 | `--debug`           | Debug-level output with stack traces                                                  |
@@ -163,6 +165,10 @@ dojops "Add an S3 bucket to the existing Terraform config"
 # Override provider/model for a single command
 dojops --provider=anthropic "Create a Helm chart for Redis"
 dojops --model=gpt-4o "Design a VPC with public and private subnets"
+
+# Force a specific tool (bypass agent routing)
+dojops --tool=terraform "Create an S3 bucket with versioning"
+dojops --tool=kubernetes "Create a deployment for nginx"
 ```
 
 ### Planning and Execution
@@ -183,6 +189,10 @@ dojops apply --allow-all-paths  # bypass DevOps file write allowlist
 dojops apply --resume --yes     # resume failed tasks, auto-approve
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
+
+# Force a specific tool for planning or execution
+dojops --tool=terraform plan "Set up S3 with CloudFront"
+dojops apply plan-abc --tool=terraform   # only run terraform tasks from plan
 ```
 
 ### Diagnostics
@@ -259,6 +269,11 @@ dojops toolchain clean
 ```bash
 # List discovered custom tools (global + project)
 dojops tools list
+
+# Search the DojOps Hub for tools
+dojops tools search docker
+dojops tools search terraform --limit 5
+dojops tools search k8s --output json
 
 # Scaffold a new custom tool
 dojops tools init my-tool

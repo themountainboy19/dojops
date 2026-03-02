@@ -558,6 +558,11 @@ dojops tools publish my-tool.dops --changelog "Added Docker support"
 # Install a .dops tool from DojOps Hub
 dojops tools install nginx-config
 dojops tools install nginx-config --version 1.0.0 --global
+
+# Search the DojOps Hub for tools
+dojops tools search docker
+dojops tools search terraform --limit 5
+dojops tools search k8s --output json
 ```
 
 #### Hub Integration

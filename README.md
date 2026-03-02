@@ -267,6 +267,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
 | `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
 | `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
+| `dojops tools search <query>`     | Search the DojOps Hub for tools                       |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -317,6 +318,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `--model=NAME`      | LLM model override                                                                    |
 | `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
 | `--profile=NAME`    | Use named config profile                                                              |
+| `--tool=NAME`       | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
 | `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
 | `--verbose`         | Verbose output                                                                        |
 | `--debug`           | Debug-level output with stack traces                                                  |
@@ -388,10 +390,20 @@ dojops tools list
 dojops tools init my-tool
 dojops tools validate .dojops/tools/my-tool/
 
+# Search the DojOps Hub for tools
+dojops tools search docker
+dojops tools search terraform --limit 5
+dojops tools search k8s --output json
+
 # Publish & install tools from DojOps Hub (https://hub.dojops.ai)
 dojops tools publish my-tool.dops --changelog "Initial release"
 dojops tools install nginx-config
 dojops tools install nginx-config --version 1.0.0 --global
+
+# Force a specific tool (bypass agent routing)
+dojops --tool=terraform "Create an S3 bucket with versioning"
+dojops --tool=kubernetes "Create a deployment for nginx"
+dojops --tool=terraform plan "Set up S3 with CloudFront"
 
 # Custom agents
 dojops agents create "an SRE specialist for incident response"
