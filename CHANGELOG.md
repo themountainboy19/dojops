@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-03-02
+
+### Fixed
+
+- **Hub URL Default**: Changed `DOJOPS_HUB_URL` default from `http://localhost:3000` to `https://hub.dojops.ai` so `tools publish`, `tools install`, and `tools search` connect to the production hub out of the box
+
 ## [1.0.2] - 2026-03-02
 
 First official public release. Versions 1.0.0 and 1.0.1 were internal testing releases.

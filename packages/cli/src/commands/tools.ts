@@ -11,7 +11,7 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { findProjectRoot } from "../state";
 
-const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "http://localhost:3000";
+const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
 
 /**
  * `dojops tools list` — discovers and lists custom tools (manifest-based + .dops files).
@@ -556,7 +556,7 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
  *   dojops tools publish <file.dops> --changelog "Initial release"
  *   dojops tools publish <name>                 # find by name in .dojops/tools/
  *
- * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  *      DOJOPS_HUB_TOKEN (auth token — obtained from hub session)
  */
 export const toolsPublishCommand: CommandHandler = async (args) => {
@@ -727,7 +727,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
  *   dojops tools install <name> --version 1.0.0  # install specific version
  *   dojops tools install <name> --global         # install to ~/.dojops/tools/
  *
- * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
 export const toolsInstallCommand: CommandHandler = async (args) => {
   const toolName = args[0];
@@ -890,7 +890,7 @@ export const toolsInstallCommand: CommandHandler = async (args) => {
  *   dojops tools search terraform --limit 5
  *   dojops tools search k8s --output json
  *
- * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
 export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
   const query = args.filter((a) => !a.startsWith("-")).join(" ");
