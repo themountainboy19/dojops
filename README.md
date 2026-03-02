@@ -46,6 +46,10 @@
 
 ## Quick Start
 
+### Prerequisites
+
+- **Node.js** >= 20 (or **Docker** if using the container image)
+
 ### Install
 
 ```bash
