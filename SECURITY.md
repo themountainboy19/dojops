@@ -11,7 +11,7 @@
 
 If you discover a security vulnerability in DojOps, please report it responsibly.
 
-**Email:** dojops@protonmail.com
+**Email:** chlagoumedhedi@outlook.com
 
 Please include:
 

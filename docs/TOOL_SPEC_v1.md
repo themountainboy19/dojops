@@ -1,10 +1,12 @@
-# DojOps Tool Specification v1
+# DojOps Tool Specification v1 (Deprecated)
 
-**Status: FROZEN**
+> **Deprecated:** This specification describes the legacy `tool.yaml` manifest format. New tools should use the **`.dops` file format** instead, which is the default when running `dojops tools init` and the only format accepted by [DojOps Hub](https://hub.dojops.ai). The `.dops` format includes richer metadata (`scope`, `risk`, `execution`, `update`) not available in `tool.yaml`. Legacy `tool.yaml` tools are still supported for backward compatibility but will not receive new features.
+
+**Status: FROZEN (Legacy)**
 **Spec version: `spec: 1`**
 **Effective from: v1.x**
 
-This document defines the v1 custom tool contract for DojOps. All custom tools targeting DojOps v1.x MUST conform to this specification. The spec is **frozen** — no breaking changes will be made under `spec: 1`. See [Compatibility Promise](#12-compatibility-promise) for evolution rules.
+This document defines the v1 custom tool contract for DojOps using `tool.yaml` manifests. The spec is **frozen** — no breaking changes will be made under `spec: 1`. See [Compatibility Promise](#12-compatibility-promise) for evolution rules.
 
 ---
 
