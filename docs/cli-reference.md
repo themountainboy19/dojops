@@ -62,6 +62,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops tools list`               | List discovered custom tools (global + project)       |
 | `dojops tools validate <path>`    | Validate a custom tool manifest                       |
 | `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
+| `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
+| `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -263,6 +265,13 @@ dojops tools init my-tool
 
 # Validate a custom tool manifest
 dojops tools validate .dojops/tools/my-tool/
+
+# Publish a tool to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops tools publish my-tool.dops --changelog "Initial release"
+
+# Install a tool from DojOps Hub
+dojops tools install nginx-config
+dojops tools install nginx-config --version 1.0.0 --global
 ```
 
 ### Provider Management

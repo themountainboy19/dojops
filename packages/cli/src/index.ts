@@ -47,6 +47,8 @@ import {
   toolsInitCommand,
   toolsValidateCommand,
   toolsLoadCommand,
+  toolsPublishCommand,
+  toolsInstallCommand,
 } from "./commands/tools";
 import {
   toolchainListCommand,
@@ -106,6 +108,8 @@ registerSubcommand("tools", "list", toolsListCommand);
 registerSubcommand("tools", "init", toolsInitCommand);
 registerSubcommand("tools", "validate", toolsValidateCommand);
 registerSubcommand("tools", "load", toolsLoadCommand);
+registerSubcommand("tools", "publish", toolsPublishCommand);
+registerSubcommand("tools", "install", toolsInstallCommand);
 
 // Nested: toolchain <sub> (system binaries)
 registerSubcommand("toolchain", "list", toolchainListCommand);

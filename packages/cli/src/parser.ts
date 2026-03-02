@@ -168,6 +168,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "switch",
     "credentials",
     "repair",
+    "publish",
   ]);
 
   const command: string[] = [];

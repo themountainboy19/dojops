@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/tool-registry";
@@ -8,6 +9,8 @@ import * as yaml from "js-yaml";
 import { CommandHandler } from "../types";
 import { ExitCode, CLIError } from "../exit-codes";
 import { findProjectRoot } from "../state";
+
+const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "http://localhost:3000";
 
 /**
  * `dojops tools list` — discovers and lists custom tools (manifest-based + .dops files).
@@ -542,4 +545,338 @@ export const toolsLoadCommand: CommandHandler = async (args) => {
   p.log.success(
     `Tool "${toolName}" v${result.manifest!.version} loaded to ${pc.underline(destDir)}`,
   );
+};
+
+/**
+ * `dojops tools publish [path]` — publishes a .dops file to the DojOps Hub.
+ *
+ * Usage:
+ *   dojops tools publish <file.dops>           # publish a specific file
+ *   dojops tools publish <file.dops> --changelog "Initial release"
+ *   dojops tools publish <name>                 # find by name in .dojops/tools/
+ *
+ * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ *      DOJOPS_HUB_TOKEN (auth token — obtained from hub session)
+ */
+export const toolsPublishCommand: CommandHandler = async (args) => {
+  const target = args[0];
+  if (!target) {
+    p.log.info(`  ${pc.dim("$")} dojops tools publish <file.dops | name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or tool name required.");
+  }
+
+  // Extract --changelog flag
+  let changelog: string | undefined;
+  const changelogIdx = args.indexOf("--changelog");
+  if (changelogIdx !== -1 && args[changelogIdx + 1]) {
+    changelog = args[changelogIdx + 1];
+  }
+
+  // Resolve the .dops file path
+  let dopsPath: string;
+  const resolved = path.resolve(target);
+
+  if (target.endsWith(".dops") && fs.existsSync(resolved)) {
+    dopsPath = resolved;
+  } else if (!target.includes("/") && !target.includes("\\")) {
+    // Look up by name in standard locations
+    const projectRoot = findProjectRoot();
+    const candidates = [
+      projectRoot ? path.join(projectRoot, ".dojops", "tools", `${target}.dops`) : null,
+      path.join(
+        process.env.HOME ?? process.env.USERPROFILE ?? "~",
+        ".dojops",
+        "tools",
+        `${target}.dops`,
+      ),
+    ].filter(Boolean) as string[];
+
+    const found = candidates.find((c) => fs.existsSync(c));
+    if (!found) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `No .dops file found for "${target}". Looked in:\n  ${candidates.join("\n  ")}`,
+      );
+    }
+    dopsPath = found;
+  } else {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${resolved}`);
+  }
+
+  // Validate locally before publishing
+  const spinner = p.spinner();
+  spinner.start("Validating .dops file...");
+
+  let module;
+  try {
+    module = parseDopsFile(dopsPath);
+    const result = validateDopsModule(module);
+    if (!result.valid) {
+      spinner.stop("Validation failed");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Invalid DOPS module:\n  ${(result.errors ?? []).join("\n  ")}`,
+      );
+    }
+  } catch (err) {
+    spinner.stop("Validation failed");
+    if (err instanceof CLIError) throw err;
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Failed to parse: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  const { meta } = module.frontmatter;
+  spinner.stop(`Validated: ${pc.cyan(meta.name)} v${meta.version}`);
+
+  // Check for auth token
+  const token = process.env.DOJOPS_HUB_TOKEN;
+  if (!token) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `No hub auth token. Set DOJOPS_HUB_TOKEN env variable.\n` +
+        `  Get one by signing into ${DEFAULT_HUB_URL} and generating an API token.`,
+    );
+  }
+
+  // Compute client-side SHA-256 hash (publisher attestation)
+  const fileBuffer = fs.readFileSync(dopsPath);
+  const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+
+  p.log.info(`${pc.dim("SHA256:")} ${hash}`);
+
+  // Upload to hub
+  spinner.start(`Publishing ${pc.cyan(meta.name)} v${meta.version} to hub...`);
+
+  const boundary = `----DojOpsBoundary${Date.now()}`;
+  const fileName = path.basename(dopsPath);
+
+  // Build multipart body manually (no external deps)
+  // Include the client-computed sha256 so the hub can verify integrity
+  const parts: Buffer[] = [];
+  parts.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
+    ),
+  );
+  parts.push(fileBuffer);
+  parts.push(
+    Buffer.from(
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="sha256"\r\n\r\n${hash}`,
+    ),
+  );
+  if (changelog) {
+    parts.push(
+      Buffer.from(
+        `\r\n--${boundary}\r\nContent-Disposition: form-data; name="changelog"\r\n\r\n${changelog}`,
+      ),
+    );
+  }
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+  const body = Buffer.concat(parts);
+
+  try {
+    const res = await fetch(`${DEFAULT_HUB_URL}/api/packages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/form-data; boundary=${boundary}`,
+        Cookie: `next-auth.session-token=${token}`,
+      },
+      body,
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      spinner.stop("Publish failed");
+      throw new CLIError(
+        ExitCode.GENERAL_ERROR,
+        `Hub error (${res.status}): ${data.error || "Unknown error"}`,
+      );
+    }
+
+    spinner.stop("Published successfully");
+
+    p.note(
+      [
+        `${pc.dim("Name:")}    ${pc.cyan(meta.name)}`,
+        `${pc.dim("Version:")} v${meta.version}`,
+        `${pc.dim("Slug:")}    ${data.slug}`,
+        `${pc.dim("SHA256:")}  ${hash}`,
+        `${pc.dim("URL:")}     ${DEFAULT_HUB_URL}/packages/${data.slug}`,
+      ].join("\n"),
+      data.created ? "Published new tool" : "Published new version",
+    );
+  } catch (err) {
+    if (err instanceof CLIError) throw err;
+    spinner.stop("Publish failed");
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+};
+
+/**
+ * `dojops tools install <name>` — downloads a .dops tool from the DojOps Hub.
+ *
+ * Usage:
+ *   dojops tools install <name>                  # install latest version
+ *   dojops tools install <name> --version 1.0.0  # install specific version
+ *   dojops tools install <name> --global         # install to ~/.dojops/tools/
+ *
+ * Env: DOJOPS_HUB_URL (default: http://localhost:3000)
+ */
+export const toolsInstallCommand: CommandHandler = async (args) => {
+  const toolName = args[0];
+  if (!toolName) {
+    p.log.info(`  ${pc.dim("$")} dojops tools install <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Tool name required.");
+  }
+
+  // Parse flags
+  let version: string | undefined;
+  const versionIdx = args.indexOf("--version");
+  if (versionIdx !== -1 && args[versionIdx + 1]) {
+    version = args[versionIdx + 1];
+  }
+  const isGlobal = args.includes("--global");
+
+  const spinner = p.spinner();
+  spinner.start(`Fetching ${pc.cyan(toolName)} from hub...`);
+
+  // Resolve slug (tool name is the slug in the hub)
+  const slug = toolName.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+
+  try {
+    // 1. Get package info to find the latest version if none specified
+    if (!version) {
+      const infoRes = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`);
+      if (!infoRes.ok) {
+        spinner.stop("Not found");
+        if (infoRes.status === 404) {
+          throw new CLIError(ExitCode.VALIDATION_ERROR, `Tool "${toolName}" not found on hub.`);
+        }
+        const data = await infoRes.json().catch(() => ({}));
+        throw new CLIError(
+          ExitCode.GENERAL_ERROR,
+          `Hub error: ${(data as { error?: string }).error || infoRes.statusText}`,
+        );
+      }
+      const info = await infoRes.json();
+      if (info.latestVersion) {
+        version = info.latestVersion.semver;
+      } else {
+        spinner.stop("No versions");
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          `Tool "${toolName}" has no published versions.`,
+        );
+      }
+    }
+
+    spinner.message(`Downloading ${pc.cyan(toolName)} v${version}...`);
+
+    // 2. Download the .dops file
+    const downloadRes = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${version}`);
+    if (!downloadRes.ok) {
+      spinner.stop("Download failed");
+      if (downloadRes.status === 404) {
+        throw new CLIError(
+          ExitCode.VALIDATION_ERROR,
+          `Version ${version} not found for "${toolName}".`,
+        );
+      }
+      throw new CLIError(ExitCode.GENERAL_ERROR, `Download failed (${downloadRes.status})`);
+    }
+
+    const fileBuffer = Buffer.from(await downloadRes.arrayBuffer());
+    const expectedHash = downloadRes.headers.get("x-checksum-sha256");
+
+    // 3. Verify integrity — compare locally computed hash against publisher's attestation
+    const actualHash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+    if (expectedHash && actualHash !== expectedHash) {
+      spinner.stop("Integrity check failed");
+      throw new CLIError(
+        ExitCode.GENERAL_ERROR,
+        `SHA256 integrity check failed! The downloaded file does not match the publisher's hash.\n` +
+          `  Publisher: ${expectedHash}\n` +
+          `  Download:  ${actualHash}\n` +
+          `This may indicate the file was tampered with. Aborting install.`,
+      );
+    }
+    if (!expectedHash) {
+      p.log.warn("No publisher hash available — skipping integrity verification.");
+    }
+
+    // 4. Validate the downloaded file
+    spinner.message("Validating...");
+    const content = fileBuffer.toString("utf-8");
+    let module;
+    try {
+      const { parseDopsString } = await import("@dojops/runtime");
+      module = parseDopsString(content);
+    } catch (err) {
+      spinner.stop("Validation failed");
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Downloaded file is not a valid .dops module: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    // 5. Write to disk
+    let destDir: string;
+    if (isGlobal) {
+      destDir = path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "tools");
+    } else {
+      const projectRoot = findProjectRoot();
+      destDir = projectRoot
+        ? path.join(projectRoot, ".dojops", "tools")
+        : path.resolve(".dojops", "tools");
+    }
+
+    fs.mkdirSync(destDir, { recursive: true });
+    const destPath = path.join(destDir, `${module.frontmatter.meta.name}.dops`);
+
+    if (fs.existsSync(destPath)) {
+      // Read existing version for comparison
+      try {
+        const existing = parseDopsFile(destPath);
+        p.log.info(
+          pc.dim(
+            `Upgrading ${existing.frontmatter.meta.name} v${existing.frontmatter.meta.version} -> v${version}`,
+          ),
+        );
+      } catch {
+        // Overwrite invalid file
+      }
+    }
+
+    fs.writeFileSync(destPath, fileBuffer);
+
+    spinner.stop("Installed successfully");
+
+    const loc = isGlobal ? "global" : "project";
+    p.note(
+      [
+        `${pc.dim("Name:")}    ${pc.cyan(module.frontmatter.meta.name)}`,
+        `${pc.dim("Version:")} v${version}`,
+        `${pc.dim("Path:")}    ${pc.underline(destPath)}`,
+        `${pc.dim("Scope:")}   ${loc}`,
+        `${pc.dim("SHA256:")}  ${actualHash}`,
+        expectedHash ? `${pc.dim("Verify:")}  ${pc.green("OK")} — matches publisher hash` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      "Tool installed",
+    );
+  } catch (err) {
+    if (err instanceof CLIError) throw err;
+    spinner.stop("Failed");
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `Failed to connect to hub at ${DEFAULT_HUB_URL}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 };

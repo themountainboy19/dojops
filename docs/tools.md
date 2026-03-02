@@ -550,7 +550,28 @@ dojops tools validate .dojops/tools/my-tool/
 
 # Scaffold a new custom tool with template files
 dojops tools init my-tool
+
+# Publish a .dops tool to DojOps Hub (requires DOJOPS_HUB_TOKEN)
+dojops tools publish my-tool.dops
+dojops tools publish my-tool.dops --changelog "Added Docker support"
+
+# Install a .dops tool from DojOps Hub
+dojops tools install nginx-config
+dojops tools install nginx-config --version 1.0.0 --global
 ```
+
+#### Hub Integration
+
+The `publish` and `install` commands connect to the [DojOps Hub](https://hub.dojops.ai) — a tool marketplace where users share `.dops` tools.
+
+**Publish** computes a SHA-256 hash of the `.dops` file client-side before uploading. This hash is stored as the **publisher attestation** — the hub verifies the upload matches the declared hash and stores it alongside the file.
+
+**Install** downloads the `.dops` file and the publisher's hash, recomputes the SHA-256 locally, and compares. If the hashes don't match, the install is aborted with an integrity error. This ensures the file has not been tampered with in transit or on the server.
+
+| Environment Variable | Description                                         |
+| -------------------- | --------------------------------------------------- |
+| `DOJOPS_HUB_URL`     | Hub API base URL (default: `https://hub.dojops.ai`) |
+| `DOJOPS_HUB_TOKEN`   | Auth token for publishing (from hub session)        |
 
 ### Tool Policy
 

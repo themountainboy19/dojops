@@ -265,6 +265,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops tools list`               | List discovered custom tools (global + project)       |
 | `dojops tools validate <path>`    | Validate a custom tool manifest                       |
 | `dojops tools init <name>`        | Scaffold a new custom tool with template files        |
+| `dojops tools publish <file>`     | Publish a .dops tool to the DojOps Hub                |
+| `dojops tools install <name>`     | Install a .dops tool from the DojOps Hub              |
 | `dojops toolchain list`           | List system toolchain binaries with install status    |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/) |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
@@ -385,6 +387,11 @@ dojops toolchain install kubectl
 dojops tools list
 dojops tools init my-tool
 dojops tools validate .dojops/tools/my-tool/
+
+# Publish & install tools from DojOps Hub (https://hub.dojops.ai)
+dojops tools publish my-tool.dops --changelog "Initial release"
+dojops tools install nginx-config
+dojops tools install nginx-config --version 1.0.0 --global
 
 # Custom agents
 dojops agents create "an SRE specialist for incident response"

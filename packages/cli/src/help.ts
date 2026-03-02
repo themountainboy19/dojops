@@ -753,7 +753,7 @@ export function printCommandHelp(command: string): void {
     case "tools":
       console.log(`\n${pc.bold("dojops tools")} — Manage DevOps tools (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops tools [list|init|validate|load]`);
+      console.log(`  ${pc.dim("$")} dojops tools [list|init|validate|load|publish|install]`);
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(`  ${pc.cyan("list")}              List all custom tools ${pc.dim("(default)")}`);
       console.log(
@@ -761,8 +761,13 @@ export function printCommandHelp(command: string): void {
       );
       console.log(`  ${pc.cyan("validate <name>")}  Validate a tool manifest`);
       console.log(`  ${pc.cyan("load <path>")}      Load a tool from a local directory`);
+      console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops tool to the DojOps Hub`);
+      console.log(`  ${pc.cyan("install <name>")}   Install a .dops tool from the DojOps Hub`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
+      console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
+      console.log(`  ${pc.cyan("--version")}       Specific version to install`);
+      console.log(`  ${pc.cyan("--global")}        Install to ~/.dojops/tools/ instead of project`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Custom tools are declarative manifests (tool.yaml) that define LLM-powered`);
       console.log(`  configuration generators. Tools are discovered from:`);
@@ -774,6 +779,11 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops tools init my-tool`);
       console.log(`  ${pc.dim("$")} dojops tools validate my-tool`);
       console.log(`  ${pc.dim("$")} dojops tools load /path/to/tool`);
+      console.log(
+        `  ${pc.dim("$")} dojops tools publish my-tool.dops --changelog "Initial release"`,
+      );
+      console.log(`  ${pc.dim("$")} dojops tools install nginx-config`);
+      console.log(`  ${pc.dim("$")} dojops tools install nginx-config --version 1.0.0 --global`);
       console.log(`  ${pc.dim("$")} dojops tools list --output json`);
       console.log();
       break;

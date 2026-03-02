@@ -38,19 +38,21 @@ dojops serve
 
 ## Commands
 
-| Command                      | Description                             |
-| ---------------------------- | --------------------------------------- |
-| `dojops "prompt"`            | Generate a DevOps configuration         |
-| `dojops --plan "prompt"`     | Decompose into a task graph and execute |
-| `dojops --execute "prompt"`  | Generate and write files to disk        |
-| `dojops debug ci "log"`      | Diagnose CI/CD failures                 |
-| `dojops analyze diff "diff"` | Analyze infrastructure diffs            |
-| `dojops scan`                | Run security/dependency/IaC scans       |
-| `dojops chat`                | Interactive AI chat session             |
-| `dojops serve`               | Start REST API + web dashboard          |
-| `dojops tools list`          | List available DevOps tools             |
-| `dojops agents list`         | List specialist agents                  |
-| `dojops doctor`              | System health check                     |
+| Command                       | Description                             |
+| ----------------------------- | --------------------------------------- |
+| `dojops "prompt"`             | Generate a DevOps configuration         |
+| `dojops --plan "prompt"`      | Decompose into a task graph and execute |
+| `dojops --execute "prompt"`   | Generate and write files to disk        |
+| `dojops debug ci "log"`       | Diagnose CI/CD failures                 |
+| `dojops analyze diff "diff"`  | Analyze infrastructure diffs            |
+| `dojops scan`                 | Run security/dependency/IaC scans       |
+| `dojops chat`                 | Interactive AI chat session             |
+| `dojops serve`                | Start REST API + web dashboard          |
+| `dojops tools list`           | List available DevOps tools             |
+| `dojops tools publish <file>` | Publish a .dops tool to the Hub         |
+| `dojops tools install <name>` | Install a .dops tool from the Hub       |
+| `dojops agents list`          | List specialist agents                  |
+| `dojops doctor`               | System health check                     |
 
 ## Configuration
 
