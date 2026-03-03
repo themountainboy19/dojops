@@ -11,10 +11,22 @@ vi.mock("@dojops/runtime", () => {
     this.name = module?.frontmatter?.meta?.name ?? "mock-runtime";
     this.generate = vi.fn();
   });
+  const DopsRuntimeV2 = vi.fn().mockImplementation(function (
+    this: Record<string, unknown>,
+    module: { frontmatter?: { meta?: { name?: string } } },
+  ) {
+    this.name = module?.frontmatter?.meta?.name ?? "mock-runtime-v2";
+    this.generate = vi.fn();
+  });
   return {
     DopsRuntime,
+    DopsRuntimeV2,
     parseDopsFile: vi.fn(),
+    parseDopsFileAny: vi.fn(),
     validateDopsModule: vi.fn(),
+    validateDopsModuleAny: vi.fn(),
+    isV2Module: vi.fn().mockReturnValue(false),
+    DocProvider: undefined,
   };
 });
 
@@ -29,7 +41,7 @@ vi.mock("../policy", () => ({
 }));
 
 import { loadBuiltInDopsModules, loadUserDopsModules, createToolRegistry } from "../index";
-import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
 import { discoverTools, discoverUserDopsFiles } from "../tool-loader";
 import type { LLMProvider } from "@dojops/core";
 import type { DopsFileEntry } from "../tool-loader";
@@ -40,13 +52,18 @@ const mockProvider: LLMProvider = {
 };
 
 const defaultParsedModule = {
-  frontmatter: { meta: { name: "test-tool", version: "1.0.0", description: "Test" } },
+  frontmatter: {
+    dops: "v1",
+    meta: { name: "test-tool", version: "1.0.0", description: "Test" },
+  },
   prompt: "test prompt",
 };
 
 function resetParseMock() {
-  vi.mocked(parseDopsFile).mockReturnValue(defaultParsedModule as ReturnType<typeof parseDopsFile>);
-  vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+  vi.mocked(parseDopsFileAny).mockReturnValue(
+    defaultParsedModule as ReturnType<typeof parseDopsFileAny>,
+  );
+  vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
 }
 
 describe("loadBuiltInDopsModules", () => {
@@ -71,7 +88,7 @@ describe("loadBuiltInDopsModules", () => {
 
     const result = loadBuiltInDopsModules(mockProvider);
     expect(result).toHaveLength(2);
-    expect(parseDopsFile).toHaveBeenCalledTimes(2);
+    expect(parseDopsFileAny).toHaveBeenCalledTimes(2);
   });
 
   it("skips invalid modules silently", () => {
@@ -79,7 +96,7 @@ describe("loadBuiltInDopsModules", () => {
     vi.mocked(fs.readdirSync).mockReturnValue(["bad.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: false, errors: ["bad format"] });
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: false, errors: ["bad format"] });
 
     const result = loadBuiltInDopsModules(mockProvider);
     expect(result).toHaveLength(0);
@@ -90,7 +107,7 @@ describe("loadBuiltInDopsModules", () => {
     vi.mocked(fs.readdirSync).mockReturnValue(["crash.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
-    vi.mocked(parseDopsFile).mockImplementation(() => {
+    vi.mocked(parseDopsFileAny).mockImplementation(() => {
       throw new Error("parse error");
     });
 
@@ -115,7 +132,7 @@ describe("loadUserDopsModules", () => {
   it("returns empty when no user dops files found", () => {
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
     const result = loadUserDopsModules(mockProvider);
-    expect(result.runtimes).toEqual([]);
+    expect(result.tools).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
 
@@ -125,28 +142,37 @@ describe("loadUserDopsModules", () => {
       location: "global",
     };
     vi.mocked(discoverUserDopsFiles).mockReturnValue([entry]);
-    vi.mocked(parseDopsFile).mockReturnValue({
-      frontmatter: { meta: { name: "my-tool", version: "1.0.0", description: "Test" } },
+    vi.mocked(parseDopsFileAny).mockReturnValue({
+      frontmatter: {
+        dops: "v1",
+        meta: { name: "my-tool", version: "1.0.0", description: "Test" },
+      },
       prompt: "test",
-    } as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    } as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
 
     const result = loadUserDopsModules(mockProvider);
-    expect(result.runtimes).toHaveLength(1);
+    expect(result.tools).toHaveLength(1);
     expect(result.warnings).toEqual([]);
   });
 
   it("collects warnings for invalid files", () => {
     const entry: DopsFileEntry = { filePath: "/tmp/bad.dops", location: "project" };
     vi.mocked(discoverUserDopsFiles).mockReturnValue([entry]);
-    vi.mocked(parseDopsFile).mockReturnValue({
-      frontmatter: { meta: { name: "bad", version: "1.0.0", description: "Bad" } },
+    vi.mocked(parseDopsFileAny).mockReturnValue({
+      frontmatter: {
+        dops: "v1",
+        meta: { name: "bad", version: "1.0.0", description: "Bad" },
+      },
       prompt: "test",
-    } as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: false, errors: ["missing meta"] });
+    } as ReturnType<typeof parseDopsFileAny>);
+    vi.mocked(validateDopsModuleAny).mockReturnValue({
+      valid: false,
+      errors: ["missing meta"],
+    });
 
     const result = loadUserDopsModules(mockProvider);
-    expect(result.runtimes).toHaveLength(0);
+    expect(result.tools).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("Invalid .dops file");
     expect(result.warnings[0]).toContain("missing meta");
@@ -155,12 +181,12 @@ describe("loadUserDopsModules", () => {
   it("collects warnings for files that throw during parse", () => {
     const entry: DopsFileEntry = { filePath: "/tmp/crash.dops", location: "project" };
     vi.mocked(discoverUserDopsFiles).mockReturnValue([entry]);
-    vi.mocked(parseDopsFile).mockImplementation(() => {
+    vi.mocked(parseDopsFileAny).mockImplementation(() => {
       throw new Error("corrupt file");
     });
 
     const result = loadUserDopsModules(mockProvider);
-    expect(result.runtimes).toHaveLength(0);
+    expect(result.tools).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
     expect(result.warnings[0]).toContain("Failed to load");
     expect(result.warnings[0]).toContain("corrupt file");
@@ -185,7 +211,7 @@ describe("createToolRegistry", () => {
     vi.mocked(fs.readdirSync).mockReturnValue(["tool.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
     vi.mocked(discoverTools).mockReturnValue([]);
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 

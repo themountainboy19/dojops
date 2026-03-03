@@ -37,6 +37,13 @@ export interface AppDependencies {
   apiKey?: string | string[];
   /** Optional documentation augmenter (Context7) for injecting up-to-date docs */
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
+  /** Optional Context7 DocProvider for v2 .dops modules */
+  context7Provider?: {
+    resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+    queryDocs(libraryId: string, query: string): Promise<string>;
+  };
+  /** Optional project context string for v2 .dops modules */
+  projectContext?: string;
 }
 
 /**

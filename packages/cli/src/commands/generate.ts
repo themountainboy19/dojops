@@ -30,10 +30,20 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   let docAugmenter:
     | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
     | undefined;
+  let context7Provider:
+    | {
+        resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+        queryDocs(libraryId: string, query: string): Promise<string>;
+      }
+    | undefined;
   if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
     try {
-      const { createDocAugmenter } = await import("@dojops/context");
+      const { createDocAugmenter, Context7Client } = await import("@dojops/context");
       docAugmenter = createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      });
+      // Create a Context7Client as DocProvider for v2 .dops modules
+      context7Provider = new Context7Client({
         apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
       });
     } catch {
@@ -41,10 +51,35 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     }
   }
 
+  // Build project context string from repo context
+  let projectContextStr: string | undefined;
+  if (projectRoot) {
+    const repoCtx = loadContext(projectRoot);
+    if (repoCtx) {
+      const parts: string[] = [];
+      if (repoCtx.primaryLanguage) parts.push(`Language: ${repoCtx.primaryLanguage}`);
+      if (repoCtx.packageManager) parts.push(`Package manager: ${repoCtx.packageManager.name}`);
+      if (repoCtx.ci.length > 0) {
+        parts.push(
+          `CI: ${[...new Set(repoCtx.ci.map((c: { platform: string }) => c.platform))].join(", ")}`,
+        );
+      }
+      if (repoCtx.container?.hasDockerfile) parts.push("Has Dockerfile");
+      if (repoCtx.infra?.hasTerraform) parts.push("Has Terraform");
+      if (repoCtx.infra?.hasKubernetes) parts.push("Has Kubernetes");
+      if (repoCtx.meta?.isMonorepo) parts.push("Monorepo");
+      if (parts.length > 0) projectContextStr = parts.join("; ");
+    }
+  }
+
   // --tool flag: bypass agent routing, use a specific tool directly
   const toolName = ctx.globalOpts.tool;
   if (toolName) {
-    const registry = createToolRegistry(provider, projectRoot, { docAugmenter });
+    const registry = createToolRegistry(provider, projectRoot, {
+      docAugmenter,
+      context7Provider,
+      projectContext: projectContextStr,
+    });
     const tool = registry.get(toolName);
     if (!tool) {
       const available = registry

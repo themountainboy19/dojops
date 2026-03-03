@@ -181,10 +181,19 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   let docAugmenter:
     | { augmentPrompt(s: string, kw: string[], q: string): Promise<string> }
     | undefined;
+  let context7Provider:
+    | {
+        resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+        queryDocs(libraryId: string, query: string): Promise<string>;
+      }
+    | undefined;
   if (process.env.DOJOPS_CONTEXT_ENABLED === "true") {
     try {
-      const { createDocAugmenter } = await import("@dojops/context");
+      const { createDocAugmenter, Context7Client } = await import("@dojops/context");
       docAugmenter = createDocAugmenter({
+        apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
+      });
+      context7Provider = new Context7Client({
         apiKey: process.env.DOJOPS_CONTEXT7_API_KEY,
       });
     } catch {
@@ -193,7 +202,10 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   const projectRoot = findProjectRoot() ?? undefined;
-  const registry = createToolRegistry(provider, projectRoot, { docAugmenter });
+  const registry = createToolRegistry(provider, projectRoot, {
+    docAugmenter,
+    context7Provider,
+  });
   const tools = registry.getAll();
   const { router, customAgentNames } = createRouter(provider, projectRoot, docAugmenter);
   const debugger_ = createDebugger(provider);

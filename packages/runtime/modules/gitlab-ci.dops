@@ -1,55 +1,37 @@
 ---
-dops: v1
+dops: v2
 kind: tool
 
 meta:
   name: gitlab-ci
-  version: 1.0.0
+  version: 2.0.0
   description: "Generate GitLab CI/CD pipeline configurations"
   author: dojops
   license: MIT
   tags: [gitlab, ci, cd, pipeline, devops]
 
-input:
-  fields:
-    projectPath:
-      type: string
-      required: true
-      description: "Root directory of the project"
-    defaultBranch:
-      type: string
-      default: "main"
-    nodeVersion:
-      type: string
-      default: "20"
-    environment:
-      type: string
-
-output:
-  type: object
-  required: [stages]
-  properties:
-    stages:
-      type: array
-      minItems: 1
-      items:
-        type: string
-    variables:
-      type: object
-    default:
-      type: object
-    include:
-      type: array
-      items:
-        type: object
+context:
+  technology: GitLab CI
+  fileFormat: yaml
+  outputGuidance: |
+    Generate a valid GitLab CI/CD pipeline YAML file.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid .gitlab-ci.yml that GitLab can parse.
+  bestPractices:
+    - Define clear pipeline stages (build, test, deploy)
+    - Use caching to speed up dependency installation
+    - Use artifacts to pass build outputs between stages
+    - Define rules instead of only/except for job conditions
+    - Use parallel and matrix for multi-version testing
+    - Set appropriate timeouts for each job
+    - Use environment keywords for deployment tracking
+  context7Libraries:
+    - name: gitlab-ci
+      query: "GitLab CI YAML syntax, stages, jobs, rules, caching, artifacts, environments"
 
 files:
-  - path: "{projectPath}/.gitlab-ci.yml"
-    format: yaml
-    source: llm
-    options:
-      sortKeys: false
-      lineWidth: 120
+  - path: ".gitlab-ci.yml"
+    format: raw
 
 detection:
   paths: [".gitlab-ci.yml"]
@@ -69,11 +51,11 @@ permissions:
   network: none
 
 scope:
-  write: ["{projectPath}/.gitlab-ci.yml"]
+  write: [".gitlab-ci.yml"]
 
 risk:
   level: LOW
-  rationale: "CI/CD pipeline changes require MR review"
+  rationale: "CI/CD pipeline changes require merge request review"
 
 execution:
   mode: generate
@@ -89,103 +71,86 @@ update:
 
 ## Prompt
 
-You are a CI/CD expert. Generate a GitLab CI/CD pipeline configuration as structured JSON.
+You are a GitLab CI/CD expert. Generate a production-ready GitLab CI pipeline configuration.
 
-Respond with valid JSON matching the GitLab CI structure. The object should contain "stages" as a top-level array, plus job definitions as top-level keys.
+{outputGuidance}
 
-{
-  "stages": ["build", "test", "deploy"],
-  "variables": { "NODE_VERSION": "20" },
-  "default": { "image": "node:20-alpine" },
-  "build": {
-    "stage": "build",
-    "script": ["npm ci", "npm run build"],
-    "artifacts": { "paths": ["dist/"] }
-  },
-  "test": {
-    "stage": "test",
-    "script": ["npm ci", "npm test"]
-  },
-  "deploy": {
-    "stage": "deploy",
-    "script": ["echo 'Deploying...'"],
-    "only": ["main"]
-  }
-}
+Follow these best practices:
+{bestPractices}
 
-IMPORTANT:
-- "stages" is required and must be an array
-- Each job must have "stage" and "script" fields
-- "script" must be an array of strings
-- Use "only"/"except" or "rules" for conditional jobs
-- Respond with valid JSON only, no markdown
+{context7Docs}
+
+Project context: {projectContext}
 
 ## Update Prompt
 
-You are a CI/CD expert. Update the existing GitLab CI pipeline configuration.
-Preserve existing jobs and stages. Only add/modify what is requested.
+You are a GitLab CI/CD expert. Update the existing GitLab CI pipeline.
+Preserve existing stages and jobs. Only add/modify what is requested.
+
+{outputGuidance}
 
 --- EXISTING CONFIGURATION ---
 {existingContent}
 --- END EXISTING CONFIGURATION ---
 
-Respond with valid JSON containing the complete GitLab CI configuration.
-
-IMPORTANT:
-- Preserve ALL existing stages and jobs unless explicitly asked to remove them
-- Maintain existing variable definitions
-- Respond with valid JSON only, no markdown
-
 ## Examples
 
-Given: "GitLab CI for a Node.js project with build, test, and deploy stages"
+Given: "GitLab CI pipeline for a Node.js project"
 
-```json
-{
-  "stages": ["build", "test", "deploy"],
-  "variables": {
-    "NODE_VERSION": "20"
-  },
-  "default": {
-    "image": "node:20-alpine",
-    "cache": {
-      "paths": ["node_modules/"]
-    }
-  },
-  "build": {
-    "stage": "build",
-    "script": ["npm ci", "npm run build"],
-    "artifacts": {
-      "paths": ["dist/"],
-      "expire_in": "1 hour"
-    }
-  },
-  "test": {
-    "stage": "test",
-    "script": ["npm ci", "npm test"],
-    "coverage": "/All files[^|]*\\|[^|]*\\s+([\\d\\.]+)/"
-  },
-  "deploy_staging": {
-    "stage": "deploy",
-    "script": ["echo 'Deploying to staging...'"],
-    "environment": {
-      "name": "staging"
-    },
-    "rules": [{ "if": "$CI_COMMIT_BRANCH == \"main\"" }]
-  }
-}
+```yaml
+stages:
+  - build
+  - test
+  - deploy
+
+variables:
+  NODE_VERSION: "20"
+
+default:
+  image: node:${NODE_VERSION}-alpine
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - node_modules/
+
+build:
+  stage: build
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 hour
+
+test:
+  stage: test
+  script:
+    - npm ci
+    - npm run lint
+    - npm test
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+
+deploy:
+  stage: deploy
+  script:
+    - npm run deploy
+  environment:
+    name: production
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
 ```
 
 ## Constraints
 
-- Every job must have "stage" and "script"
-- Script entries must be strings
-- Use caching for dependency directories
-- Use artifacts for build outputs
-- Define environments for deploy jobs
-- Maximum 20 jobs per pipeline
+- Pipeline must define stages
+- Jobs should have descriptive names
+- Use rules for job conditions (not only/except)
+- Cache dependencies between pipeline runs
+- Set appropriate timeouts for long-running jobs
 
 ## Keywords
 
-gitlab, gitlab-ci, ci, cd, pipeline, job, stage, runner,
-deploy, build, test, artifact, cache, environment, gitlab-ci.yml
+gitlab, ci, cd, pipeline, stage, job, runner, deploy,
+gitlab-ci, merge-request, artifact, cache, environment

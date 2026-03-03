@@ -124,7 +124,7 @@ export function detectExistingContent(detectionPaths: string[], basePath: string
 /**
  * Resolve template variables in file path: `{varName}` → value
  */
-function resolveFilePath(templatePath: string, input: Record<string, unknown>): string {
+export function resolveFilePath(templatePath: string, input: Record<string, unknown>): string {
   let resolved = templatePath;
   for (const [key, value] of Object.entries(input)) {
     if (typeof value === "string") {

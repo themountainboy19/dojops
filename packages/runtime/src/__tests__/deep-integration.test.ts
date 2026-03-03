@@ -14,8 +14,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { parseDopsString, parseDopsFile, validateDopsModule } from "../parser";
-import { DopsRuntime } from "../runtime";
+import {
+  parseDopsString,
+  parseDopsFileAny,
+  validateDopsModule,
+  validateDopsModuleAny,
+} from "../parser";
+import { DopsRuntime, DopsRuntimeV2 } from "../runtime";
+import { isV2Module } from "../spec";
 import { compilePrompt, PromptContext } from "../prompt-compiler";
 import { compileInputSchema, compileOutputSchema } from "../schema-compiler";
 import {
@@ -1726,12 +1732,17 @@ describe("Built-in Module Regression: New Sections", () => {
     "kubernetes",
     "helm",
     "dockerfile",
-    "docker-compose",
     "ansible",
     "nginx",
     "systemd",
   ];
-  const LOW_RISK_TOOLS = ["github-actions", "gitlab-ci", "makefile", "prometheus"];
+  const LOW_RISK_TOOLS = [
+    "github-actions",
+    "gitlab-ci",
+    "makefile",
+    "prometheus",
+    "docker-compose",
+  ];
 
   it("has exactly 12 built-in modules", () => {
     expect(moduleFiles.length).toBe(12);
@@ -1742,25 +1753,23 @@ describe("Built-in Module Regression: New Sections", () => {
 
     describe(`${moduleName}.dops`, () => {
       it("has scope section with at least one write path", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         expect(module.frontmatter.scope).toBeDefined();
         expect(module.frontmatter.scope!.write.length).toBeGreaterThanOrEqual(1);
       });
 
-      it("scope paths reference valid file spec paths", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
-        const filePaths = module.frontmatter.files.map((f) => f.path);
-        // Each file path should have a matching scope pattern
+      it("scope paths cover all file spec paths", () => {
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const filePaths = module.frontmatter.files.map((f: { path: string }) => f.path);
+        // Each file path should be covered by at least one scope pattern
         for (const filePath of filePaths) {
-          const hasMatch = module.frontmatter.scope!.write.some(
-            (scopePath) => scopePath === filePath,
-          );
+          const hasMatch = matchesScopePattern(filePath, module.frontmatter.scope!.write, {});
           expect(hasMatch).toBe(true);
         }
       });
 
       it("has risk section with correct level", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         expect(module.frontmatter.risk).toBeDefined();
         expect(module.frontmatter.risk!.rationale.length).toBeGreaterThan(0);
 
@@ -1772,14 +1781,14 @@ describe("Built-in Module Regression: New Sections", () => {
       });
 
       it("has execution section with idempotent: true", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         expect(module.frontmatter.execution).toBeDefined();
         expect(module.frontmatter.execution!.mode).toBe("generate");
         expect(module.frontmatter.execution!.idempotent).toBe(true);
       });
 
       it("has update section when detection is present", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         if (module.frontmatter.detection) {
           expect(module.frontmatter.update).toBeDefined();
           expect(module.frontmatter.update!.strategy).toBe("replace");
@@ -1788,26 +1797,34 @@ describe("Built-in Module Regression: New Sections", () => {
       });
 
       it("scope paths do not contain path traversal", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         for (const writePath of module.frontmatter.scope!.write) {
           expect(writePath).not.toContain("..");
         }
       });
 
       it("validates without errors after adding new sections", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
-        const result = validateDopsModule(module);
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
+        const result = validateDopsModuleAny(module);
         expect(result.valid).toBe(true);
       });
 
-      it("creates DopsRuntime successfully", () => {
-        const module = parseDopsFile(path.join(MODULES_DIR, file));
+      it("creates runtime successfully", () => {
+        const module = parseDopsFileAny(path.join(MODULES_DIR, file));
         const provider = createMockProvider({});
-        const runtime = new DopsRuntime(module, provider);
-        expect(runtime.name).toBe(moduleName);
-        expect(runtime.risk.level).toBeDefined();
-        expect(runtime.executionMode).toBeDefined();
-        expect(runtime.metadata.riskLevel).toBeDefined();
+        if (isV2Module(module)) {
+          const runtime = new DopsRuntimeV2(module, provider);
+          expect(runtime.name).toBe(moduleName);
+          expect(runtime.risk.level).toBeDefined();
+          expect(runtime.executionMode).toBeDefined();
+          expect(runtime.metadata.riskLevel).toBeDefined();
+        } else {
+          const runtime = new DopsRuntime(module, provider);
+          expect(runtime.name).toBe(moduleName);
+          expect(runtime.risk.level).toBeDefined();
+          expect(runtime.executionMode).toBeDefined();
+          expect(runtime.metadata.riskLevel).toBeDefined();
+        }
       });
     });
   }

@@ -1,203 +1,51 @@
 ---
-dops: v1
+dops: v2
 kind: tool
 
 meta:
   name: kubernetes
-  version: 1.0.0
+  version: 2.0.0
   description: "Generate Kubernetes deployment manifests"
   author: dojops
   license: MIT
-  tags: [k8s, kubernetes, container, orchestration, deployment]
+  tags: [kubernetes, k8s, deployment, container, orchestration]
 
-input:
-  fields:
-    appName:
-      type: string
-      required: true
-    image:
-      type: string
-      required: true
-    port:
-      type: integer
-      required: true
-      min: 1
-    replicas:
-      type: integer
-      default: 1
-      min: 1
-    namespace:
-      type: string
-      default: "default"
-    outputPath:
-      type: string
-      required: true
-      description: "Directory to write Kubernetes manifests to (e.g. './k8s')"
-    environment:
-      type: string
-
-output:
-  type: object
-  required: [deployment, service]
-  properties:
-    deployment:
-      type: object
-      required: [replicas, containers]
-      properties:
-        replicas:
-          type: number
-        containers:
-          type: array
-          minItems: 1
-          items:
-            type: object
-            required: [name, image, ports]
-            properties:
-              name:
-                type: string
-              image:
-                type: string
-              ports:
-                type: array
-                minItems: 1
-                items:
-                  type: object
-                  required: [containerPort]
-                  properties:
-                    containerPort:
-                      type: number
-                    protocol:
-                      type: string
-              env:
-                type: array
-                items:
-                  type: object
-                  required: [name]
-                  properties:
-                    name:
-                      type: string
-                    value:
-                      type: string
-                    valueFrom:
-                      type: object
-              resources:
-                type: object
-                properties:
-                  requests:
-                    type: object
-                  limits:
-                    type: object
-              livenessProbe:
-                type: object
-              readinessProbe:
-                type: object
-              securityContext:
-                type: object
-              volumeMounts:
-                type: array
-                items:
-                  type: object
-        labels:
-          type: object
-    service:
-      type: object
-      required: [ports]
-      properties:
-        type:
-          type: string
-          enum: [ClusterIP, NodePort, LoadBalancer]
-        ports:
-          type: array
-          minItems: 1
-          items:
-            type: object
-            required: [port, targetPort]
-            properties:
-              port:
-                type: number
-              targetPort:
-                type: number
-              protocol:
-                type: string
-              name:
-                type: string
-    configMaps:
-      type: array
-      items:
-        type: object
-        required: [name]
-        properties:
-          name:
-            type: string
-          data:
-            type: object
-    secrets:
-      type: array
-      items:
-        type: object
-        required: [name]
-        properties:
-          name:
-            type: string
-          type:
-            type: string
-          data:
-            type: object
-    ingress:
-      type: object
-    hpa:
-      type: object
-    statefulSet:
-      type: object
-    daemonSet:
-      type: object
-    cronJob:
-      type: object
-    pvcs:
-      type: array
-    rbac:
-      type: object
-    networkPolicy:
-      type: object
-    pdb:
-      type: object
+context:
+  technology: Kubernetes
+  fileFormat: yaml
+  outputGuidance: |
+    Generate valid Kubernetes YAML manifests.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    Use multi-document YAML (--- separator) when generating multiple resources (Deployment, Service, etc.).
+    The output must be valid kubectl-compatible YAML.
+  bestPractices:
+    - Set resource requests and limits for all containers
+    - Use readiness and liveness probes for health checking
+    - Run containers as non-root with read-only root filesystem when possible
+    - Use labels and annotations consistently for resource management
+    - Define PodDisruptionBudgets for high-availability workloads
+    - Use ConfigMaps and Secrets for configuration (never hardcode)
+    - Set appropriate security contexts and network policies
+  context7Libraries:
+    - name: kubernetes
+      query: "Kubernetes Deployment, Service, Pod spec, resource limits, probes, security context"
 
 files:
-  - path: "{outputPath}/{appName}.yaml"
-    format: yaml
-    source: llm
-    multiDocument: true
-    options:
-      sortKeys: true
-      lineWidth: 120
+  - path: "k8s/manifests.yaml"
+    format: raw
 
 detection:
-  paths: ["*.yaml", "*.yml", "k8s/*.yaml", "k8s/*.yml", "kubernetes/*.yaml"]
+  paths: ["k8s/*.yaml", "k8s/*.yml", "*.yaml", "*.yml"]
   updateMode: true
 
 verification:
   structural:
-    - path: "deployment"
+    - path: "kind"
       required: true
-      message: "Deployment configuration is required"
-    - path: "deployment.containers"
-      type: array
-      minItems: 1
-      message: "Deployment must define at least one container"
-    - path: "deployment.containers.*.name"
+      message: "Kubernetes resource must have a kind"
+    - path: "apiVersion"
       required: true
-      message: "Each container must have a name"
-    - path: "deployment.containers.*.image"
-      required: true
-      message: "Each container must have an image"
-    - path: "service"
-      required: true
-      message: "Service configuration is required"
-    - path: "service.ports"
-      type: array
-      minItems: 1
-      message: "Service must define at least one port"
-
+      message: "Kubernetes resource must have an apiVersion"
   binary:
     command: "kubectl apply --dry-run=client -f manifest.yaml"
     parser: kubectl-stderr
@@ -210,11 +58,11 @@ permissions:
   network: none
 
 scope:
-  write: ["{outputPath}/{appName}.yaml"]
+  write: ["k8s/*.yaml", "k8s/*.yml"]
 
 risk:
   level: MEDIUM
-  rationale: "Cluster configuration changes affect running services"
+  rationale: "Kubernetes manifest changes affect running workloads"
 
 execution:
   mode: generate
@@ -230,98 +78,94 @@ update:
 
 ## Prompt
 
-You are a Kubernetes expert. Generate Kubernetes deployment manifests as structured JSON.
+You are a Kubernetes expert. Generate production-ready Kubernetes manifests.
 
-Respond with a JSON object containing deployment and service configurations:
-{
-  "deployment": {
-    "replicas": 1,
-    "containers": [
-      {
-        "name": "app",
-        "image": "nginx:latest",
-        "ports": [{ "containerPort": 80, "protocol": "TCP" }],
-        "env": [],
-        "resources": {
-          "requests": { "cpu": "100m", "memory": "128Mi" },
-          "limits": { "cpu": "500m", "memory": "256Mi" }
-        }
-      }
-    ],
-    "labels": { "app": "my-app" }
-  },
-  "service": {
-    "type": "ClusterIP",
-    "ports": [{ "port": 80, "targetPort": 80, "protocol": "TCP" }]
-  },
-  "configMaps": [],
-  "secrets": []
-}
+{outputGuidance}
 
-IMPORTANT:
-- "deployment" and "service" are required
-- "containers" must be an ARRAY with at least one container
-- Each container must have "name", "image", and "ports"
-- Include resource requests/limits for production readiness
-- Respond with valid JSON only, no markdown
+Follow these best practices:
+{bestPractices}
+
+{context7Docs}
+
+Project context: {projectContext}
 
 ## Update Prompt
 
-You are a Kubernetes expert. Update existing Kubernetes manifests.
+You are a Kubernetes expert. Update the existing Kubernetes manifests.
 Preserve existing resources and settings. Only add/modify what is requested.
+
+{outputGuidance}
 
 --- EXISTING CONFIGURATION ---
 {existingContent}
 --- END EXISTING CONFIGURATION ---
 
-Respond with valid JSON containing the full deployment and service configuration.
-
-IMPORTANT:
-- Preserve ALL existing containers, volumes, and configurations
-- Maintain existing labels and annotations
-- Respond with valid JSON only, no markdown
-
 ## Examples
 
-Given: "Deploy nginx with 3 replicas on port 80"
+Given: "Deployment and Service for a web app on port 8080 with 3 replicas"
 
-```json
-{
-  "deployment": {
-    "replicas": 3,
-    "containers": [
-      {
-        "name": "nginx",
-        "image": "nginx:1.25",
-        "ports": [{ "containerPort": 80, "protocol": "TCP" }],
-        "env": [],
-        "resources": {
-          "requests": { "cpu": "100m", "memory": "128Mi" },
-          "limits": { "cpu": "500m", "memory": "256Mi" }
-        }
-      }
-    ],
-    "labels": { "app": "nginx" }
-  },
-  "service": {
-    "type": "ClusterIP",
-    "ports": [{ "port": 80, "targetPort": 80, "protocol": "TCP" }]
-  },
-  "configMaps": [],
-  "secrets": []
-}
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  labels:
+    app: web-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+        - name: web-app
+          image: web-app:latest
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app
+spec:
+  type: ClusterIP
+  selector:
+    app: web-app
+  ports:
+    - port: 80
+      targetPort: 8080
 ```
 
 ## Constraints
 
-- Always include resource requests and limits
+- All containers must have resource limits defined
 - Use specific image tags, not :latest in production
-- Container names must be lowercase alphanumeric with hyphens
-- Include liveness and readiness probes for production workloads
-- Use non-root security context when possible
+- Include health check probes for all long-running containers
+- Labels must be consistent between Deployment and Service selectors
+- Use namespaces to isolate workloads
 
 ## Keywords
 
-kubernetes, k8s, kubectl, deployment, service, pod, container,
-namespace, ingress, configmap, secret, hpa, statefulset, daemonset,
-helm, kustomize, manifest, yaml, orchestration
+kubernetes, k8s, deployment, service, pod, container, manifest,
+kubectl, namespace, ingress, configmap, secret, replica, statefulset

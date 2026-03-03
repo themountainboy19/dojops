@@ -1,68 +1,43 @@
 ---
-dops: v1
+dops: v2
 kind: tool
 
 meta:
   name: ansible
-  version: 1.0.0
+  version: 2.0.0
   description: "Generate Ansible playbooks for configuration management"
   author: dojops
   license: MIT
-  tags: [ansible, automation, configuration, playbook, devops]
+  tags: [ansible, playbook, automation, configuration, devops]
 
-input:
-  fields:
-    playbookName:
-      type: string
-      required: true
-      description: "Name of the playbook (e.g. 'setup-webserver')"
-      pattern: "^[a-z][a-z0-9-]*$"
-    targetOS:
-      type: enum
-      values: [ubuntu, debian, centos, rhel, amazon-linux, alpine]
-      default: ubuntu
-    tasks:
-      type: string
-      required: true
-      description: "Description of tasks to automate"
-    outputPath:
-      type: string
-      required: true
-      description: "Directory to write the playbook to"
-    hosts:
-      type: string
-      default: "all"
-    becomeRoot:
-      type: boolean
-      default: true
-    environment:
-      type: string
-
-output:
-  type: object
-  required: [content]
-  properties:
-    content:
-      type: string
-      description: "Complete Ansible playbook as a YAML string"
+context:
+  technology: Ansible
+  fileFormat: raw
+  outputGuidance: |
+    Generate a valid Ansible playbook in YAML format.
+    Output raw YAML content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid Ansible playbook that ansible-playbook can execute.
+  bestPractices:
+    - Use handlers for service restarts triggered by configuration changes
+    - Group related tasks with blocks and meaningful names
+    - Use variables for environment-specific values
+    - Prefer modules over raw/shell commands where possible
+    - Use become (sudo) only when necessary and specify become_user
+    - Include tags for selective task execution
+    - Use ansible-vault for sensitive data references
+  context7Libraries:
+    - name: ansible
+      query: "Ansible playbook syntax, modules, handlers, variables, roles, tasks"
 
 files:
-  - path: "{outputPath}/{playbookName}.yml"
+  - path: "playbook.yml"
     format: raw
-    source: llm
-    dataPath: content
 
 detection:
-  paths: ["{outputPath}/{playbookName}.yml", "*.yml", "playbooks/*.yml"]
+  paths: ["playbook.yml", "*.yml", "site.yml"]
   updateMode: true
 
 verification:
-  structural:
-    - path: "content"
-      required: true
-      type: string
-      message: "Playbook content is required"
-
   binary:
     command: "ansible-playbook --syntax-check playbook.yml"
     parser: ansible-syntax
@@ -75,11 +50,11 @@ permissions:
   network: none
 
 scope:
-  write: ["{outputPath}/{playbookName}.yml"]
+  write: ["*.yml", "*.yaml"]
 
 risk:
   level: MEDIUM
-  rationale: "Playbook changes execute on remote hosts"
+  rationale: "Playbook changes may modify system configuration"
 
 execution:
   mode: generate
@@ -95,66 +70,80 @@ update:
 
 ## Prompt
 
-You are an Ansible expert. Generate a complete Ansible playbook as YAML text.
+You are an Ansible expert. Generate a production-ready Ansible playbook.
 
-You MUST respond with a JSON object containing a "content" field with the complete YAML playbook as a string.
+{outputGuidance}
 
-The playbook should:
-- Be a valid YAML list with one or more plays
-- Start with `---`
-- Include proper play structure (name, hosts, become, tasks)
-- Use appropriate Ansible modules for the target OS
-- Include handlers when services need to be restarted
-- Use variables for configurable values
+Follow these best practices:
+{bestPractices}
 
-Response format:
-{
-  "content": "---\n- name: Setup Webserver\n  hosts: all\n  become: true\n  tasks:\n    - name: Install nginx\n      apt:\n        name: nginx\n        state: present\n"
-}
+{context7Docs}
 
-IMPORTANT:
-- The "content" field must contain the COMPLETE playbook YAML as a string
-- Use proper YAML indentation (2 spaces)
-- Include `---` at the start
-- Use `become: true` for tasks requiring root
-- Respond with valid JSON only, no markdown
+Project context: {projectContext}
 
 ## Update Prompt
 
 You are an Ansible expert. Update the existing Ansible playbook.
 Preserve existing tasks and handlers. Only add/modify what is requested.
 
+{outputGuidance}
+
 --- EXISTING CONFIGURATION ---
 {existingContent}
 --- END EXISTING CONFIGURATION ---
 
-Respond with a JSON object containing a "content" field with the complete updated YAML playbook.
-
-IMPORTANT:
-- Preserve ALL existing tasks unless explicitly asked to remove them
-- Maintain existing variable definitions
-- Respond with valid JSON only, no markdown
-
 ## Examples
 
-Given: "Install and configure nginx on Ubuntu"
+Given: "Install and configure Nginx on Ubuntu servers"
 
-```json
-{
-  "content": "---\n- name: Install and Configure Nginx\n  hosts: all\n  become: true\n  vars:\n    nginx_port: 80\n  tasks:\n    - name: Update apt cache\n      apt:\n        update_cache: yes\n        cache_valid_time: 3600\n    - name: Install nginx\n      apt:\n        name: nginx\n        state: present\n    - name: Start nginx service\n      service:\n        name: nginx\n        state: started\n        enabled: yes\n  handlers:\n    - name: Restart nginx\n      service:\n        name: nginx\n        state: restarted\n"
-}
+```yaml
+---
+- name: Configure Nginx web server
+  hosts: webservers
+  become: true
+  vars:
+    nginx_port: 80
+    server_name: example.com
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+
+  tasks:
+    - name: Install Nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+      tags: [install]
+
+    - name: Configure Nginx site
+      ansible.builtin.template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/default
+        mode: "0644"
+      notify: Restart nginx
+      tags: [configure]
+
+    - name: Enable Nginx service
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+      tags: [service]
 ```
 
 ## Constraints
 
-- Always include a play name
-- Use FQCN (Fully Qualified Collection Name) when possible (e.g. ansible.builtin.apt)
-- Include handlers for service restarts
-- Use variables instead of hardcoded values where appropriate
-- Maximum 50 tasks per playbook
+- Each task must have a descriptive name
+- Use fully qualified collection names (e.g., ansible.builtin.apt)
+- Handlers should be used for service restarts
+- Tasks should be idempotent
 - No hardcoded passwords or secrets
 
 ## Keywords
 
-ansible, playbook, automation, configuration, management, tasks,
-handlers, roles, inventory, provision, setup, deploy, devops
+ansible, playbook, task, handler, role, automation, configuration,
+provision, deploy, inventory, module, variable, become

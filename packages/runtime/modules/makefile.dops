@@ -1,53 +1,44 @@
 ---
-dops: v1
+dops: v2
 kind: tool
 
 meta:
   name: makefile
-  version: 1.0.0
-  description: "Generate Makefiles for build automation"
+  version: 2.0.0
+  description: "Generate Makefiles for project build automation"
   author: dojops
   license: MIT
-  tags: [make, makefile, build, automation, compile]
+  tags: [make, makefile, build, automation, tasks]
 
-input:
-  fields:
-    projectPath:
-      type: string
-      required: true
-      description: "Root directory of the project"
-    targets:
-      type: string
-      required: true
-      description: "Description of build targets to create"
-    environment:
-      type: string
-
-output:
-  type: object
-  required: [content]
-  properties:
-    content:
-      type: string
-      description: "Complete Makefile content as text"
+context:
+  technology: GNU Make
+  fileFormat: raw
+  outputGuidance: |
+    Generate a valid Makefile.
+    Output raw Makefile content directly — do NOT wrap in JSON or code fences.
+    The output must be a valid Makefile with proper tab indentation for recipes.
+    IMPORTANT: Use actual tab characters (not spaces) for recipe indentation.
+  bestPractices:
+    - Declare .PHONY targets for non-file targets
+    - Include a help target that lists available targets
+    - Use variables for configurable values at the top
+    - Order targets logically (help first, then build, test, clean)
+    - Use @ prefix for commands that should not be echoed
+    - Include a clean target for removing build artifacts
+    - Use .DEFAULT_GOAL to set the default target
+  context7Libraries:
+    - name: gnu-make
+      query: "Makefile syntax, targets, prerequisites, variables, pattern rules, .PHONY"
 
 files:
-  - path: "{projectPath}/Makefile"
+  - path: "Makefile"
     format: raw
-    source: llm
-    dataPath: content
 
 detection:
   paths: ["Makefile", "makefile", "GNUmakefile"]
   updateMode: true
 
 verification:
-  structural:
-    - path: "content"
-      required: true
-      type: string
-      message: "Makefile content is required"
-
   binary:
     command: "make -n -f Makefile"
     parser: make-dryrun
@@ -60,11 +51,11 @@ permissions:
   network: none
 
 scope:
-  write: ["{projectPath}/Makefile"]
+  write: ["Makefile"]
 
 risk:
   level: LOW
-  rationale: "Build automation changes are local"
+  rationale: "Makefile changes affect local build process only"
 
 execution:
   mode: generate
@@ -80,66 +71,72 @@ update:
 
 ## Prompt
 
-You are a build automation expert. Generate a Makefile as text.
+You are a build automation expert. Generate a production-ready Makefile.
 
-You MUST respond with a JSON object containing a "content" field with the complete Makefile as a string.
+{outputGuidance}
 
-The Makefile should:
-- Use tab indentation for commands (CRITICAL — Makefiles require tabs, not spaces)
-- Include .PHONY declarations for non-file targets
-- Set .DEFAULT_GOAL for the main target
-- Include common targets (build, test, clean, lint, help)
-- Use variables for configurable values
+Follow these best practices:
+{bestPractices}
 
-Response format:
-{
-  "content": ".DEFAULT_GOAL := help\n\n.PHONY: build test clean lint help\n\nbuild:\n\tnpm run build\n\ntest:\n\tnpm test\n\nclean:\n\trm -rf dist node_modules\n\nlint:\n\tnpm run lint\n\nhelp:\n\t@echo \"Available targets:\"\n\t@echo \"  build  - Build the project\"\n\t@echo \"  test   - Run tests\"\n\t@echo \"  clean  - Clean build artifacts\"\n\t@echo \"  lint   - Run linter\"\n\t@echo \"  help   - Show this help\"\n"
-}
+{context7Docs}
 
-IMPORTANT:
-- "content" must contain the COMPLETE Makefile as a string
-- Commands MUST be indented with TABS (\t), not spaces
-- Include .PHONY for all non-file targets
-- Include a help target
-- Respond with valid JSON only, no markdown
+Project context: {projectContext}
 
 ## Update Prompt
 
 You are a build automation expert. Update the existing Makefile.
 Preserve existing targets and settings. Only add/modify what is requested.
 
+{outputGuidance}
+
 --- EXISTING CONFIGURATION ---
 {existingContent}
 --- END EXISTING CONFIGURATION ---
 
-Respond with a JSON object containing a "content" field with the complete updated Makefile.
-
-IMPORTANT:
-- Preserve ALL existing targets unless explicitly asked to remove them
-- Maintain existing variables and .PHONY declarations
-- Use tab indentation for commands
-- Respond with valid JSON only, no markdown
-
 ## Examples
 
-Given: "Makefile for a Go project with build, test, and docker targets"
+Given: "Makefile for a Go project with build, test, lint, and Docker targets"
 
-```json
-{
-  "content": "BINARY_NAME := myapp\nGO := go\nDOCKER := docker\n\n.DEFAULT_GOAL := help\n\n.PHONY: build test clean lint docker-build docker-push help\n\nbuild:\n\t$(GO) build -o bin/$(BINARY_NAME) ./cmd/$(BINARY_NAME)\n\ntest:\n\t$(GO) test ./...\n\nclean:\n\trm -rf bin/\n\nlint:\n\tgolangci-lint run\n\ndocker-build:\n\t$(DOCKER) build -t $(BINARY_NAME):latest .\n\ndocker-push:\n\t$(DOCKER) push $(BINARY_NAME):latest\n\nhelp:\n\t@echo \"Available targets:\"\n\t@echo \"  build        - Build the binary\"\n\t@echo \"  test         - Run tests\"\n\t@echo \"  clean        - Clean build artifacts\"\n\t@echo \"  lint         - Run linter\"\n\t@echo \"  docker-build - Build Docker image\"\n\t@echo \"  docker-push  - Push Docker image\"\n\t@echo \"  help         - Show this help\"\n"
-}
+```makefile
+.DEFAULT_GOAL := help
+.PHONY: help build test lint clean docker-build docker-push
+
+APP_NAME := myapp
+VERSION := $(shell git describe --tags --always --dirty)
+DOCKER_IMAGE := $(APP_NAME):$(VERSION)
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+build: ## Build the application
+	go build -ldflags "-X main.version=$(VERSION)" -o bin/$(APP_NAME) ./cmd/$(APP_NAME)
+
+test: ## Run tests
+	go test -race -coverprofile=coverage.out ./...
+
+lint: ## Run linters
+	golangci-lint run ./...
+
+clean: ## Remove build artifacts
+	rm -rf bin/ coverage.out
+
+docker-build: ## Build Docker image
+	docker build -t $(DOCKER_IMAGE) .
+
+docker-push: docker-build ## Push Docker image
+	docker push $(DOCKER_IMAGE)
 ```
 
 ## Constraints
 
-- Commands MUST use tab indentation (not spaces)
-- Include .PHONY for all non-file targets
-- Include a help target with descriptions
-- Use variables for repeated values
-- Maximum 30 targets per Makefile
-- No hardcoded secrets or credentials
+- Use tabs for recipe indentation (not spaces)
+- Declare .PHONY for non-file targets
+- Include a help target
+- Variable names should be UPPER_CASE
+- Include a clean target
 
 ## Keywords
 
-make, makefile, build, compile, automation, gnumake,
-target, recipe, phony, clean, install, deploy
+make, makefile, build, target, recipe, automation,
+task, phony, variable, prerequisite, clean, install

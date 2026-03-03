@@ -1,13 +1,30 @@
 import * as crypto from "crypto";
+import * as fs from "fs";
+import * as path from "path";
+import * as yaml from "js-yaml";
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
 import { z } from "zod";
-import { DopsExecution, DopsModule, DopsRisk, FileSpec } from "./spec";
+import {
+  DopsExecution,
+  DopsModule,
+  DopsModuleV2,
+  DopsRisk,
+  FileSpec,
+  FileSpecV2,
+  Context7LibraryRef,
+} from "./spec";
 import { compileInputSchema, compileOutputSchema } from "./schema-compiler";
-import { compilePrompt, PromptContext } from "./prompt-compiler";
+import { compilePrompt, PromptContext, compilePromptV2, PromptContextV2 } from "./prompt-compiler";
 import { validateStructure } from "./structural-validator";
 import { runVerification } from "./binary-verifier";
-import { writeFiles, serializeForFile, detectExistingContent } from "./file-writer";
+import {
+  writeFiles,
+  serializeForFile,
+  detectExistingContent,
+  resolveFilePath,
+  matchesScopePattern,
+} from "./file-writer";
 
 export interface DopsRuntimeOptions {
   /** Base path for file detection (defaults to cwd) */
@@ -281,5 +298,357 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
     }
 
     return parts.join("\n");
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// v2 Runtime — Raw content generation
+// ══════════════════════════════════════════════════════
+
+/**
+ * Duck-typed interface for Context7 DocProvider.
+ * Avoids hard import dependency on @dojops/context.
+ */
+export interface DocProvider {
+  resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+  queryDocs(libraryId: string, query: string): Promise<string>;
+}
+
+export interface DopsRuntimeV2Options extends DopsRuntimeOptions {
+  context7Provider?: DocProvider;
+  projectContext?: string;
+}
+
+/**
+ * Strip markdown code fences from LLM output.
+ * Handles ```lang ... ``` and ~~~ ... ~~~ wrappers.
+ */
+export function stripCodeFences(content: string): string {
+  const trimmed = content.trim();
+
+  // Match ```<optional-lang>\n...\n``` or ~~~<optional-lang>\n...\n~~~
+  const fenceMatch = trimmed.match(/^(?:```|~~~)\w*\n([\s\S]*?)\n(?:```|~~~)$/);
+  if (fenceMatch) {
+    return fenceMatch[1];
+  }
+
+  return trimmed;
+}
+
+/**
+ * Parse raw content into an object for structural validation.
+ * Returns null for formats that can't be parsed (raw, ini, toml, hcl).
+ */
+export function parseRawContent(raw: string, format: string): unknown | null {
+  try {
+    if (format === "yaml") {
+      return yaml.load(raw);
+    }
+    if (format === "json") {
+      return JSON.parse(raw);
+    }
+  } catch {
+    return null;
+  }
+  // hcl, raw, ini, toml — cannot parse generically
+  return null;
+}
+
+/**
+ * DopsRuntimeV2: The v2 tool runtime engine.
+ * LLM generates raw file content instead of JSON objects.
+ * Context7 libraries are declared in frontmatter and fetched at runtime.
+ */
+export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: z.ZodType;
+
+  private readonly module: DopsModuleV2;
+  private readonly provider: LLMProvider;
+  private readonly options: DopsRuntimeV2Options;
+  private readonly _systemPromptHash: string;
+  private readonly _moduleHash: string;
+
+  constructor(module: DopsModuleV2, provider: LLMProvider, options?: DopsRuntimeV2Options) {
+    this.module = module;
+    this.provider = provider;
+    this.options = options ?? {};
+
+    this.name = module.frontmatter.meta.name;
+    this.description = module.frontmatter.meta.description;
+
+    // v2: minimal input schema — just prompt + existingContent
+    this.inputSchema = z.object({
+      prompt: z.string().min(1),
+      existingContent: z.string().optional(),
+    });
+
+    this._systemPromptHash = crypto
+      .createHash("sha256")
+      .update(module.sections.prompt)
+      .digest("hex");
+
+    this._moduleHash = crypto.createHash("sha256").update(module.raw).digest("hex");
+  }
+
+  validate(input: unknown): { valid: boolean; error?: string } {
+    const result = this.inputSchema.safeParse(input);
+    if (result.success) return { valid: true };
+    return { valid: false, error: result.error.message };
+  }
+
+  async generate(input: Record<string, unknown>): Promise<ToolOutput> {
+    try {
+      // 1. Detect existing content
+      let existingContent = input.existingContent as string | undefined;
+      const basePath = this.options.basePath ?? process.cwd();
+
+      if (!existingContent && this.module.frontmatter.detection) {
+        const detected = detectExistingContent(this.module.frontmatter.detection.paths, basePath);
+        if (detected) {
+          existingContent = detected;
+        }
+      }
+
+      // 2. Fetch Context7 docs from declared libraries
+      let context7Docs = "";
+      if (this.options.context7Provider && this.module.frontmatter.context.context7Libraries) {
+        context7Docs = await this.fetchContext7Docs(
+          this.module.frontmatter.context.context7Libraries,
+        );
+      }
+
+      // 3. Compile prompt with v2 variables
+      const promptContext: PromptContextV2 = {
+        existingContent,
+        updateConfig: this.module.frontmatter.update,
+        context7Docs: context7Docs || undefined,
+        projectContext: this.options.projectContext,
+        contextBlock: this.module.frontmatter.context,
+      };
+      let systemPrompt = compilePromptV2(this.module.sections, promptContext);
+
+      // 3b. Fallback: legacy docAugmenter if no Context7 provider
+      if (!context7Docs && this.options.docAugmenter) {
+        try {
+          const keywords = this.keywords.slice(0, 3);
+          systemPrompt = await this.options.docAugmenter.augmentPrompt(
+            systemPrompt,
+            keywords,
+            input.prompt as string,
+          );
+        } catch {
+          // Graceful degradation
+        }
+      }
+
+      // 4. Build user prompt
+      const isUpdate = !!existingContent;
+      const userPrompt = isUpdate
+        ? `Update the existing ${this.module.frontmatter.context.technology} configuration: ${input.prompt}`
+        : `Generate ${this.module.frontmatter.context.technology} configuration: ${input.prompt}`;
+
+      // 5. Call LLM WITHOUT schema (free-text mode)
+      const response = await this.provider.generate({
+        system: systemPrompt,
+        prompt: userPrompt,
+      });
+
+      // 6. Strip code fences from response
+      const rawContent = stripCodeFences(response.content);
+
+      return {
+        success: true,
+        data: { generated: rawContent, isUpdate },
+        usage: response.usage,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  async execute(input: Record<string, unknown>): Promise<ToolOutput> {
+    // 1. Generate
+    const genResult = await this.generate(input);
+    if (!genResult.success || !genResult.data) return genResult;
+
+    const { generated, isUpdate } = genResult.data as {
+      generated: string;
+      isUpdate: boolean;
+    };
+
+    try {
+      const filesWritten: string[] = [];
+      const filesModified: string[] = [];
+      const basePath = this.options.basePath ?? process.cwd();
+
+      for (const fileSpec of this.module.frontmatter.files) {
+        // Resolve path template — v2 paths use simple patterns
+        const resolvedPath = resolveFilePath(fileSpec.path, input);
+        const fullPath = path.isAbsolute(resolvedPath)
+          ? resolvedPath
+          : path.join(basePath, resolvedPath);
+
+        // Scope enforcement
+        if (this.module.frontmatter.scope) {
+          if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
+            throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
+          }
+        }
+
+        // Backup existing files on update
+        if (isUpdate && fs.existsSync(fullPath)) {
+          fs.copyFileSync(fullPath, fullPath + ".bak");
+          filesModified.push(resolvedPath);
+        } else {
+          filesWritten.push(resolvedPath);
+        }
+
+        // Ensure directory exists
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+          fs.mkdirSync(dir, { recursive: true });
+        }
+
+        // Write raw content directly — no serialization step
+        fs.writeFileSync(fullPath, generated, "utf-8");
+      }
+
+      return {
+        success: true,
+        data: { generated, isUpdate },
+        filesWritten,
+        filesModified,
+        usage: genResult.usage,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  async verify(data: unknown): Promise<VerificationResult> {
+    const verificationConfig = this.module.frontmatter.verification;
+    const permissions = this.module.frontmatter.permissions ?? {};
+
+    // For v2, data is a raw string. Parse it for structural validation.
+    const rawContent = typeof data === "string" ? data : String(data);
+    const fileFormat = this.module.frontmatter.context.fileFormat;
+    const parsed = parseRawContent(rawContent, fileFormat);
+
+    // Run structural validation against parsed content (if parseable)
+    const structuralIssues: VerificationIssue[] =
+      verificationConfig?.structural && parsed
+        ? validateStructure(parsed, verificationConfig.structural)
+        : [];
+
+    // For binary verification, use the raw content directly
+    let filename = "output";
+    if (this.module.frontmatter.files.length > 0) {
+      const primaryFile = this.module.frontmatter.files[0];
+      const pathParts = primaryFile.path.split("/");
+      filename = pathParts[pathParts.length - 1].replace(/\{[^}]+\}/g, "output");
+    }
+
+    return runVerification(
+      parsed ?? data,
+      rawContent,
+      filename,
+      verificationConfig,
+      permissions,
+      structuralIssues,
+      this.name,
+    );
+  }
+
+  get systemPromptHash(): string {
+    return this._systemPromptHash;
+  }
+
+  get moduleHash(): string {
+    return this._moduleHash;
+  }
+
+  get metadata(): ToolMetadata {
+    return {
+      toolType: "built-in",
+      toolVersion: this.module.frontmatter.meta.version,
+      toolHash: this._moduleHash,
+      toolSource: "dops",
+      systemPromptHash: this._systemPromptHash,
+      riskLevel: this.risk.level,
+      icon: this.module.frontmatter.meta.icon,
+    };
+  }
+
+  get risk(): DopsRisk {
+    return (
+      this.module.frontmatter.risk ?? {
+        level: "LOW",
+        rationale: "No risk classification declared",
+      }
+    );
+  }
+
+  get executionMode(): DopsExecution {
+    return (
+      this.module.frontmatter.execution ?? {
+        mode: "generate",
+        deterministic: false,
+        idempotent: false,
+      }
+    );
+  }
+
+  get isDeterministic(): boolean {
+    return this.executionMode.deterministic;
+  }
+
+  get isIdempotent(): boolean {
+    return this.executionMode.idempotent;
+  }
+
+  get keywords(): string[] {
+    return this.module.sections.keywords
+      .split(",")
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+  }
+
+  get fileSpecs(): FileSpecV2[] {
+    return this.module.frontmatter.files;
+  }
+
+  /**
+   * Fetch documentation from Context7 for declared libraries.
+   * Resolves each library by name, then queries docs with the user's prompt.
+   */
+  private async fetchContext7Docs(libraries: Context7LibraryRef[]): Promise<string> {
+    const provider = this.options.context7Provider;
+    if (!provider) return "";
+
+    const docParts: string[] = [];
+
+    for (const lib of libraries) {
+      try {
+        const resolved = await provider.resolveLibrary(lib.name, lib.query);
+        if (!resolved) continue;
+
+        const docs = await provider.queryDocs(resolved.id, lib.query);
+        if (docs && docs.trim().length > 0) {
+          docParts.push(`### ${lib.name}\n${docs}`);
+        }
+      } catch {
+        // Graceful degradation: skip failed library lookups
+      }
+    }
+
+    return docParts.join("\n\n");
   }
 }

@@ -287,3 +287,73 @@ export interface DopsValidationResult {
   valid: boolean;
   errors?: string[];
 }
+
+// ══════════════════════════════════════════════════════
+// v2 Format Schemas
+// ══════════════════════════════════════════════════════
+
+// ── Context7 Library Reference ───────────────────────
+
+export const Context7LibraryRefSchema = z.object({
+  name: z.string().min(1),
+  query: z.string().min(1),
+});
+
+export type Context7LibraryRef = z.infer<typeof Context7LibraryRefSchema>;
+
+// ── Context Block (replaces input + output in v2) ────
+
+export const ContextBlockSchema = z.object({
+  technology: z.string().min(1),
+  fileFormat: z.enum(["yaml", "hcl", "json", "raw", "ini", "toml"]),
+  outputGuidance: z.string().min(1),
+  bestPractices: z.array(z.string().min(1)).min(1),
+  context7Libraries: z.array(Context7LibraryRefSchema).optional(),
+});
+
+export type ContextBlock = z.infer<typeof ContextBlockSchema>;
+
+// ── v2 File Spec (always raw) ────────────────────────
+
+export const FileSpecV2Schema = z.object({
+  path: z.string().min(1),
+  format: z.literal("raw").default("raw"),
+  conditional: z.boolean().optional(),
+});
+
+export type FileSpecV2 = z.infer<typeof FileSpecV2Schema>;
+
+// ── v2 Frontmatter ──────────────────────────────────
+
+export const DopsFrontmatterV2Schema = z.object({
+  dops: z.literal("v2"),
+  kind: z.enum(["tool"]).default("tool"),
+  meta: MetaSchema,
+  context: ContextBlockSchema,
+  files: z.array(FileSpecV2Schema).min(1),
+  detection: DetectionConfigSchema.optional(),
+  verification: VerificationConfigSchema.optional(),
+  permissions: PermissionsSchema.optional(),
+  scope: ScopeSchema.optional(),
+  risk: RiskSchema.optional(),
+  execution: ExecutionSchema.optional(),
+  update: UpdateSchema.optional(),
+});
+
+export type DopsFrontmatterV2 = z.infer<typeof DopsFrontmatterV2Schema>;
+
+// ── v2 Complete Module ──────────────────────────────
+
+export interface DopsModuleV2 {
+  frontmatter: DopsFrontmatterV2;
+  sections: MarkdownSections;
+  raw: string;
+}
+
+// ── Version-agnostic union ──────────────────────────
+
+export type DopsModuleAny = DopsModule | DopsModuleV2;
+
+export function isV2Module(mod: DopsModuleAny): mod is DopsModuleV2 {
+  return mod.frontmatter.dops === "v2";
+}

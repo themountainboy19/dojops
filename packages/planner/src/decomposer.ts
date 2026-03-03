@@ -107,6 +107,8 @@ ${contextSection}
 
 IMPORTANT: Each task's "input" object MUST match the tool's input fields exactly. Use the correct field names, types, and provide all required fields. Do not invent fields that are not listed.
 
+For tools that only accept a "prompt" input, provide a detailed natural-language description of what configuration to generate. Include specifics like language/runtime, versions, deployment targets, and any special requirements. The tool handles technology-specific details internally.
+
 Use canonical output paths: github-actions → projectPath="."; kubernetes → outputPath="k8s"; helm → outputPath="charts/<name>"; terraform → outputPath="terraform" (or "." if .tf already at root); dockerfile/docker-compose/makefile/gitlab-ci → outputPath="."; ansible → outputPath="ansible"; prometheus → outputPath="monitoring".
 
 Respond with a JSON object matching this structure:

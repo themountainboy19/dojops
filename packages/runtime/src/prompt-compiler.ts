@@ -1,4 +1,4 @@
-import { DopsUpdate, MarkdownSections } from "./spec";
+import { ContextBlock, DopsUpdate, MarkdownSections } from "./spec";
 
 export interface PromptContext {
   existingContent?: string;
@@ -120,6 +120,126 @@ function substituteVariables(prompt: string, context: PromptContext): string {
         const safe = sanitizeInputValue(value);
         result = result.replace(new RegExp(`\\{${key}\\}`, "g"), safe);
       }
+    }
+  }
+
+  return result;
+}
+
+// ══════════════════════════════════════════════════════
+// v2 Prompt Compiler
+// ══════════════════════════════════════════════════════
+
+export interface PromptContextV2 {
+  existingContent?: string;
+  updateConfig?: DopsUpdate;
+  context7Docs?: string;
+  projectContext?: string;
+  contextBlock: ContextBlock;
+}
+
+/**
+ * Compile markdown sections into an optimized LLM system prompt for v2 modules.
+ *
+ * Supports v2-specific variables:
+ * - {outputGuidance} — from context.outputGuidance
+ * - {bestPractices} — numbered list from context.bestPractices
+ * - {context7Docs} — fetched docs injected at runtime
+ * - {projectContext} — repo scanner context string
+ * - {existingContent} — same as v1 (for update mode)
+ */
+export function compilePromptV2(sections: MarkdownSections, context: PromptContextV2): string {
+  const parts: string[] = [];
+
+  // 1. Main prompt section
+  const isUpdate = !!context.existingContent;
+
+  if (isUpdate && sections.updatePrompt) {
+    let prompt = sections.updatePrompt;
+    prompt = substituteV2Variables(prompt, context);
+    if (context.updateConfig?.strategy === "preserve_structure") {
+      prompt +=
+        "\n\nIMPORTANT: Preserve the overall structure and organization of the existing configuration.";
+    }
+    parts.push(prompt);
+  } else if (isUpdate) {
+    let prompt = substituteV2Variables(sections.prompt, context);
+    const preserveInstruction =
+      context.updateConfig?.strategy === "preserve_structure"
+        ? "Preserve the overall structure and organization of the existing configuration.\n"
+        : "";
+    prompt +=
+      "\n\nYou are UPDATING an existing configuration.\n" +
+      preserveInstruction +
+      "Preserve ALL existing content unless explicitly asked to remove it.\n" +
+      "Merge new content with existing.\n\n" +
+      "--- EXISTING CONFIGURATION ---\n" +
+      (context.existingContent ?? "") +
+      "\n--- END EXISTING CONFIGURATION ---";
+    parts.push(prompt);
+  } else {
+    parts.push(substituteV2Variables(sections.prompt, context));
+  }
+
+  // 2. Constraints section
+  if (sections.constraints) {
+    const constraintLines = sections.constraints
+      .split("\n")
+      .map((line) => line.replace(/^[-*]\s*/, "").trim())
+      .filter((line) => line.length > 0);
+
+    if (constraintLines.length > 0) {
+      parts.push("\nCONSTRAINTS:");
+      constraintLines.forEach((line, i) => {
+        parts.push(`${i + 1}. ${line}`);
+      });
+    }
+  }
+
+  // 3. Examples section
+  if (sections.examples) {
+    parts.push("\nEXAMPLES:");
+    parts.push(sections.examples);
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Substitute v2-specific `{variableName}` placeholders in a prompt string.
+ */
+function substituteV2Variables(prompt: string, context: PromptContextV2): string {
+  let result = prompt;
+
+  // {outputGuidance}
+  result = result.replace(/\{outputGuidance\}/g, context.contextBlock.outputGuidance);
+
+  // {bestPractices} — numbered list
+  const bestPracticesList = context.contextBlock.bestPractices
+    .map((bp, i) => `${i + 1}. ${bp}`)
+    .join("\n");
+  result = result.replace(/\{bestPractices\}/g, bestPracticesList);
+
+  // {context7Docs}
+  if (context.context7Docs !== undefined) {
+    result = result.replace(/\{context7Docs\}/g, context.context7Docs);
+  } else {
+    result = result.replace(/\{context7Docs\}/g, "No additional documentation available.");
+  }
+
+  // {projectContext}
+  if (context.projectContext !== undefined) {
+    result = result.replace(/\{projectContext\}/g, context.projectContext);
+  } else {
+    result = result.replace(/\{projectContext\}/g, "No project context available.");
+  }
+
+  // {existingContent} — trusted (read from filesystem)
+  if (context.existingContent !== undefined) {
+    const injectAs = context.updateConfig?.injectAs ?? "existingContent";
+    result = result.replace(new RegExp(`\\{${injectAs}\\}`, "g"), context.existingContent);
+    if (injectAs !== "existingContent") {
+      result = result.replace(/\{existingContent\}/g, context.existingContent);
     }
   }
 

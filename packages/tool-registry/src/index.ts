@@ -1,6 +1,13 @@
 import { LLMProvider } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
-import { DopsRuntime, parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import {
+  DopsRuntime,
+  DopsRuntimeV2,
+  parseDopsFileAny,
+  validateDopsModuleAny,
+  isV2Module,
+  DocProvider,
+} from "@dojops/runtime";
 import * as fs from "fs";
 import * as path from "path";
 import { ToolRegistry } from "./registry";
@@ -26,34 +33,48 @@ export interface CreateToolRegistryOptions {
   docAugmenter?: {
     augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
   };
+  /** Optional Context7 DocProvider for v2 .dops modules */
+  context7Provider?: DocProvider;
+  /** Optional project context string for v2 .dops modules */
+  projectContext?: string;
 }
 
 /**
  * Load built-in .dops modules from @dojops/runtime/modules/.
- * Returns DopsRuntime instances for each valid module.
+ * Returns DevOpsTool instances (DopsRuntime for v1, DopsRuntimeV2 for v2) for each valid module.
  */
 export function loadBuiltInDopsModules(
   provider: LLMProvider,
   options?: CreateToolRegistryOptions,
-): DopsRuntime[] {
+): DevOpsTool[] {
   const modulesDir = path.join(__dirname, "../../runtime/modules");
-  const runtimes: DopsRuntime[] = [];
+  const tools: DevOpsTool[] = [];
 
   try {
-    if (!fs.existsSync(modulesDir)) return runtimes;
+    if (!fs.existsSync(modulesDir)) return tools;
 
     const files = fs.readdirSync(modulesDir) as string[];
     for (const file of files) {
       if (!file.endsWith(".dops")) continue;
       try {
-        const module = parseDopsFile(path.join(modulesDir, file));
-        const validation = validateDopsModule(module);
+        const module = parseDopsFileAny(path.join(modulesDir, file));
+        const validation = validateDopsModuleAny(module);
         if (validation.valid) {
-          runtimes.push(
-            new DopsRuntime(module, provider, {
-              docAugmenter: options?.docAugmenter,
-            }),
-          );
+          if (isV2Module(module)) {
+            tools.push(
+              new DopsRuntimeV2(module, provider, {
+                docAugmenter: options?.docAugmenter,
+                context7Provider: options?.context7Provider,
+                projectContext: options?.projectContext,
+              }),
+            );
+          } else {
+            tools.push(
+              new DopsRuntime(module, provider, {
+                docAugmenter: options?.docAugmenter,
+              }),
+            );
+          }
         }
       } catch {
         // Skip invalid modules silently
@@ -63,31 +84,42 @@ export function loadBuiltInDopsModules(
     // modules dir not found — not an error in dev/test
   }
 
-  return runtimes;
+  return tools;
 }
 
 /**
  * Load user .dops files from global/project directories.
+ * Supports both v1 and v2 .dops formats.
  */
 export function loadUserDopsModules(
   provider: LLMProvider,
   projectPath?: string,
   options?: CreateToolRegistryOptions,
-): { runtimes: DopsRuntime[]; warnings: string[] } {
+): { tools: DevOpsTool[]; warnings: string[] } {
   const dopsFiles = discoverUserDopsFiles(projectPath);
-  const runtimes: DopsRuntime[] = [];
+  const tools: DevOpsTool[] = [];
   const warnings: string[] = [];
 
   for (const entry of dopsFiles) {
     try {
-      const module = parseDopsFile(entry.filePath);
-      const validation = validateDopsModule(module);
+      const module = parseDopsFileAny(entry.filePath);
+      const validation = validateDopsModuleAny(module);
       if (validation.valid) {
-        runtimes.push(
-          new DopsRuntime(module, provider, {
-            docAugmenter: options?.docAugmenter,
-          }),
-        );
+        if (isV2Module(module)) {
+          tools.push(
+            new DopsRuntimeV2(module, provider, {
+              docAugmenter: options?.docAugmenter,
+              context7Provider: options?.context7Provider,
+              projectContext: options?.projectContext,
+            }),
+          );
+        } else {
+          tools.push(
+            new DopsRuntime(module, provider, {
+              docAugmenter: options?.docAugmenter,
+            }),
+          );
+        }
       } else {
         warnings.push(
           `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
@@ -100,7 +132,7 @@ export function loadUserDopsModules(
     }
   }
 
-  return { runtimes, warnings };
+  return { tools, warnings };
 }
 
 /**
@@ -137,8 +169,8 @@ export function createToolRegistry(
   );
 
   // 5. Load user .dops files (treated as custom tools, can override built-in)
-  const { runtimes: userDopsRuntimes } = loadUserDopsModules(provider, projectPath, options);
-  const allowedDops = userDopsRuntimes.filter((rt) => isToolAllowed(rt.name, policy));
+  const { tools: userDopsTools } = loadUserDopsModules(provider, projectPath, options);
+  const allowedDops = userDopsTools.filter((rt) => isToolAllowed(rt.name, policy));
 
   // Add user .dops runtimes as built-in tools (they'll override by name in registry)
   builtInTools.push(...allowedDops);

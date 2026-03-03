@@ -102,6 +102,12 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   }
 }
 
+/** Duck-typed DocProvider for v2 .dops modules (avoids hard import on @dojops/context) */
+interface DocProvider {
+  resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
+  queryDocs(libraryId: string, query: string): Promise<string>;
+}
+
 /**
  * Creates all DevOps tools. Uses tool-registry to instantiate all 12 built-in tools
  * plus any discovered plugin tools.
@@ -109,13 +115,21 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
  * @param provider - LLM provider for tool generation
  * @param projectPath - Optional project path for plugin discovery
  * @param docAugmenter - Optional documentation augmenter for tool prompts
+ * @param context7Provider - Optional Context7 DocProvider for v2 .dops modules
+ * @param projectContext - Optional project context string for v2 .dops modules
  */
 export function createTools(
   provider: LLMProvider,
   projectPath?: string,
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
+  context7Provider?: DocProvider,
+  projectContext?: string,
 ): DevOpsTool[] {
-  return createToolRegistry(provider, projectPath, { docAugmenter }).getAll();
+  return createToolRegistry(provider, projectPath, {
+    docAugmenter,
+    context7Provider,
+    projectContext,
+  }).getAll();
 }
 
 export interface CreateRouterResult {
