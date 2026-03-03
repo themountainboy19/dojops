@@ -7,6 +7,7 @@ import {
   getConfigPath,
   validateProvider,
   resolveProvider,
+  getActiveProfile,
   VALID_PROVIDERS,
   DojOpsConfig,
 } from "../config";
@@ -56,7 +57,11 @@ function showConfig(config: DojOpsConfig): void {
     lines.push(...envLines);
   }
 
-  p.note(lines.join("\n"), `Configuration ${pc.dim(`(${getConfigPath()})`)}`);
+  const activeProfile = getActiveProfile();
+  const title = activeProfile
+    ? `Configuration ${pc.dim(`(${getConfigPath()})`)} ${pc.yellow(`[profile: ${activeProfile}]`)}`
+    : `Configuration ${pc.dim(`(${getConfigPath()})`)}`;
+  p.note(lines.join("\n"), title);
 }
 
 export async function configCommand(args: string[], ctx: CLIContext): Promise<void> {

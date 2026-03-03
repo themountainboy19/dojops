@@ -31,7 +31,15 @@ export async function configProfileCommand(args: string[], ctx: CLIContext): Pro
       const name = args[1];
       if (!name) {
         p.log.info(`  ${pc.dim("$")} dojops config profile use <name>`);
+        p.log.info(
+          `  ${pc.dim("$")} dojops config profile use default  ${pc.dim("(reset to base config)")}`,
+        );
         throw new CLIError(ExitCode.VALIDATION_ERROR, "Profile name required.");
+      }
+      if (name === "default") {
+        setActiveProfile(undefined);
+        p.log.success("Switched to default configuration.");
+        break;
       }
       const existing = loadProfile(name);
       if (!existing) {

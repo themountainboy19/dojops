@@ -264,7 +264,7 @@ export function getActiveProfile(): string | undefined {
   }
 }
 
-export function setActiveProfile(name: string): void {
+export function setActiveProfile(name: string | undefined): void {
   const dir = configDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });

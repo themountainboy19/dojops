@@ -281,7 +281,9 @@ function validateDopsFile(filePath: string): void {
  * Falls back to legacy tool.yaml + input.schema.json with --legacy flag.
  */
 export const toolsInitCommand: CommandHandler = async (args, ctx) => {
-  let toolName = args[0];
+  // Filter out flags from args to get positional tool name
+  const positionalArgs = args.filter((a) => !a.startsWith("-"));
+  let toolName = positionalArgs[0];
   let description = "";
   let format: "yaml" | "json" | "hcl" | "raw" = "yaml";
   let systemPrompt = "";

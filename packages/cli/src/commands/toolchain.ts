@@ -188,6 +188,7 @@ async function doInstall(name: string): Promise<void> {
     if (!isStructured) s.stop(`${pc.red("\u2717")} ${tool.name} installation failed.`);
     const msg = err instanceof Error ? err.message : String(err);
     p.log.error(msg);
+    throw new CLIError(ExitCode.GENERAL_ERROR, `Failed to install ${tool.name}: ${msg}`);
   }
 }
 

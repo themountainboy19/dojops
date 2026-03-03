@@ -15,8 +15,20 @@ export function augmentSystemPrompt(
 ): string {
   if (!schema) return system ?? "";
 
-  const jsonSchema = z.toJSONSchema(schema);
-  const schemaStr = JSON.stringify(jsonSchema, null, 2);
+  let schemaStr: string;
+  try {
+    const jsonSchema = z.toJSONSchema(schema);
+    schemaStr = JSON.stringify(jsonSchema, null, 2);
+  } catch {
+    // Schemas with transforms/pipes cannot be converted to JSON Schema.
+    // Fall back to a generic JSON instruction.
+    const fallback = [
+      "",
+      "You MUST respond with valid JSON only. No markdown, no extra text.",
+      "Ensure ALL required fields are present and match the specified types.",
+    ].join("\n");
+    return ((system ?? "") + fallback).trim();
+  }
 
   const schemaInstruction = [
     "",

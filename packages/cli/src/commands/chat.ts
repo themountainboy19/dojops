@@ -18,7 +18,7 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   const sessionName = extractFlagValue(args, "--session");
   const resumeFlag = hasFlag(args, "--resume");
   const deterministic = hasFlag(args, "--deterministic");
-  const agentFlag = extractFlagValue(args, "--agent");
+  const agentFlag = ctx.globalOpts.agent ?? extractFlagValue(args, "--agent");
   const messageFlag = extractFlagValue(args, "--message") ?? extractFlagValue(args, "-m");
 
   const rootDir = findProjectRoot(ctx.cwd);

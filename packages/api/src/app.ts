@@ -300,6 +300,11 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/metrics", metricsRouter);
   app.use("/api/v1/metrics", metricsRouter);
 
+  // 404 handler for unmatched API routes (returns JSON instead of Express HTML default)
+  app.use("/api", (_req: express.Request, res: express.Response) => {
+    res.status(404).json({ error: "Not found" });
+  });
+
   // Error handler (must be last)
   app.use(errorHandler);
 
