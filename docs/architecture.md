@@ -143,7 +143,7 @@ The DOPS runtime processes `.dops` module files — a declarative format combini
 
 | Section        | Purpose                                                                               |
 | -------------- | ------------------------------------------------------------------------------------- |
-| `meta`         | Name, version, description, optional `icon` (HTTPS URL for marketplace display)       |
+| `meta`         | Name, version, description, author, license, tags, repository                         |
 | `input`        | Field definitions with types, constraints, defaults                                   |
 | `output`       | JSON Schema for LLM output validation                                                 |
 | `files`        | Output file specs with path templates, format, serialization options                  |
@@ -161,7 +161,7 @@ The DOPS runtime processes `.dops` module files — a declarative format combini
 
 - `DopsRuntime.risk` — Returns declared risk or defaults to `{ level: "LOW", rationale: "No risk classification declared" }`
 - `DopsRuntime.executionMode` — Returns declared execution semantics or defaults to `{ mode: "generate", deterministic: false, idempotent: false }`
-- `DopsRuntime.metadata` — Includes `riskLevel`, `icon`, `systemPromptHash`, `toolHash` for audit and marketplace integration
+- `DopsRuntime.metadata` — Includes `riskLevel`, `systemPromptHash`, `toolHash` for audit integration
 - **Scope enforcement** — `writeFiles()` validates resolved paths against `scope.write` patterns after `{var}` expansion; out-of-scope writes throw
 - **Update strategy** — `preserve_structure` injects additional prompt instructions to maintain existing config organization
 

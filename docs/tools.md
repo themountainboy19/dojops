@@ -423,18 +423,6 @@ update:
 
 When `strategy` is `preserve_structure`, the prompt compiler injects additional instructions to maintain the existing configuration's organization. The `injectAs` field controls the variable name used in `## Update Prompt` sections (default: `existingContent`).
 
-### Meta Icon — Marketplace Display
-
-```yaml
-meta:
-  name: terraform
-  version: 1.0.0
-  description: "Generates Terraform configurations"
-  icon: "https://registry.dojops.ai/icons/terraform.svg"
-```
-
-The `icon` field is optional. When present, it must be an HTTPS URL (max 2048 characters). This URL is used by the DojOps marketplace to display a tool icon alongside the tool name.
-
 ### Markdown Sections
 
 After the closing `---` delimiter, markdown sections define prompts:
