@@ -358,7 +358,8 @@ All sections are defined in YAML between `---` delimiters:
 | Section        | Required | Description                                                           |
 | -------------- | -------- | --------------------------------------------------------------------- |
 | `dops`         | Yes      | Version identifier (`v1`)                                             |
-| `meta`         | Yes      | Tool name, version, description, optional `icon` URL                  |
+| `kind`         | No       | Module kind (`tool`, default: `tool`)                                 |
+| `meta`         | Yes      | Tool name, version, description, author, license, tags, repository    |
 | `input`        | No       | Input field definitions with types, constraints, defaults             |
 | `output`       | Yes      | JSON Schema for LLM output validation                                 |
 | `files`        | Yes      | Output file specs (path templates, format, serialization options)     |
@@ -369,6 +370,32 @@ All sections are defined in YAML between `---` delimiters:
 | `detection`    | No       | Existing file detection paths for auto-update mode                    |
 | `verification` | No       | Structural rules + optional binary verification command               |
 | `permissions`  | No       | Filesystem, child_process, and network permission declarations        |
+
+### File Spec Fields
+
+Each entry in the `files` array defines an output file:
+
+| Field           | Type    | Default | Description                                      |
+| --------------- | ------- | ------- | ------------------------------------------------ |
+| `path`          | string  | —       | Output path (supports `{var}` templates)         |
+| `format`        | string  | `raw`   | `hcl`, `yaml`, `json`, `raw`, `ini`, `toml`      |
+| `source`        | string  | `llm`   | `llm` (LLM-generated) or `template` (static)     |
+| `content`       | string  | —       | Static content when `source: template`           |
+| `multiDocument` | boolean | —       | Multi-document YAML (`---` separated)            |
+| `dataPath`      | string  | —       | JSON path to extract from LLM output             |
+| `conditional`   | boolean | —       | Only write if LLM produces content for this file |
+| `options`       | object  | —       | Serialization options (see below)                |
+
+**Serialization options** (`options`):
+
+| Field           | Type     | Description                          |
+| --------------- | -------- | ------------------------------------ |
+| `mapAttributes` | string[] | YAML attributes to serialize as maps |
+| `keyOrder`      | string[] | Preferred top-level key ordering     |
+| `sortKeys`      | boolean  | Sort all keys alphabetically         |
+| `lineWidth`     | number   | YAML line width                      |
+| `noRefs`        | boolean  | Disable YAML anchor references       |
+| `indent`        | number   | Indentation level                    |
 
 ### Scope — Write Boundary Enforcement
 

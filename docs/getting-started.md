@@ -224,7 +224,7 @@ dojops scan --fix            # Generate and apply LLM-powered remediation
 dojops scan --compare        # Compare findings with previous scan
 ```
 
-See [Security Scanning](security-scanning.md) for details on all 9 scanners.
+See [Security Scanning](security-scanning.md) for details on all 10 scanners.
 
 ---
 

@@ -114,7 +114,8 @@ Path traversal (`..`) in scope patterns is rejected at parse time by the Zod sch
 - **DevOps write allowlist** — When no explicit `allowedPaths` are set, only DevOps files (CI configs, Dockerfiles, Terraform, Kubernetes manifests, etc.) can be written. This prevents LLM-generated code from mutating application source files. Bypass with `--allow-all-paths`
 - **Path allowlists** — `allowedPaths` restricts where files can be written (takes precedence over DevOps allowlist)
 - **Path denylists** — `deniedPaths` blocks specific paths (takes precedence over everything)
-- **Environment isolation** — `envVars` controls available environment variables
+- **Environment isolation** — `allowEnvVars` declares allowed environment variables (advisory — not enforced at runtime; use `filterEnvVars(policy)` to apply manually)
+- **Network access** — `allowNetwork` declares network permission intent (advisory — not enforced at runtime; reserved for future OS-level sandboxing)
 - **Timeouts** — `timeoutMs` prevents runaway operations
 - **Size limits** — `maxFileSize` prevents oversized file writes
 
@@ -130,12 +131,14 @@ The approval context includes file paths, content preview, and tool name.
 
 ### Layer 6: Sandboxed Execution
 
-`SandboxedFs` wraps all file operations:
+`SandboxedFs` wraps file operations with policy enforcement:
 
-- Path validation against the execution policy
-- File size validation before writes
+- Path validation against the execution policy (`checkWriteAllowed`)
+- File size validation before writes (`checkFileSize`)
 - Atomic write operations (temp-file + `fs.renameSync` — POSIX atomic rename prevents partial writes on crash)
-- Per-file audit logging (path, size, timestamp, operation)
+- Read-path validation against denied paths (with symlink resolution)
+
+`SafeExecutor` also performs pre-execution path checks on declared output files and post-hoc validation on actually written files. Per-file audit logging (files written/modified, timestamps, duration) is recorded in execution audit entries.
 
 All 12 built-in tools and custom tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
 
@@ -208,7 +211,7 @@ PID-based execution locking prevents concurrent mutations:
 
 Beyond the execution pipeline, DojOps provides proactive security scanning via `@dojops/scanner`:
 
-- 9 scanners covering vulnerabilities, dependencies, IaC issues, secrets, shell scripts, SAST, and SBOM generation
+- 10 scanners covering vulnerabilities, dependencies, IaC issues, secrets, shell scripts, SAST, license compliance, and SBOM generation
 - Exit codes 6 (HIGH) and 7 (CRITICAL) for CI/CD integration
 - LLM-powered remediation with path-traversal protection
 
@@ -260,7 +263,7 @@ Each custom tool has a SHA-256 hash computed from its `tool.yaml` content. This 
 2. Validating `provider` and `model` match the plan's execution context
 3. Validating `systemPromptHash` for custom tool tasks to detect prompt drift
 
-If any check fails, replay is aborted unless `--yes` forces continuation.
+If any check fails, replay is aborted unless `--force` overrides the check. The `--yes` flag intentionally does **not** bypass replay validation, since deterministic replay requires an exact environment match to produce meaningful results.
 
 ---
 

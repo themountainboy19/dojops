@@ -8,36 +8,44 @@ Complete reference for the `dojops` command-line interface.
 
 ### Generation & Planning
 
-| Command                          | Description                                       |
-| -------------------------------- | ------------------------------------------------- |
-| `dojops <prompt>`                | Generate DevOps config (default command)          |
-| `dojops generate <prompt>`       | Explicit generation (same as default)             |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph   |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow             |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                              |
-| `dojops apply --skip-verify`     | Skip external config verification (on by default) |
-| `dojops apply --allow-all-paths` | Bypass DevOps file write allowlist                |
-| `dojops apply --resume`          | Resume a partially-failed plan                    |
-| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
-| `dojops apply --dry-run`         | Preview changes without writing files             |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                     |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language             |
+| Command                           | Description                                                 |
+| --------------------------------- | ----------------------------------------------------------- |
+| `dojops <prompt>`                 | Generate DevOps config (default command)                    |
+| `dojops generate <prompt>`        | Explicit generation (same as default)                       |
+| `dojops plan <prompt>`            | Decompose goal into dependency-aware task graph             |
+| `dojops plan --execute <prompt>`  | Plan + execute with approval workflow                       |
+| `dojops apply [<plan-id>]`        | Execute a saved plan                                        |
+| `dojops apply --skip-verify`      | Skip external config verification (on by default)           |
+| `dojops apply --allow-all-paths`  | Bypass DevOps file write allowlist                          |
+| `dojops apply --resume`           | Resume a partially-failed plan                              |
+| `dojops apply --replay`           | Deterministic replay: temp=0, validate env match            |
+| `dojops apply --dry-run`          | Preview changes without writing files                       |
+| `dojops apply --force`            | Skip git dirty check, HIGH risk gate, and replay validation |
+| `dojops apply --task <id>`        | Run only a single task from the plan                        |
+| `dojops apply --timeout <sec>`    | Per-task timeout in seconds (default: 60)                   |
+| `dojops apply --install-packages` | Run package manager install after successful apply          |
+| `dojops validate [<plan-id>]`     | Validate plan against schemas                               |
+| `dojops explain [<plan-id>]`      | LLM explains a plan in plain language                       |
 
 ### Diagnostics & Analysis
 
-| Command                      | Description                                           |
-| ---------------------------- | ----------------------------------------------------- |
-| `dojops check`               | LLM-powered DevOps config quality check (score 0-100) |
-| `dojops check --output json` | Output check report as JSON                           |
-| `dojops debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
-| `dojops analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
-| `dojops scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
-| `dojops scan --security`     | Run security scanners only (trivy, gitleaks)          |
-| `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
-| `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
-| `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
-| `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
-| `dojops scan --compare`      | Compare findings with previous scan report            |
+| Command                       | Description                                                            |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `dojops check`                | LLM-powered DevOps config quality check (score 0-100)                  |
+| `dojops check --output json`  | Output check report as JSON                                            |
+| `dojops check provider`       | Test LLM provider connectivity and list models                         |
+| `dojops debug ci <log>`       | Diagnose CI/CD log failures (root cause, fixes)                        |
+| `dojops analyze diff <diff>`  | Analyze infrastructure diff (risk, cost, security)                     |
+| `dojops scan`                 | Security scan: vulnerabilities, deps, IaC, secrets                     |
+| `dojops scan --security`      | Run security scanners only (trivy, gitleaks)                           |
+| `dojops scan --deps`          | Run dependency audit only (npm, pip)                                   |
+| `dojops scan --iac`           | Run IaC scanners only (checkov, hadolint)                              |
+| `dojops scan --sbom`          | Generate SBOM (CycloneDX) with hash tracking                           |
+| `dojops scan --license`       | Run license compliance scanners (trivy-license)                        |
+| `dojops scan --fix`           | Generate and apply LLM-powered remediation                             |
+| `dojops scan --compare`       | Compare findings with previous scan report                             |
+| `dojops scan --target <dir>`  | Scan a different directory                                             |
+| `dojops scan --fail-on <sev>` | Set severity threshold for non-zero exit (CRITICAL, HIGH, MEDIUM, LOW) |
 
 ### Interactive
 
@@ -70,6 +78,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                             |
 | `dojops toolchain clean`          | Remove all toolchain binaries                         |
 | `dojops inspect <target>`         | Inspect config or session state                       |
+| `dojops verify`                   | Verify audit log hash chain integrity (standalone)    |
 
 ### History & Audit
 
@@ -78,6 +87,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops history list`           | View execution history                                                |
 | `dojops history show <plan-id>` | Show plan details and per-task results                                |
 | `dojops history verify`         | Verify audit log hash chain integrity                                 |
+| `dojops history audit`          | List audit log entries                                                |
+| `dojops history repair`         | Repair broken audit log hash chain                                    |
 | `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
 | `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
@@ -113,21 +124,26 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ## Global Options
 
-| Option              | Description                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------- |
-| `--provider=NAME`   | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini`, `github-copilot` |
-| `--model=NAME`      | LLM model override                                                                    |
-| `--temperature=N`   | LLM temperature (0-2) for deterministic reproducibility                               |
-| `--profile=NAME`    | Use named config profile                                                              |
-| `--tool=NAME`       | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
-| `--output=FORMAT`   | Output: `table` (default), `json`, `yaml`                                             |
-| `--verbose`         | Verbose output                                                                        |
-| `--debug`           | Debug-level output with stack traces                                                  |
-| `--quiet`           | Suppress non-essential output                                                         |
-| `--no-color`        | Disable color output                                                                  |
-| `--non-interactive` | Disable interactive prompts                                                           |
-| `--yes`             | Auto-approve all confirmations (implies `--non-interactive`)                          |
-| `--help, -h`        | Show help message                                                                     |
+| Option                     | Description                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------- |
+| `--provider=NAME`          | LLM provider: `openai`, `anthropic`, `ollama`, `deepseek`, `gemini`, `github-copilot` |
+| `--model=NAME`             | LLM model override                                                                    |
+| `--temperature=N`          | LLM temperature (0-2) for deterministic reproducibility                               |
+| `--fallback-provider=NAME` | Fallback LLM provider (used when primary fails)                                       |
+| `--profile=NAME`           | Use named config profile                                                              |
+| `--tool=NAME`              | Force a specific tool for `generate`, `plan`, or `apply` (bypasses agent routing)     |
+| `--agent=NAME`             | Force a specific agent for `generate` (bypasses keyword routing)                      |
+| `--timeout=MS`             | Global timeout in milliseconds                                                        |
+| `--output=FORMAT`          | Output: `table` (default), `json`, `yaml`                                             |
+| `--raw`                    | Output raw LLM response text only (no formatting)                                     |
+| `--verbose`                | Verbose output                                                                        |
+| `--debug`                  | Debug-level output with stack traces                                                  |
+| `--quiet`                  | Suppress non-essential output                                                         |
+| `--no-color`               | Disable color output                                                                  |
+| `--non-interactive`        | Disable interactive prompts                                                           |
+| `--yes`                    | Auto-approve all confirmations (implies `--non-interactive`)                          |
+| `--version, -V`            | Show version number                                                                   |
+| `--help, -h`               | Show help message                                                                     |
 
 ---
 
@@ -215,6 +231,10 @@ dojops check
 
 # Machine-readable output
 dojops check --output json
+
+# Test provider connectivity
+dojops check provider
+dojops check provider --output json
 ```
 
 ### Security Scanning
@@ -228,12 +248,19 @@ dojops scan --security          # trivy + gitleaks
 dojops scan --deps              # npm-audit + pip-audit
 dojops scan --iac               # checkov + hadolint
 dojops scan --sbom              # generate SBOM with hash tracking
+dojops scan --license           # license compliance check
 
 # Compare with previous scan
 dojops scan --compare
 
 # Auto-remediation
 dojops scan --fix --yes
+
+# Scan a different directory
+dojops scan --target /path/to/project
+
+# Fail CI on severity threshold
+dojops scan --fail-on MEDIUM
 ```
 
 ### Interactive Chat

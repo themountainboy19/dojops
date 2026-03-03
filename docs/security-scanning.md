@@ -1,6 +1,6 @@
 # Security Scanning
 
-DojOps's `@dojops/scanner` package provides automated security scanning with 9 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, secret detection, shell script analysis, SAST, and SBOM generation. Findings can be automatically remediated using LLM-powered fix generation.
+DojOps's `@dojops/scanner` package provides automated security scanning with 10 scanners covering vulnerabilities, dependency audits, infrastructure-as-code checks, secret detection, shell script analysis, SAST, license compliance, and SBOM generation. Findings can be automatically remediated using LLM-powered fix generation.
 
 ---
 
@@ -18,17 +18,18 @@ The scanner system:
 
 ## Scanners
 
-| Scanner      | Binary       | Categories        | Applicability                                                                     |
-| ------------ | ------------ | ----------------- | --------------------------------------------------------------------------------- |
-| `npm-audit`  | `npm`        | `DEPENDENCY`      | Node.js projects (has `package-lock.json`)                                        |
-| `pip-audit`  | `pip-audit`  | `DEPENDENCY`      | Python projects (has `requirements.txt`, `Pipfile`, `setup.py`, `pyproject.toml`) |
-| `trivy`      | `trivy`      | `SECURITY`        | Always applicable (vulnerabilities, secrets, misconfigurations)                   |
-| `gitleaks`   | `gitleaks`   | `SECRETS`         | Always applicable (hardcoded secrets and credentials)                             |
-| `checkov`    | `checkov`    | `IAC`             | Projects with Terraform, Kubernetes, Helm, or Ansible files                       |
-| `hadolint`   | `hadolint`   | `IAC`, `SECURITY` | Projects that have a `Dockerfile`                                                 |
-| `shellcheck` | `shellcheck` | `IAC`, `SECURITY` | Projects with shell scripts (`.sh` files)                                         |
-| `trivy-sbom` | `trivy`      | `SBOM`            | Always applicable (generates CycloneDX SBOM)                                      |
-| `semgrep`    | `semgrep`    | `SECURITY`        | Always applicable (SAST — static application security testing)                    |
+| Scanner         | Binary       | Categories         | Applicability                                                                      |
+| --------------- | ------------ | ------------------ | ---------------------------------------------------------------------------------- |
+| `npm-audit`     | `npm`        | `deps`, `security` | Node.js projects (has `package-lock.json`)                                         |
+| `pip-audit`     | `pip-audit`  | `deps`, `security` | Python projects (has `requirements.txt`, `Pipfile`, `setup.py`, `pyproject.toml`)  |
+| `trivy`         | `trivy`      | `security`         | Always applicable (vulnerabilities, secrets, misconfigurations)                    |
+| `gitleaks`      | `gitleaks`   | `security`         | Always applicable (hardcoded secrets and credentials)                              |
+| `checkov`       | `checkov`    | `iac`, `security`  | Projects with Terraform, Kubernetes, Helm, Ansible, CloudFormation, or Dockerfiles |
+| `hadolint`      | `hadolint`   | `iac`, `security`  | Projects that have a `Dockerfile`                                                  |
+| `shellcheck`    | `shellcheck` | `iac`, `security`  | Projects with shell scripts (`.sh` files)                                          |
+| `trivy-sbom`    | `trivy`      | `SBOM`             | Always applicable (generates CycloneDX SBOM)                                       |
+| `trivy-license` | `trivy`      | `LICENSE`          | Always applicable (license compliance checking)                                    |
+| `semgrep`       | `semgrep`    | `SECURITY`         | Always applicable (SAST — static application security testing)                     |
 
 ---
 
@@ -41,6 +42,7 @@ The scanner system:
 | `deps`     | npm-audit, pip-audit          | Dependency vulnerability audit                 |
 | `iac`      | checkov, hadolint, shellcheck | Infrastructure-as-code linting and validation  |
 | `sbom`     | trivy-sbom                    | SBOM generation (CycloneDX) with hash tracking |
+| `license`  | trivy-license                 | License compliance checking                    |
 
 ---
 
@@ -57,12 +59,13 @@ The scanner system:
 
 ## Finding Categories
 
-| Category     | Description                         | Scanners             |
-| ------------ | ----------------------------------- | -------------------- |
-| `SECURITY`   | Vulnerability findings              | trivy, hadolint      |
-| `DEPENDENCY` | Outdated or vulnerable dependencies | npm-audit, pip-audit |
-| `IAC`        | Infrastructure-as-code issues       | checkov, hadolint    |
-| `SECRETS`    | Hardcoded secrets and credentials   | gitleaks             |
+| Category     | Description                         | Scanners                                      |
+| ------------ | ----------------------------------- | --------------------------------------------- |
+| `SECURITY`   | Vulnerability findings              | trivy, hadolint, shellcheck, checkov, semgrep |
+| `DEPENDENCY` | Outdated or vulnerable dependencies | npm-audit, pip-audit                          |
+| `IAC`        | Infrastructure-as-code issues       | checkov, hadolint, shellcheck                 |
+| `SECRETS`    | Hardcoded secrets and credentials   | gitleaks                                      |
+| `LICENSE`    | License compliance issues           | trivy-license                                 |
 
 ---
 
@@ -83,9 +86,10 @@ Runs all applicable scanners against the current project. Output includes:
 ### Targeted Scans
 
 ```bash
-dojops scan --security       # trivy + gitleaks only
-dojops scan --deps           # npm-audit + pip-audit only
-dojops scan --iac            # checkov + hadolint only
+dojops scan --security       # trivy + gitleaks + semgrep + checkov + hadolint + shellcheck
+dojops scan --deps           # npm-audit + pip-audit
+dojops scan --iac            # checkov + hadolint + shellcheck
+dojops scan --license        # trivy-license (license compliance)
 ```
 
 ### Scan Comparison
@@ -158,20 +162,27 @@ interface ScanReport {
   scannersRun: string[];
   scannersSkipped: string[]; // format: "toolname: reason"
   durationMs: number;
+  sbomOutputs?: string[]; // Raw SBOM content strings
   sbomHash?: string; // SHA-256 hash of SBOM content (when --sbom is used)
   sbomPath?: string; // Path where SBOM was saved
+  errors?: string[]; // Scanner crash messages
+  policyResult?: { passed: boolean; violations: string[] }; // Scan policy evaluation
 }
 
 interface ScanFinding {
   id: string;
   tool: string;
   severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  category: "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS";
+  category: "SECURITY" | "DEPENDENCY" | "IAC" | "SECRETS" | "LICENSE";
   file?: string;
   line?: number;
   message: string;
   recommendation?: string;
   autoFixAvailable: boolean;
+  cve?: string; // CVE identifier (e.g. "CVE-2021-44228")
+  cvss?: number; // CVSS score (0-10)
+  cwe?: string; // CWE identifier (e.g. "CWE-79")
+  fixVersion?: string; // Version that fixes the vulnerability
 }
 ```
 

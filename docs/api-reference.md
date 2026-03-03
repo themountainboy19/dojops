@@ -1,6 +1,6 @@
 # API Reference
 
-DojOps exposes a REST API via Express with 19 endpoints covering generation, planning, diagnostics, scanning, chat, metrics, and history. Start the server with `dojops serve`.
+DojOps exposes a REST API via Express with 20 endpoints covering generation, planning, diagnostics, scanning, chat, metrics, and history. Start the server with `dojops serve`.
 
 ---
 
@@ -616,6 +616,27 @@ Audit chain integrity and command distribution.
 
 ```bash
 curl http://localhost:3000/api/metrics/audit
+```
+
+#### `GET /api/metrics/tokens`
+
+LLM token usage tracking via `TokenTracker`.
+
+**Response:**
+
+```json
+{
+  "totalPromptTokens": 15000,
+  "totalCompletionTokens": 8000,
+  "totalTokens": 23000,
+  "requestCount": 42
+}
+```
+
+**curl:**
+
+```bash
+curl http://localhost:3000/api/metrics/tokens
 ```
 
 ---

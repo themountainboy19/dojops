@@ -172,7 +172,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Platform
 
-- **REST API** — 19 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
+- **REST API** — 20 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
 - **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
 - **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
