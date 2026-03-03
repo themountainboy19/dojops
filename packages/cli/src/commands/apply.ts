@@ -7,7 +7,7 @@ import { createToolRegistry } from "@dojops/tool-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
-import { statusIcon, statusText, riskColor } from "../formatter";
+import { statusIcon, statusText, riskColor, wrapForNote } from "../formatter";
 import {
   findProjectRoot,
   loadPlan,
@@ -160,7 +160,7 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   }
 
   p.note(
-    summaryLines.join("\n"),
+    wrapForNote(summaryLines.join("\n")),
     resume && completedTaskIds.size > 0 ? "Pre-flight: Resume" : "Pre-flight Summary",
   );
 
@@ -233,8 +233,10 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
           const result = await tool.generate(input);
           const preview = typeof result === "string" ? result : JSON.stringify(result, null, 2);
           const truncated =
-            preview.length > 2000 ? preview.slice(0, 2000) + "\n... (truncated)" : preview;
-          p.note(truncated, `${task.id} — ${task.tool}: ${task.description}`);
+            preview.length > 5000
+              ? preview.slice(0, 5000) + "\n... (truncated — use --output json for full content)"
+              : preview;
+          p.note(wrapForNote(truncated), `${task.id} — ${task.tool}: ${task.description}`);
         } catch (err) {
           p.log.warn(
             `${pc.bold(task.id)} generation failed: ${err instanceof Error ? err.message : String(err)}`,

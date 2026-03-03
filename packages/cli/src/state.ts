@@ -245,16 +245,6 @@ export function initProject(rootDir: string): string[] {
     created.push(".dojops/.gitignore");
   }
 
-  // Copy DojOps icon into .dojops/
-  const iconTarget = path.join(base, "dojops-icon.png");
-  if (!fs.existsSync(iconTarget)) {
-    const iconSource = path.join(__dirname, "..", "assets", "dojops-icon.png");
-    if (fs.existsSync(iconSource)) {
-      fs.copyFileSync(iconSource, iconTarget);
-      created.push(".dojops/dojops-icon.png");
-    }
-  }
-
   return created;
 }
 

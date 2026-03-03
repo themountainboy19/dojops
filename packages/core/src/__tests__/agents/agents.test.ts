@@ -401,3 +401,219 @@ describe("AgentRouter edge cases", () => {
     }).toThrow("AgentRouter has no agents configured");
   });
 });
+
+describe("Primary keywords boost", () => {
+  const configs: SpecialistConfig[] = [
+    {
+      name: "fallback",
+      domain: "orchestration",
+      systemPrompt: "Orchestrator.",
+      keywords: ["orchestrate"],
+    },
+    {
+      name: "infra-agent",
+      domain: "infrastructure",
+      systemPrompt: "Infra.",
+      keywords: ["terraform", "hcl", "infrastructure", "provider", "module"],
+      primaryKeywords: ["terraform", "hcl"],
+    },
+    {
+      name: "k8s-agent",
+      domain: "container-orchestration",
+      systemPrompt: "K8s.",
+      keywords: ["kubernetes", "k8s", "helm", "pod", "deployment"],
+      primaryKeywords: ["kubernetes", "k8s"],
+    },
+  ];
+
+  it("boosts confidence when primary keyword matches", () => {
+    const router = new AgentRouter(mockProvider("ok"), configs);
+    // "terraform hcl" matches 2/5 keywords, both are primary
+    // base = 2*0.25 + (2/5)*0.25 = 0.5 + 0.1 = 0.6
+    // primaryBonus = 2 * 0.1 = 0.2
+    // total = 0.8
+    const result = router.route("terraform hcl query");
+    expect(result.confidence).toBeCloseTo(0.8, 4);
+    expect(result.agent.domain).toBe("infrastructure");
+  });
+
+  it("no boost when matched keywords are not primary", () => {
+    const router = new AgentRouter(mockProvider("ok"), configs);
+    // "infrastructure module" matches 2/5 keywords, none primary
+    // base = 2*0.25 + (2/5)*0.25 = 0.6
+    // primaryBonus = 0
+    const result = router.route("infrastructure module query");
+    expect(result.confidence).toBeCloseTo(0.6, 4);
+  });
+
+  it("unchanged behavior with no primaryKeywords defined", () => {
+    const noPrimaryConfigs: SpecialistConfig[] = [
+      {
+        name: "fallback",
+        domain: "orchestration",
+        systemPrompt: "Orchestrator.",
+        keywords: ["orchestrate"],
+      },
+      {
+        name: "plain-agent",
+        domain: "testing",
+        systemPrompt: "Test.",
+        keywords: ["alpha", "beta", "gamma"],
+      },
+    ];
+    const router = new AgentRouter(mockProvider("ok"), noPrimaryConfigs);
+    // "alpha beta" matches 2/3, no primaryKeywords
+    // base = 2*0.25 + (2/3)*0.25 = 0.5 + 0.1667 = 0.6667
+    const result = router.route("alpha beta query");
+    expect(result.confidence).toBeCloseTo(0.6667, 3);
+  });
+});
+
+describe("Project context biased routing", () => {
+  const configs: SpecialistConfig[] = [
+    {
+      name: "fallback",
+      domain: "orchestration",
+      systemPrompt: "Orchestrator.",
+      keywords: ["orchestrate"],
+    },
+    {
+      name: "infra-agent",
+      domain: "infrastructure",
+      systemPrompt: "Infra.",
+      keywords: ["terraform", "hcl", "infrastructure", "provider", "module"],
+    },
+    {
+      name: "k8s-agent",
+      domain: "container-orchestration",
+      systemPrompt: "K8s.",
+      keywords: ["kubernetes", "k8s", "helm", "pod", "deployment"],
+    },
+  ];
+
+  it("boosts confidence when agent domain matches project domains", () => {
+    const router = new AgentRouter(mockProvider("ok"), configs);
+    // Without context: "infrastructure module" → 2*0.25 + (2/5)*0.25 = 0.6
+    const noCtx = router.route("infrastructure module query");
+    // With context: +0.15 boost
+    const withCtx = router.route("infrastructure module query", {
+      projectDomains: ["infrastructure"],
+    });
+    expect(withCtx.confidence - noCtx.confidence).toBeCloseTo(0.15, 4);
+  });
+
+  it("no boost when project domains do not match agent domain", () => {
+    const router = new AgentRouter(mockProvider("ok"), configs);
+    const noCtx = router.route("terraform hcl query");
+    const withCtx = router.route("terraform hcl query", {
+      projectDomains: ["container-orchestration"],
+    });
+    expect(withCtx.confidence).toBeCloseTo(noCtx.confidence, 4);
+  });
+
+  it("empty projectDomains produces same result as no options", () => {
+    const router = new AgentRouter(mockProvider("ok"), configs);
+    const noOpts = router.route("kubernetes k8s query");
+    const emptyOpts = router.route("kubernetes k8s query", { projectDomains: [] });
+    expect(emptyOpts.confidence).toBe(noOpts.confidence);
+  });
+});
+
+describe("SpecialistAgent retry and timeout", () => {
+  it("retries once on transient error", async () => {
+    let callCount = 0;
+    const provider: LLMProvider = {
+      name: "retry-mock",
+      generate: vi.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.reject(new Error("ECONNRESET"));
+        }
+        return Promise.resolve({
+          content: "success",
+          model: "mock",
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        });
+      }),
+    };
+    const agent = new SpecialistAgent(provider, {
+      name: "test",
+      domain: "test",
+      systemPrompt: "Test.",
+      keywords: ["test"],
+    });
+
+    const result = await agent.run({ prompt: "hello" });
+    expect(result.content).toBe("success");
+    expect(callCount).toBe(2);
+  });
+
+  it("does not retry on non-transient error", async () => {
+    const provider: LLMProvider = {
+      name: "fail-mock",
+      generate: vi.fn().mockRejectedValue(new Error("Invalid API key")),
+    };
+    const agent = new SpecialistAgent(provider, {
+      name: "test",
+      domain: "test",
+      systemPrompt: "Test.",
+      keywords: ["test"],
+    });
+
+    await expect(agent.run({ prompt: "hello" })).rejects.toThrow("Invalid API key");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
+  });
+
+  it("times out when provider is too slow", async () => {
+    const provider: LLMProvider = {
+      name: "slow-mock",
+      generate: vi.fn().mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(
+              () =>
+                resolve({
+                  content: "late",
+                  model: "mock",
+                  usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+                }),
+              5000,
+            ),
+          ),
+      ),
+    };
+    const agent = new SpecialistAgent(provider, {
+      name: "test",
+      domain: "test",
+      systemPrompt: "Test.",
+      keywords: ["test"],
+    });
+
+    await expect(agent.run({ prompt: "hello" }, { timeoutMs: 100 })).rejects.toThrow("timed out");
+  });
+});
+
+describe("SpecialistAgent message sanitization", () => {
+  it("filters out oversized messages in runWithHistory", async () => {
+    const provider = mockProvider("ok");
+    const agent = new SpecialistAgent(provider, {
+      name: "test",
+      domain: "test",
+      systemPrompt: "Test.",
+      keywords: ["test"],
+    });
+
+    const hugeContent = "x".repeat(200 * 1024); // 200KB > 128KB limit
+    await agent.runWithHistory([
+      { role: "user", content: "hello" },
+      { role: "assistant", content: hugeContent },
+      { role: "user", content: "follow up" },
+    ]);
+
+    // The oversized message should be filtered out
+    const call = (provider.generate as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.messages).toHaveLength(2); // Only the 2 non-oversized messages
+    expect(call.messages[0].content).toBe("hello");
+    expect(call.messages[1].content).toBe("follow up");
+  });
+});

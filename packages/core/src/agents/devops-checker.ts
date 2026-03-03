@@ -32,6 +32,15 @@ Analyze the provided files for:
 
 Also identify important DevOps files that are MISSING from the project (e.g. .dockerignore, .gitignore, CODEOWNERS, security policies, CI workflows).
 
+CRITICAL: Your suggestions MUST be relevant to the project's detected languages, frameworks, and infrastructure. Study the Project Context carefully:
+- Only suggest tools and files that match the detected languages and tech stack.
+- Do NOT suggest Makefile for Java/Kotlin/Scala projects (use Gradle or Maven instead).
+- Do NOT suggest npm/yarn configs for Python-only projects.
+- Do NOT suggest pip/poetry configs for Node.js-only projects.
+- Do NOT suggest Terraform for projects with no infrastructure-as-code.
+- Do NOT suggest Kubernetes manifests for projects with no container orchestration.
+- Match your recommendations to the project's actual ecosystem and toolchain.
+
 Assign a maturity score from 0-100:
 - 0-25: Minimal — missing critical configs
 - 26-50: Basic — fundamentals present but gaps
@@ -59,11 +68,29 @@ export class DevOpsChecker {
       .map((f) => wrapAsData(sanitizeUserInput(f.content), f.path))
       .join("\n\n");
 
+    // Extract key project info for explicit constraint reinforcement
+    let projectConstraint = "";
+    try {
+      const ctx = JSON.parse(contextJson);
+      const langs = (ctx.languages ?? []).map((l: { name: string }) => l.name);
+      const domains = ctx.relevantDomains ?? [];
+      if (langs.length > 0 || domains.length > 0) {
+        const parts: string[] = [];
+        if (langs.length > 0) parts.push(`Detected languages: ${langs.join(", ")}`);
+        if (ctx.primaryLanguage) parts.push(`Primary language: ${ctx.primaryLanguage}`);
+        if (domains.length > 0) parts.push(`Relevant domains: ${domains.join(", ")}`);
+        projectConstraint = `\n## Project Type Constraints\n${parts.join("\n")}\nOnly suggest tools, files, and practices relevant to this specific tech stack.\n`;
+      }
+    } catch {
+      // contextJson parsing failed — skip constraints
+    }
+
     const prompt = [
       "Review this project's DevOps configuration.\n",
       "## Project Context\n```json",
       contextJson,
       "```\n",
+      projectConstraint,
       "## DevOps Files\n",
       filesSection,
     ].join("\n");

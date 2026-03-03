@@ -116,6 +116,7 @@ When planning:
     "end-to-end",
     "full stack",
   ],
+  primaryKeywords: ["orchestrate", "decompose", "multi-step", "end-to-end"],
 };
 
 // ---------------------------------------------------------------------------
@@ -155,6 +156,7 @@ Always follow infrastructure-as-code best practices and security guidelines.${NO
     "output",
     "variable",
   ],
+  primaryKeywords: ["terraform", "hcl", "iac", "tf"],
 };
 
 // ---------------------------------------------------------------------------
@@ -194,6 +196,7 @@ Always follow Kubernetes best practices for production workloads.${NO_FOLLOWUP_I
     "operator",
     "crd",
   ],
+  primaryKeywords: ["kubernetes", "k8s", "helm", "kubectl"],
 };
 
 // ---------------------------------------------------------------------------
@@ -233,6 +236,7 @@ Always design pipelines that are fast, reliable, and secure.${NO_FOLLOWUP_INSTRU
     "matrix",
     "runner",
   ],
+  primaryKeywords: ["pipeline", "github actions", "ci", "cd"],
 };
 
 // ---------------------------------------------------------------------------
@@ -272,6 +276,7 @@ Always prioritize security and flag potential vulnerabilities.${NO_FOLLOWUP_INST
     "tls",
     "certificate",
   ],
+  primaryKeywords: ["security", "vulnerability", "audit", "cve"],
 };
 
 // ---------------------------------------------------------------------------
@@ -310,6 +315,7 @@ Always design observability that enables fast detection and resolution.${NO_FOLL
     "loki",
     "elk",
   ],
+  primaryKeywords: ["prometheus", "grafana", "observability", "opentelemetry"],
 };
 
 // ---------------------------------------------------------------------------
@@ -348,6 +354,7 @@ Always optimize for small, secure, and reproducible images.${NO_FOLLOWUP_INSTRUC
     "buildx",
     "layer",
   ],
+  primaryKeywords: ["docker", "dockerfile", "compose", "buildkit"],
 };
 
 // ---------------------------------------------------------------------------
@@ -387,6 +394,7 @@ Always balance cost, reliability, and performance in architectural decisions.${N
     "landing zone",
     "multi-cloud",
   ],
+  primaryKeywords: ["aws", "gcp", "azure", "serverless", "well-architected"],
 };
 
 // ---------------------------------------------------------------------------
@@ -425,6 +433,7 @@ Always design for security, redundancy, and low latency.${NO_FOLLOWUP_INSTRUCTIO
     "ssl",
     "http",
   ],
+  primaryKeywords: ["dns", "load balancer", "vpn", "route53"],
 };
 
 // ---------------------------------------------------------------------------
@@ -463,6 +472,7 @@ Always prioritize data integrity, availability, and performance.${NO_FOLLOWUP_IN
     "nosql",
     "elasticsearch",
   ],
+  primaryKeywords: ["postgres", "mysql", "redis", "dynamodb", "mongodb"],
 };
 
 // ---------------------------------------------------------------------------
@@ -501,6 +511,7 @@ Always ensure declarative, auditable, and repeatable delivery.${NO_FOLLOWUP_INST
     "kustomization",
     "image automation",
   ],
+  primaryKeywords: ["gitops", "argocd", "flux", "flagger"],
 };
 
 // ---------------------------------------------------------------------------
@@ -539,6 +550,7 @@ Always map recommendations to specific control frameworks.${NO_FOLLOWUP_INSTRUCT
     "cis benchmark",
     "audit trail",
   ],
+  primaryKeywords: ["soc2", "hipaa", "pci", "gdpr", "compliance"],
 };
 
 // ---------------------------------------------------------------------------
@@ -576,6 +588,7 @@ Always provide actionable fixes with high confidence.${NO_FOLLOWUP_INSTRUCTION}`
     "oom",
     "ci error",
   ],
+  primaryKeywords: ["debug", "failed", "failure", "exit code", "stack trace"],
 };
 
 // ---------------------------------------------------------------------------
@@ -618,6 +631,7 @@ Always act ethically — only analyze code and systems you have authorization to
     "trivy",
     "gitleaks",
   ],
+  primaryKeywords: ["owasp", "sast", "dast", "pentest", "appsec"],
 };
 
 // ---------------------------------------------------------------------------
@@ -667,6 +681,7 @@ Always follow ShellCheck recommendations and produce scripts that are safe, port
     "unit",
     "journalctl",
   ],
+  primaryKeywords: ["bash", "shellcheck", "posix", "systemd"],
 };
 
 // ---------------------------------------------------------------------------
@@ -711,6 +726,7 @@ Always produce well-typed, well-tested, and production-ready Python code.${NO_FO
     "pylint",
     "typer",
   ],
+  primaryKeywords: ["python", "pytest", "mypy", "poetry"],
 };
 
 // ---------------------------------------------------------------------------

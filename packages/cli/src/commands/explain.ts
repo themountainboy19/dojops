@@ -1,5 +1,6 @@
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
+import { wrapForNote } from "../formatter";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -59,5 +60,5 @@ export async function explainCommand(args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
-  p.note(result.content, `Explanation: ${plan.id}`);
+  p.note(wrapForNote(result.content), `Explanation: ${plan.id}`);
 }

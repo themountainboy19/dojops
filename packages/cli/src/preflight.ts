@@ -168,6 +168,32 @@ export function collectMissingTools(): ToolDependency[] {
 }
 
 /**
+ * Collect missing tool dependencies filtered by relevant project domains.
+ * Only returns tools from specialists whose domain matches the project.
+ */
+export function collectMissingToolsForDomains(domains: string[]): ToolDependency[] {
+  if (domains.length === 0) return collectMissingTools();
+
+  const domainSet = new Set(domains);
+  const seen = new Set<string>();
+  const uniqueDeps: ToolDependency[] = [];
+  for (const config of ALL_SPECIALIST_CONFIGS) {
+    if (!domainSet.has(config.domain)) continue;
+    for (const dep of config.toolDependencies ?? []) {
+      if (!seen.has(dep.npmPackage)) {
+        seen.add(dep.npmPackage);
+        uniqueDeps.push(dep);
+      }
+    }
+  }
+
+  return uniqueDeps.filter((dep) => {
+    const found = dep.binary ? resolveBinary(dep.binary) : resolveModule(dep.npmPackage);
+    return !found;
+  });
+}
+
+/**
  * Check whether npm global installs need elevated permissions.
  * Returns true if the npm global prefix directory is not writable.
  */
@@ -216,8 +242,13 @@ function npmInstallGlobal(pkg: string, useSudo: boolean): void {
  * Detects permission issues and uses sudo when needed.
  * Returns the list of successfully installed package names.
  */
-export async function offerToolInstall(options?: { nonInteractive?: boolean }): Promise<string[]> {
-  const missing = collectMissingTools();
+export async function offerToolInstall(options?: {
+  nonInteractive?: boolean;
+  domains?: string[];
+}): Promise<string[]> {
+  const missing = options?.domains
+    ? collectMissingToolsForDomains(options.domains)
+    : collectMissingTools();
   if (missing.length === 0) {
     p.log.success("All optional agent tools are installed.");
     return [];
@@ -300,14 +331,47 @@ export function collectMissingSystemTools(): typeof SYSTEM_TOOLS {
   });
 }
 
+/** Maps system tool names to the specialist domains they serve. */
+export const SYSTEM_TOOL_DOMAINS: Record<string, string[]> = {
+  terraform: ["infrastructure", "cloud-architecture"],
+  kubectl: ["container-orchestration"],
+  gh: ["ci-cd", "ci-debugging"],
+  hadolint: ["containerization"],
+  trivy: ["security", "application-security"],
+  gitleaks: ["security", "application-security"],
+  ansible: ["infrastructure"],
+};
+
+/**
+ * Collect missing system tools filtered by relevant project domains.
+ * Only returns tools whose associated domains overlap with the project's domains.
+ */
+export function collectMissingSystemToolsForDomains(domains: string[]): typeof SYSTEM_TOOLS {
+  if (domains.length === 0) return collectMissingSystemTools();
+
+  const domainSet = new Set(domains);
+  const registry = loadToolchainRegistry();
+  return SYSTEM_TOOLS.filter((tool) => {
+    if (!isToolSupportedOnCurrentPlatform(tool)) return false;
+    if (registry.tools.find((t) => t.name === tool.name)) return false;
+    if (resolveBinary(tool.binaryName)) return false;
+    // Filter by domain relevance
+    const toolDomains = SYSTEM_TOOL_DOMAINS[tool.name] ?? [];
+    return toolDomains.some((d) => domainSet.has(d));
+  });
+}
+
 /**
  * Interactively offer to install missing system tools into the sandbox.
  * Returns the list of successfully installed tool names.
  */
 export async function offerSystemToolInstall(options?: {
   nonInteractive?: boolean;
+  domains?: string[];
 }): Promise<string[]> {
-  const missing = collectMissingSystemTools();
+  const missing = options?.domains
+    ? collectMissingSystemToolsForDomains(options.domains)
+    : collectMissingSystemTools();
   if (missing.length === 0) {
     p.log.success("All system tools are installed.");
     return [];

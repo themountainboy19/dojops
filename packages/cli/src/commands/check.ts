@@ -4,6 +4,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { DevOpsChecker } from "@dojops/core";
 import { CommandHandler } from "../types";
+import { wrapForNote } from "../formatter";
 import { findProjectRoot, loadContext, appendAudit, getCurrentUser } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
 
@@ -119,11 +120,13 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
             : "Minimal";
 
     p.note(
-      [
-        `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim(`(${scoreLabel})`)}`,
-        "",
-        report.summary,
-      ].join("\n"),
+      wrapForNote(
+        [
+          `${pc.bold("Score:")} ${scoreColor(`${report.score}/100`)} ${pc.dim(`(${scoreLabel})`)}`,
+          "",
+          report.summary,
+        ].join("\n"),
+      ),
       "DevOps Maturity",
     );
 
@@ -149,7 +152,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
         }
         lines.push("");
       }
-      p.note(lines.join("\n"), `Findings (${report.findings.length})`);
+      p.note(wrapForNote(lines.join("\n")), `Findings (${report.findings.length})`);
     } else {
       p.log.success("No findings — your DevOps configuration looks great!");
     }
@@ -157,7 +160,7 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
     // Missing files
     if (report.missingFiles.length > 0) {
       const missingLines = report.missingFiles.map((f) => `  ${pc.yellow("○")} ${f}`);
-      p.note(missingLines.join("\n"), "Recommended missing files");
+      p.note(wrapForNote(missingLines.join("\n")), "Recommended missing files");
     }
 
     // Audit

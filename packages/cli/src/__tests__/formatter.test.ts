@@ -43,10 +43,11 @@ describe("formatOutput", () => {
     expect(result).toContain("line2");
   });
 
-  it("truncates after 20 lines", () => {
-    const lines = Array.from({ length: 25 }, (_, i) => `line ${i}`).join("\n");
+  it("truncates after 50 lines", () => {
+    const lines = Array.from({ length: 60 }, (_, i) => `line ${i}`).join("\n");
     const result = formatOutput(lines);
-    expect(result).toContain("5 more lines");
+    expect(result).toContain("10 more lines");
+    expect(result).toContain("--output json");
   });
 });
 

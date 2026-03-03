@@ -10,6 +10,8 @@ export interface ChatSessionOptions {
   state?: ChatSessionState;
   maxContextMessages?: number;
   mode?: SessionMode;
+  /** Project domains from `dojops init` for context-biased routing. */
+  projectDomains?: string[];
 }
 
 export interface BridgeCommand {
@@ -28,12 +30,14 @@ export class ChatSession {
   private router: AgentRouter;
   private memoryManager: MemoryManager;
   private summarizer: SessionSummarizer;
+  private projectDomains: string[];
 
   constructor(opts: ChatSessionOptions) {
     this.provider = opts.provider;
     this.router = opts.router;
     this.memoryManager = new MemoryManager(opts.maxContextMessages ?? 20);
     this.summarizer = new SessionSummarizer(opts.provider);
+    this.projectDomains = opts.projectDomains ?? [];
 
     this.state = opts.state ?? {
       id: generateSessionId(),
@@ -104,7 +108,7 @@ export class ChatSession {
     let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
 
     if (!agent) {
-      const route = this.router.route(userMessage);
+      const route = this.router.route(userMessage, { projectDomains: this.projectDomains });
       agent = route.agent;
     }
 

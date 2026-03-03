@@ -30,10 +30,11 @@ export function statusText(status: string): string {
 
 export function formatOutput(content: string): string {
   const lines = content.split("\n");
-  const preview = lines.slice(0, 20);
+  const limit = 50;
+  const preview = lines.slice(0, limit);
   const formatted = preview.map((l) => `    ${pc.dim(l)}`).join("\n");
-  if (lines.length > 20) {
-    return `${formatted}\n    ${pc.dim(`... (${lines.length - 20} more lines)`)}`;
+  if (lines.length > limit) {
+    return `${formatted}\n    ${pc.dim(`... (${lines.length - limit} more lines — use --output json for full content)`)}`;
   }
   return formatted;
 }
@@ -91,4 +92,58 @@ export function maskToken(token: string | undefined): string {
   if (!token) return pc.dim("(not set)");
   if (token.length <= 6) return "***";
   return token.slice(0, 3) + "***" + token.slice(-3);
+}
+
+// ── ANSI-safe text wrapping for p.note() ─────────────────────────
+
+/** Strip ANSI escape codes for accurate width measurement. */
+function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+/**
+ * Word-wrap a single line to fit within `maxWidth` visible characters.
+ * Preserves leading indentation on continuation lines.
+ */
+function wrapLine(line: string, maxWidth: number): string[] {
+  const visible = stripAnsi(line);
+  if (visible.length <= maxWidth) return [line];
+
+  // Detect leading plain-text indent
+  const indentMatch = visible.match(/^(\s*)/);
+  const indent = indentMatch ? indentMatch[1] : "";
+
+  const words = visible.split(/(\s+)/);
+  const result: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    if (current.length + word.length > maxWidth && current.length > 0) {
+      result.push(current.trimEnd());
+      current = indent + word.trimStart();
+    } else {
+      current += word;
+    }
+  }
+  if (current.length > 0) result.push(current.trimEnd());
+
+  return result;
+}
+
+/**
+ * Wrap all lines in a multi-line string so no visible line exceeds the
+ * terminal width minus `p.note()` box-drawing overhead (7 chars).
+ *
+ * Safe for strings containing ANSI color codes — measures visible width only.
+ */
+export function wrapForNote(text: string): string {
+  // p.note() overhead: "│  " (3) on the left + "  │" (3) on the right + 1 safety
+  const cols = Math.min(process.stdout.columns || 80, 200);
+  const maxWidth = Math.max(30, cols - 7);
+
+  return text
+    .split("\n")
+    .flatMap((line) => wrapLine(line, maxWidth))
+    .join("\n");
 }

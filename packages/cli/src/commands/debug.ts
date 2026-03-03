@@ -4,6 +4,7 @@ import * as p from "@clack/prompts";
 import { createDebugger } from "@dojops/api";
 import { CLIContext } from "../types";
 import { formatConfidence } from "../formatter";
+import { wrapForNote } from "../formatter";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
@@ -74,5 +75,5 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
     }
   }
 
-  p.note(bodyLines.join("\n"), "CI Diagnosis");
+  p.note(wrapForNote(bodyLines.join("\n")), "CI Diagnosis");
 }

@@ -7,6 +7,7 @@ import { runScan, planRemediation, applyFixes, compareScanReports } from "@dojop
 import type { ScanType, ScanReport, ScanFinding } from "@dojops/scanner";
 import * as yaml from "js-yaml";
 import { CLIContext } from "../types";
+import { wrapForNote } from "../formatter";
 import { hasFlag, extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import {
@@ -259,11 +260,14 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
         } else {
           // Show plan
           p.note(
-            plan.fixes
-              .map(
-                (f) => `${pc.bold(f.findingId)}: ${f.action} ${pc.dim(f.file)}\n  ${f.description}`,
-              )
-              .join("\n\n"),
+            wrapForNote(
+              plan.fixes
+                .map(
+                  (f) =>
+                    `${pc.bold(f.findingId)}: ${f.action} ${pc.dim(f.file)}\n  ${f.description}`,
+                )
+                .join("\n\n"),
+            ),
             "Remediation Plan",
           );
 

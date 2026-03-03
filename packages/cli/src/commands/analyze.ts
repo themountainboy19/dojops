@@ -3,7 +3,7 @@ import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createDiffAnalyzer } from "@dojops/api";
 import { CLIContext } from "../types";
-import { formatConfidence, riskColor, changeColor } from "../formatter";
+import { formatConfidence, riskColor, changeColor, wrapForNote } from "../formatter";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
@@ -91,5 +91,5 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
     }
   }
 
-  p.note(bodyLines.join("\n"), "Infrastructure Diff Analysis");
+  p.note(wrapForNote(bodyLines.join("\n")), "Infrastructure Diff Analysis");
 }

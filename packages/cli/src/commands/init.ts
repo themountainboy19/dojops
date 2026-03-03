@@ -482,9 +482,15 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
 
   p.log.info(`Context: ${pc.dim(contextMdPath)}`);
 
-  // Offer to install missing optional tool dependencies
-  await offerToolInstall({ nonInteractive: cliCtx.globalOpts.nonInteractive });
+  // Offer to install missing optional tool dependencies (filtered by project domains)
+  await offerToolInstall({
+    nonInteractive: cliCtx.globalOpts.nonInteractive,
+    domains: ctx.relevantDomains,
+  });
 
-  // Offer to install missing system tools (terraform, kubectl, etc.)
-  await offerSystemToolInstall({ nonInteractive: cliCtx.globalOpts.nonInteractive });
+  // Offer to install missing system tools (filtered by project domains)
+  await offerSystemToolInstall({
+    nonInteractive: cliCtx.globalOpts.nonInteractive,
+    domains: ctx.relevantDomains,
+  });
 };

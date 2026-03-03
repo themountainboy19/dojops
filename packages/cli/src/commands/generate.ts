@@ -116,6 +116,11 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
 
   const { router } = createRouter(provider, projectRoot);
 
+  // Load project domains for context-biased routing
+  const projectDomains: string[] = projectRoot
+    ? (loadContext(projectRoot)?.relevantDomains ?? [])
+    : [];
+
   // --agent flag: force routing to a specific agent
   const agentName = ctx.globalOpts.agent;
   let route;
@@ -138,7 +143,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
     const s = p.spinner();
     if (!isStructuredOutput) s.start("Routing to specialist agent...");
-    route = router.route(prompt);
+    route = router.route(prompt, { projectDomains });
     if (!isStructuredOutput)
       s.stop(
         route.confidence > 0

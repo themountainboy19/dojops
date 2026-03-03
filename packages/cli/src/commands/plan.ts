@@ -6,6 +6,7 @@ import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { classifyPlanRisk } from "../risk-classifier";
+import { wrapForNote } from "../formatter";
 import * as yaml from "js-yaml";
 import crypto from "node:crypto";
 import {
@@ -104,7 +105,10 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
       return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
     });
-    p.note(taskLines.join("\n"), `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`);
+    p.note(
+      wrapForNote(taskLines.join("\n")),
+      `${graph.goal} ${pc.dim(`(${graph.tasks.length} tasks)`)}`,
+    );
   }
 
   // Save plan to .dojops/plans/

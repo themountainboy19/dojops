@@ -8,6 +8,11 @@ export interface RouteResult {
   reason: string;
 }
 
+export interface RouteOptions {
+  /** Project domains detected by `dojops init`. Boosts agents whose domain matches. */
+  projectDomains?: string[];
+}
+
 export class AgentRouter {
   private agents: SpecialistAgent[];
 
@@ -34,8 +39,9 @@ export class AgentRouter {
     return new RegExp(`\\b${kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(lower);
   }
 
-  route(prompt: string): RouteResult {
+  route(prompt: string, options?: RouteOptions): RouteResult {
     const lower = prompt.toLowerCase();
+    const projectDomains = new Set(options?.projectDomains ?? []);
     const scored: Array<{ agent: SpecialistAgent; confidence: number; keywords: string[] }> = [];
 
     for (const agent of this.agents) {
@@ -43,10 +49,21 @@ export class AgentRouter {
       if (matchedKeywords.length === 0) continue;
 
       const matchRatio = matchedKeywords.length / agent.keywords.length;
+
+      // Primary keyword bonus: each matched primary keyword adds +0.1 confidence
+      const primarySet = new Set(agent.primaryKeywords);
+      const primaryMatchCount = matchedKeywords.filter((kw) => primarySet.has(kw)).length;
+      const primaryBonus = primaryMatchCount * 0.1;
+
+      // Project context bonus: +0.15 when agent domain matches project domains
+      const contextBonus = projectDomains.has(agent.domain) ? 0.15 : 0;
+
       const confidence = Math.min(
         matchedKeywords.length * 0.25 +
           matchRatio * 0.25 +
-          (matchedKeywords.length >= 3 ? 0.15 : 0),
+          (matchedKeywords.length >= 3 ? 0.15 : 0) +
+          primaryBonus +
+          contextBonus,
         1.0,
       );
 

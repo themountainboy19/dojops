@@ -12,6 +12,7 @@ import { getConfigPath, resolveOllamaHost } from "../config";
 import { ExitCode } from "../exit-codes";
 import {
   findProjectRoot,
+  loadContext,
   listPlans,
   listExecutions,
   listScanReports,
@@ -22,6 +23,7 @@ import {
   resolveModule,
   offerToolInstall,
   offerSystemToolInstall,
+  SYSTEM_TOOL_DOMAINS,
 } from "../preflight";
 import { loadToolchainRegistry } from "../toolchain-sandbox";
 
@@ -96,6 +98,9 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     detail: root ? `${root}/.dojops/` : "Not initialized (run: dojops init)",
   });
 
+  // Load project domains for filtering tool suggestions
+  const projectDomains: string[] = root ? (loadContext(root)?.relevantDomains ?? []) : [];
+
   // Ollama reachability
   if (provider === "ollama" || process.env.DOJOPS_PROVIDER === "ollama") {
     const ollamaHost = resolveOllamaHost(undefined, ctx.config);
@@ -133,10 +138,13 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     }
   }
 
-  // Agent tool dependencies (deduplicated by npmPackage)
+  // Agent tool dependencies (deduplicated by npmPackage, filtered by project domains)
+  const domainSet = new Set(projectDomains);
   const seen = new Set<string>();
   const uniqueDeps: ToolDependency[] = [];
   for (const config of ALL_SPECIALIST_CONFIGS) {
+    // Skip specialists whose domain doesn't match the project (if domains are known)
+    if (projectDomains.length > 0 && !domainSet.has(config.domain)) continue;
     for (const dep of config.toolDependencies ?? []) {
       if (!seen.has(dep.npmPackage)) {
         seen.add(dep.npmPackage);
@@ -153,9 +161,14 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     });
   }
 
-  // System tool checks
+  // System tool checks (filtered by project domains)
   const toolRegistry = loadToolchainRegistry();
   for (const tool of SYSTEM_TOOLS) {
+    // Skip system tools whose domains don't match the project (if domains are known)
+    if (projectDomains.length > 0) {
+      const toolDomains = SYSTEM_TOOL_DOMAINS[tool.name] ?? [];
+      if (!toolDomains.some((d) => domainSet.has(d))) continue;
+    }
     const sandboxEntry = toolRegistry.tools.find((t) => t.name === tool.name);
     const systemBinary = !sandboxEntry ? resolveBinary(tool.binaryName) : undefined;
     const supported = isToolSupportedOnCurrentPlatform(tool);
@@ -245,18 +258,24 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     p.log.success("All checks passed.");
   }
 
-  // Offer to install missing optional tool dependencies
+  // Offer to install missing optional tool dependencies (filtered by project domains)
   const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
   if (hasMissingTools) {
-    await offerToolInstall({ nonInteractive: ctx.globalOpts.nonInteractive });
+    await offerToolInstall({
+      nonInteractive: ctx.globalOpts.nonInteractive,
+      domains: projectDomains,
+    });
   }
 
-  // Offer to install missing system tools
+  // Offer to install missing system tools (filtered by project domains)
   const hasMissingSystemTools = checks.some(
     (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
   );
   if (hasMissingSystemTools) {
-    await offerSystemToolInstall({ nonInteractive: ctx.globalOpts.nonInteractive });
+    await offerSystemToolInstall({
+      nonInteractive: ctx.globalOpts.nonInteractive,
+      domains: projectDomains,
+    });
   }
 
   // Exit non-zero when checks failed
