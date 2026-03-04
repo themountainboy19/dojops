@@ -7,26 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`modules init` v2 Scaffold with LLM**: `dojops modules init <name>` now generates `.dops v2` files by default (was v1). When an LLM provider is configured, offers AI-powered generation of best practices, output guidance, prompt templates, keywords, risk classification, detection paths, and Context7 library references. Falls back to sensible defaults when no provider is available. Use `--legacy` flag to generate v1 `tool.yaml` format
-- **`agents info` Partial Name Matching**: `dojops agents info` now supports prefix matching (`terraform` → `terraform-specialist`), segment matching (`security` → `security-auditor`, `cloud` → `cloud-architect`), and "Did you mean?" suggestions when no match is found
-- **`inspect` Default Summary**: `dojops inspect` with no target now shows both config and session state instead of erroring
-
-### Changed
-
-- **`analyze diff` Help Text**: Reordered usage to recommend `--file` first for multiline diffs, added note about shell escaping limitations with inline arguments
-
-### Fixed
-
-- **`modules validate` Path Lookup**: `dojops modules validate <name>` now searches `.dojops/modules/` (where `modules init` creates files) in addition to `.dojops/tools/`. Previously, modules created by `init` could not be found by `validate`
-- **Technology Name Capitalization**: `modules init` now properly title-cases hyphenated tool names (e.g., `redis-config` → "Redis Config" instead of "Redis-config")
-
 ## [1.0.6] - 2026-03-04
 
 ### Added
 
 - **`dojops upgrade` Command**: New CLI command to check for and install CLI updates. Fetches the latest version from the npm registry, compares with the current version, and runs `npm install -g @dojops/cli@<version>` with interactive confirmation. Supports `--check` flag (check-only, exit 1 if update available), `--yes` for auto-approval, `--non-interactive` mode, and `--output json` for structured output
+- **`modules init` v2 Scaffold with LLM**: `dojops modules init <name>` now generates `.dops v2` files by default (was v1). When an LLM provider is configured, offers AI-powered generation of best practices, output guidance, prompt templates, keywords, risk classification, detection paths, and Context7 library references. Falls back to sensible defaults when no provider is available. Use `--legacy` flag to generate v1 `tool.yaml` format
+- **`agents info` Partial Name Matching**: `dojops agents info` now supports prefix matching (`terraform` → `terraform-specialist`), segment matching (`security` → `security-auditor`, `cloud` → `cloud-architect`), and "Did you mean?" suggestions when no match is found
+- **`inspect` Default Summary**: `dojops inspect` with no target now shows both config and session state instead of erroring
 
 ### Changed
 
@@ -34,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **All 12 Built-in Modules Updated**: Constraints merged into `context.bestPractices` arrays; `## Examples`, `## Constraints`, and `## Update Prompt` sections removed from all built-in `.dops` modules
 - **36 Community Modules Updated**: All modules in `dojops-dops-tools` updated to the simplified v2 format
 - **Tool → Module Rename**: User-facing CLI commands renamed from `dojops tools` to `dojops modules` (with `tools` as backward-compatible alias). `--tool` flag renamed to `--module` (with `--tool` alias). Custom module discovery now searches `.dojops/modules/` as the primary path with `.dojops/tools/` as fallback. Internal TypeScript types (`BaseTool`, `ToolRegistry`, etc.) are unchanged. All documentation, website, and community repos updated
+- **`analyze diff` Help Text**: Reordered usage to recommend `--file` first for multiline diffs, added note about shell escaping limitations with inline arguments
+
+### Fixed
+
+- **`modules validate` Path Lookup**: `dojops modules validate <name>` now searches `.dojops/modules/` (where `modules init` creates files) in addition to `.dojops/tools/`. Previously, modules created by `init` could not be found by `validate`
+- **Technology Name Capitalization**: `modules init` now properly title-cases hyphenated tool names (e.g., `redis-config` → "Redis Config" instead of "Redis-config")
+- **Dashboard Sign-In Button**: Centered the "Sign In" button text on the authentication overlay (was left-aligned due to flexbox default)
 
 ## [1.0.5] - 2026-03-03
 

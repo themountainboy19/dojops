@@ -21,13 +21,13 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.5-00e5ff?style=flat-square" alt="Version" />
+  <a href="https://www.npmjs.com/package/@dojops/cli"><img src="https://img.shields.io/npm/v/@dojops/cli?style=flat-square&color=00e5ff&label=version" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@dojops/cli"><img src="https://img.shields.io/npm/dm/@dojops/cli?style=flat-square&color=00e5ff&label=downloads" alt="npm downloads" /></a>
+  <a href="https://github.com/dojops/dojops/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/dojops/dojops/ci.yml?branch=main&style=flat-square&label=CI" alt="CI" /></a>
+  <a href="https://github.com/dojops/dojops"><img src="https://img.shields.io/github/stars/dojops/dojops?style=flat-square&color=eab308" alt="GitHub stars" /></a>
+  <a href="https://github.com/dojops/dojops/blob/main/LICENSE"><img src="https://img.shields.io/github/license/dojops/dojops?style=flat-square&color=blue" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/typescript-5.4+-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/tools-12-eab308?style=flat-square" alt="Tools" />
-  <img src="https://img.shields.io/badge/agents-16%2B_custom-8b5cf6?style=flat-square" alt="Agents" />
-  <img src="https://img.shields.io/badge/providers-6-ef4444?style=flat-square" alt="Providers" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
 </p>
 
 <p align="center">
