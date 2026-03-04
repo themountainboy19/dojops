@@ -107,11 +107,40 @@ function agentInfo(args: string[], ctx: CLIContext): void {
     customAgentNames.add(entry.config.name);
   }
 
-  const config = [...configMap.values()].find((c) => c.name.toLowerCase() === name.toLowerCase());
+  const allConfigs = [...configMap.values()];
+  const lower = name.toLowerCase();
+
+  // 1. Exact match (case-insensitive)
+  let config = allConfigs.find((c) => c.name.toLowerCase() === lower);
+
+  // 2. Prefix match (e.g., "terraform" matches "terraform-specialist")
+  if (!config) {
+    const prefixMatches = allConfigs.filter((c) => c.name.toLowerCase().startsWith(lower));
+    if (prefixMatches.length === 1) config = prefixMatches[0];
+  }
+
+  // 3. Substring match on name segments (e.g., "docker" matches "docker-specialist")
+  if (!config) {
+    const segmentMatches = allConfigs.filter((c) =>
+      c.name
+        .toLowerCase()
+        .split("-")
+        .some((seg) => seg === lower),
+    );
+    if (segmentMatches.length === 1) config = segmentMatches[0];
+  }
 
   if (!config) {
-    const names = [...configMap.keys()].join(", ");
-    p.log.info(`Available agents: ${names}`);
+    // Show suggestions for close matches
+    const candidates = allConfigs
+      .filter((c) => c.name.toLowerCase().includes(lower) || c.domain.toLowerCase().includes(lower))
+      .map((c) => c.name);
+    if (candidates.length > 0) {
+      p.log.info(`Did you mean: ${candidates.join(", ")}?`);
+    } else {
+      const names = [...configMap.keys()].join(", ");
+      p.log.info(`Available agents: ${names}`);
+    }
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Agent "${name}" not found.`);
   }
 

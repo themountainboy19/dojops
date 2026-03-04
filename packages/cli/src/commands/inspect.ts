@@ -16,12 +16,10 @@ export async function inspectCommand(args: string[], ctx: CLIContext): Promise<v
       return inspectSession(ctx);
     default:
       if (!sub) {
-        p.log.info(`  ${pc.dim("$")} dojops inspect config`);
-        p.log.info(`  ${pc.dim("$")} dojops inspect session`);
-        throw new CLIError(
-          ExitCode.VALIDATION_ERROR,
-          "No inspect target specified. Available: config, session",
-        );
+        // No target specified — show both config and session
+        inspectConfig(ctx);
+        inspectSession(ctx);
+        return;
       }
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,

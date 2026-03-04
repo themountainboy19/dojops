@@ -503,6 +503,21 @@ describe("toolsInitCommand — non-interactive defaults", () => {
     expect(content).toContain('technology: "Redis"');
   });
 
+  it("title-cases hyphenated tool names for technology", async () => {
+    await toolsInitCommand(["redis-config", "--non-interactive"], makeCtx());
+
+    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    expect(content).toContain('technology: "Redis Config"');
+    expect(content).not.toContain("Redis-config");
+  });
+
+  it("title-cases multi-segment hyphenated names", async () => {
+    await toolsInitCommand(["my-custom-tool", "--non-interactive"], makeCtx());
+
+    const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
+    expect(content).toContain('technology: "My Custom Tool"');
+  });
+
   it("defaults file format to yaml", async () => {
     await toolsInitCommand(["my-tool", "--non-interactive"], makeCtx());
 

@@ -13,6 +13,16 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { findProjectRoot } from "../state";
 
+/**
+ * Converts a hyphenated tool name to title case (e.g., "redis-config" → "Redis Config").
+ */
+function titleCase(name: string): string {
+  return name
+    .split("-")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
 // ── Zod schema for LLM-generated module content ────────────────────
 
 const InitModuleResponseSchema = z.object({
@@ -163,7 +173,14 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
   if (!toolPath.includes("/") && !toolPath.includes("\\")) {
     const projectRoot = findProjectRoot();
     const dopsLocations = [
+      projectRoot ? path.join(projectRoot, ".dojops", "modules", `${toolPath}.dops`) : null,
       projectRoot ? path.join(projectRoot, ".dojops", "tools", `${toolPath}.dops`) : null,
+      path.join(
+        process.env.HOME ?? process.env.USERPROFILE ?? "~",
+        ".dojops",
+        "modules",
+        `${toolPath}.dops`,
+      ),
       path.join(
         process.env.HOME ?? process.env.USERPROFILE ?? "~",
         ".dojops",
@@ -350,10 +367,10 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
 
     const techInput = await p.text({
       message: "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
-      placeholder: toolName.charAt(0).toUpperCase() + toolName.slice(1),
+      placeholder: titleCase(toolName),
     });
     if (p.isCancel(techInput)) return;
-    technology = techInput || toolName.charAt(0).toUpperCase() + toolName.slice(1);
+    technology = techInput || titleCase(toolName);
 
     const formatInput = await p.select({
       message: "Output file format:",
@@ -412,7 +429,7 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
 
   // Apply defaults for non-interactive mode
   if (!description) description = `${toolName} configuration generator`;
-  if (!technology) technology = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+  if (!technology) technology = titleCase(toolName);
   const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
   if (!outputFilePath) outputFilePath = `${toolName}.${fileExt}`;
 

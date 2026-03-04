@@ -331,19 +331,34 @@ export function printCommandHelp(command: string): void {
     case "analyze diff":
       console.log(`\n${pc.bold("dojops analyze diff")} — Analyze infrastructure diff for risk`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
-      console.log(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
-      console.log(`  ${pc.dim("$")} terraform plan | dojops analyze diff`);
+      console.log(
+        `  ${pc.dim("$")} dojops analyze diff --file <path>          ${pc.dim("(recommended)")}`,
+      );
+      console.log(
+        `  ${pc.dim("$")} terraform plan | dojops analyze diff       ${pc.dim("(pipe)")}`,
+      );
+      console.log(
+        `  ${pc.dim("$")} dojops analyze diff "single-line content"  ${pc.dim("(inline)")}`,
+      );
       console.log(`\n${pc.bold("OPTIONS")}`);
-      console.log(`  ${pc.cyan("--file=PATH")}    Read diff content from a file`);
+      console.log(
+        `  ${pc.cyan("--file=PATH")}    Read diff content from a file ${pc.dim("(best for multiline)")}`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Analyzes infrastructure diffs (e.g. terraform plan output) and provides`);
       console.log(`  risk assessment, cost impact, security impact, and recommendations.`);
-      console.log(`  Accepts input via argument, --file flag, or stdin pipe.`);
+      console.log(`  Accepts input via --file flag, stdin pipe, or inline argument.`);
+      console.log();
+      console.log(
+        `  ${pc.yellow("Note:")} For multiline diffs, use --file or pipe. Inline arguments may lose`,
+      );
+      console.log(`  formatting due to shell escaping.`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} dojops analyze diff "terraform plan output..."`);
       console.log(`  ${pc.dim("$")} dojops analyze diff --file plan.diff`);
       console.log(`  ${pc.dim("$")} terraform plan | dojops analyze diff`);
+      console.log(
+        `  ${pc.dim("$")} terraform plan > plan.txt && dojops analyze diff --file plan.txt`,
+      );
       console.log();
       break;
 
