@@ -781,7 +781,7 @@ blockedTools:
 
 Custom modules are sandboxed with the same guardrails as built-in modules, plus additional controls:
 
-- **Verification command whitelist** — Only 16 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris). Non-whitelisted commands are rejected at runtime
+- **Verification command whitelist** — Only 33 known DevOps binaries are allowed (terraform, kubectl, helm, ansible-lint, ansible-playbook, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris, nginx, promtool, systemd-analyze, make, actionlint, caddy, haproxy, nomad, podman, fluentd, opa, vault, circleci, npx, tsc, cfn-lint). Non-whitelisted commands are rejected at runtime
 - **Permission enforcement** — The `permissions.child_process` field must be `"required"` for verification commands to execute. Omitted or `"none"` means the command is silently skipped (default-safe)
 - **Path traversal prevention** — File paths in `files[].path` and `detector.path` cannot contain `..` segments, preventing writes outside the project directory
 - **Execution guardrails** — Custom tools execute through the same `SafeExecutor` pipeline as built-in tools, inheriting `maxFileSize` (1MB default), `timeoutMs` (30s default), DevOps write allowlist enforcement, and per-file audit logging

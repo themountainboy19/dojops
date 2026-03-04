@@ -139,7 +139,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 - **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
 - **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
-- **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (16 allowed binaries), `child_process` permission gating, and path traversal prevention
+- **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input is validated against Zod schemas before execution. v1 tools also validate LLM output; v2 tools generate raw content directly
 - **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
@@ -174,7 +174,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 - **REST API** — 20 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
 - **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
-- **Metrics API** — 4 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
+- **Metrics API** — 5 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`, `/tokens`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
 
 ---
@@ -217,26 +217,29 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 
 #### Generation & Planning
 
-| Command                          | Description                                       |
-| -------------------------------- | ------------------------------------------------- |
-| `dojops <prompt>`                | Generate DevOps config (default command)          |
-| `dojops generate <prompt>`       | Explicit generation (same as default)             |
-| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph   |
-| `dojops plan --execute <prompt>` | Plan + execute with approval workflow             |
-| `dojops apply [<plan-id>]`       | Execute a saved plan                              |
-| `dojops apply --skip-verify`     | Skip external config verification (on by default) |
-| `dojops apply --resume`          | Resume a partially-failed plan                    |
-| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match  |
-| `dojops apply --dry-run`         | Preview changes without writing files             |
-| `dojops apply --allow-all-paths` | Bypass DevOps file write allowlist                |
-| `dojops validate [<plan-id>]`    | Validate plan against schemas                     |
-| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language             |
+| Command                          | Description                                                 |
+| -------------------------------- | ----------------------------------------------------------- |
+| `dojops <prompt>`                | Generate DevOps config (default command)                    |
+| `dojops generate <prompt>`       | Explicit generation (same as default)                       |
+| `dojops plan <prompt>`           | Decompose goal into dependency-aware task graph             |
+| `dojops plan --execute <prompt>` | Plan + execute with approval workflow                       |
+| `dojops apply [<plan-id>]`       | Execute a saved plan                                        |
+| `dojops apply --skip-verify`     | Skip external config verification (on by default)           |
+| `dojops apply --resume`          | Resume a partially-failed plan                              |
+| `dojops apply --retry`           | Retry failed tasks when used with `--resume`                |
+| `dojops apply --replay`          | Deterministic replay: temp=0, validate env match            |
+| `dojops apply --dry-run`         | Preview changes without writing files                       |
+| `dojops apply --force`           | Skip git dirty check, HIGH risk gate, and replay validation |
+| `dojops apply --allow-all-paths` | Bypass DevOps file write allowlist                          |
+| `dojops validate [<plan-id>]`    | Validate plan against schemas                               |
+| `dojops explain [<plan-id>]`     | LLM explains a plan in plain language                       |
 
 #### Diagnostics & Analysis
 
 | Command                      | Description                                           |
 | ---------------------------- | ----------------------------------------------------- |
 | `dojops check`               | LLM-powered DevOps config quality check (score 0-100) |
+| `dojops check --fix`         | Auto-remediate HIGH/CRITICAL findings via LLM         |
 | `dojops debug ci <log>`      | Diagnose CI/CD log failures (root cause, fixes)       |
 | `dojops analyze diff <diff>` | Analyze infrastructure diff (risk, cost, security)    |
 | `dojops scan`                | Security scan: vulnerabilities, deps, IaC, secrets    |
@@ -244,17 +247,19 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops scan --deps`         | Run dependency audit only (npm, pip)                  |
 | `dojops scan --iac`          | Run IaC scanners only (checkov, hadolint)             |
 | `dojops scan --sbom`         | Generate SBOM (CycloneDX) with hash tracking          |
+| `dojops scan --license`      | Run license compliance scanners (trivy-license)       |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 | `dojops scan --compare`      | Compare findings with previous scan report            |
 
 #### Interactive
 
-| Command                      | Description                              |
-| ---------------------------- | ---------------------------------------- |
-| `dojops chat`                | Interactive multi-turn AI DevOps session |
-| `dojops chat --session=NAME` | Resume or create a named session         |
-| `dojops chat --resume`       | Resume the most recent session           |
-| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent   |
+| Command                      | Description                                            |
+| ---------------------------- | ------------------------------------------------------ |
+| `dojops chat`                | Interactive multi-turn AI DevOps session               |
+| `dojops chat --session=NAME` | Resume or create a named session                       |
+| `dojops chat --resume`       | Resume the most recent session                         |
+| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent                 |
+| `dojops chat --message=TEXT` | Send a single message and exit (scriptable, also `-m`) |
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
@@ -286,7 +291,9 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops history list`           | View execution history                                                |
 | `dojops history show <plan-id>` | Show plan details and per-task results                                |
 | `dojops history verify`         | Verify audit log hash chain integrity                                 |
-| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
+| `dojops history audit`          | List audit log entries                                                |
+| `dojops history repair`         | Repair broken audit log hash chain                                    |
+| `dojops clean [<plan-id>]`      | Remove generated artifacts from a plan                                |
 | `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
 #### Provider Management
@@ -312,8 +319,11 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops auth login`                 | Authenticate with LLM provider                                                            |
 | `dojops auth status`                | Show saved tokens and default provider                                                    |
 | `dojops serve [--port=N]`           | Start API server + web dashboard                                                          |
+| `dojops serve --no-auth`            | Start server without API key authentication (local dev only)                              |
+| `dojops serve --tls-cert --tls-key` | Enable HTTPS/TLS on the API server                                                        |
+| `dojops serve credentials`          | Generate API key for dashboard/API authentication                                         |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
-| `dojops doctor`                     | System health diagnostics + project metrics                                               |
+| `dojops status`                     | System health diagnostics + project metrics (alias: `doctor`)                             |
 | `dojops upgrade`                    | Check for and install CLI updates (`--check` for check-only)                              |
 
 ### Global Options
@@ -524,6 +534,7 @@ DojOps includes 16 built-in agents plus support for user-defined custom agents. 
 | `GET`    | `/api/metrics/overview`  | Plan/execution/scan aggregates                       |
 | `GET`    | `/api/metrics/security`  | Scan findings, severity trends, top issues           |
 | `GET`    | `/api/metrics/audit`     | Audit chain integrity, command distribution          |
+| `GET`    | `/api/metrics/tokens`    | LLM token usage tracking                             |
 
 ### Examples
 
@@ -616,7 +627,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 2140 tests
+pnpm test               # Run all 2195 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -641,8 +652,9 @@ packages/
   core/             LLM providers (6) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  tools/            12 built-in DevOps tools
+  runtime/          12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
   scanner/          10 security scanners + LLM-powered remediation
+  context/          Context7 documentation augmentation for v2 tools
   session/          Chat session management + memory + context injection
   sdk/              BaseTool<T> abstract class + Zod re-export + verification types + file-reader utilities
 ```
@@ -651,10 +663,10 @@ packages/
 
 | Package                 | Tests    |
 | ----------------------- | -------- |
-| `@dojops/runtime`       | 578      |
-| `@dojops/core`          | 485      |
-| `@dojops/cli`           | 284      |
-| `@dojops/tool-registry` | 250      |
+| `@dojops/runtime`       | 589      |
+| `@dojops/core`          | 496      |
+| `@dojops/cli`           | 315      |
+| `@dojops/tool-registry` | 252      |
 | `@dojops/api`           | 236      |
 | `@dojops/scanner`       | 110      |
 | `@dojops/executor`      | 67       |
@@ -662,7 +674,7 @@ packages/
 | `@dojops/session`       | 38       |
 | `@dojops/context`       | 29       |
 | `@dojops/sdk`           | 24       |
-| **Total**               | **2140** |
+| **Total**               | **2195** |
 
 ---
 
@@ -675,7 +687,7 @@ npm login
 pnpm publish-packages    # Build + publish in dependency order
 ```
 
-Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `tools` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
+Publish order: `sdk` -> `core` -> `context` -> `executor` -> `planner` -> `runtime` -> `tool-registry` -> `scanner` -> `session` -> `api` -> `cli`
 
 ---
 

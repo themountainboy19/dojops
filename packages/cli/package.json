@@ -60,7 +60,8 @@
     "@dojops/tool-registry": "workspace:*",
     "dotenv": "^17.0.0",
     "js-yaml": "^4.1.0",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9"

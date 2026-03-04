@@ -67,6 +67,8 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
   |     +-- @dojops/executor
   |     |     +-- @dojops/sdk
   |     +-- @dojops/scanner
+  |     +-- @dojops/context
+  |     |     +-- @dojops/core
   |     +-- @dojops/session
   |           +-- @dojops/core
 ```
@@ -77,6 +79,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 cli -> api -> tool-registry -> runtime -> core -> sdk
           -> planner -> executor
           -> scanner
+          -> context -> core
           -> session -> core
 ```
 
@@ -187,7 +190,7 @@ Unified registry layer between consumers (Planner, Executor, CLI, API) and tool 
 - **CustomTool adapter** — Converts declarative `tool.yaml` into a `DevOpsTool`-compatible object with generate/execute/verify
 - **Tool policy** — `.dojops/policy.yaml` supports `allowedTools` and `blockedTools` lists
 - **Audit enrichment** — Custom tool executions include `toolType`, `toolSource`, `toolVersion`, `toolHash`, and `systemPromptHash` in audit entries
-- **Tool isolation** — Verification commands restricted to a whitelist of 16 allowed binaries (terraform, kubectl, helm, etc.), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
+- **Tool isolation** — Verification commands restricted to a whitelist of 33 allowed binaries (terraform, kubectl, helm, ansible-lint, ansible-playbook, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris, nginx, promtool, systemd-analyze, make, actionlint, caddy, haproxy, nomad, podman, fluentd, opa, vault, circleci, npx, tsc, cfn-lint), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
 - **Unified interface** — `ToolRegistry.getAll()` returns `DevOpsTool[]`, so Planner, Executor, and API remain unchanged
 
 ### 6. Execution Engine (`@dojops/executor`)

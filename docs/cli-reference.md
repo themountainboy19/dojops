@@ -23,6 +23,7 @@ Complete reference for the `dojops` command-line interface.
 | `dojops apply --force`            | Skip git dirty check, HIGH risk gate, and replay validation |
 | `dojops apply --task <id>`        | Run only a single task from the plan                        |
 | `dojops apply --timeout <sec>`    | Per-task timeout in seconds (default: 60)                   |
+| `dojops apply --retry`            | Retry failed tasks when used with `--resume`                |
 | `dojops apply --install-packages` | Run package manager install after successful apply          |
 | `dojops validate [<plan-id>]`     | Validate plan against schemas                               |
 | `dojops explain [<plan-id>]`      | LLM explains a plan in plain language                       |
@@ -33,6 +34,7 @@ Complete reference for the `dojops` command-line interface.
 | ----------------------------- | ---------------------------------------------------------------------- |
 | `dojops check`                | LLM-powered DevOps config quality check (score 0-100)                  |
 | `dojops check --output json`  | Output check report as JSON                                            |
+| `dojops check --fix`          | Auto-remediate HIGH/CRITICAL findings via LLM                          |
 | `dojops check provider`       | Test LLM provider connectivity and list models                         |
 | `dojops debug ci <log>`       | Diagnose CI/CD log failures (root cause, fixes)                        |
 | `dojops analyze diff <diff>`  | Analyze infrastructure diff (risk, cost, security)                     |
@@ -68,6 +70,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops agents create <desc>`     | Create a custom agent (LLM-generated)                 |
 | `dojops agents create --manual`   | Create a custom agent interactively                   |
 | `dojops agents remove <name>`     | Remove a custom agent                                 |
+| `dojops modules load <path>`      | Copy a local tool.yaml module into `.dojops/tools/`   |
 | `dojops modules list`             | List discovered custom modules (global + project)     |
 | `dojops modules validate <path>`  | Validate a custom module manifest                     |
 | `dojops modules init <name>`      | Scaffold a new custom module with template files      |
@@ -90,7 +93,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops history verify`         | Verify audit log hash chain integrity                                 |
 | `dojops history audit`          | List audit log entries                                                |
 | `dojops history repair`         | Repair broken audit log hash chain                                    |
-| `dojops destroy <plan-id>`      | Remove generated artifacts from a plan                                |
+| `dojops clean [<plan-id>]`      | Remove generated artifacts from a plan                                |
+| `dojops destroy <plan-id>`      | Deprecated alias for `clean`                                          |
 | `dojops rollback <plan-id>`     | Reverse an applied plan (delete created files + restore .bak backups) |
 
 ### Provider Management
@@ -107,21 +111,22 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Configuration & Server
 
-| Command                             | Description                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------- |
-| `dojops config`                     | Configure provider, model, tokens (interactive)                                 |
-| `dojops config show`                | Display current configuration                                                   |
-| `dojops config profile create NAME` | Save current config as a named profile                                          |
-| `dojops config profile use NAME`    | Switch to a named profile                                                       |
-| `dojops config profile list`        | List all profiles                                                               |
-| `dojops auth login`                 | Authenticate with LLM provider                                                  |
-| `dojops auth status`                | Show saved tokens and default provider                                          |
-| `dojops serve [--port=N]`           | Start API server + web dashboard                                                |
-| `dojops serve --no-auth`            | Start server without API key authentication (local dev only)                    |
-| `dojops serve credentials`          | Generate API key for dashboard/API authentication                               |
-| `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
-| `dojops doctor`                     | System health diagnostics + project metrics                                     |
-| `dojops upgrade`                    | Check for and install CLI updates (`--check` for check-only)                    |
+| Command                                       | Description                                                                     |
+| --------------------------------------------- | ------------------------------------------------------------------------------- |
+| `dojops config`                               | Configure provider, model, tokens (interactive)                                 |
+| `dojops config show`                          | Display current configuration                                                   |
+| `dojops config profile create NAME`           | Save current config as a named profile                                          |
+| `dojops config profile use NAME`              | Switch to a named profile                                                       |
+| `dojops config profile list`                  | List all profiles                                                               |
+| `dojops auth login`                           | Authenticate with LLM provider                                                  |
+| `dojops auth status`                          | Show saved tokens and default provider                                          |
+| `dojops serve [--port=N]`                     | Start API server + web dashboard                                                |
+| `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                    |
+| `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                              |
+| `dojops serve credentials`                    | Generate API key for dashboard/API authentication                               |
+| `dojops init`                                 | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
+| `dojops status`                               | System health diagnostics + project metrics (alias: `doctor`)                   |
+| `dojops upgrade`                              | Check for and install CLI updates (`--check` for check-only)                    |
 
 ---
 
@@ -206,6 +211,7 @@ dojops apply --skip-verify      # skip external validation (on by default)
 dojops apply --force            # skip git dirty working tree check
 dojops apply --allow-all-paths  # bypass DevOps file write allowlist
 dojops apply --resume --yes     # resume failed tasks, auto-approve
+dojops apply --resume --retry   # resume + retry failed tasks
 dojops apply --replay           # deterministic: temp=0, validate env match
 dojops apply --replay --yes     # force replay despite mismatches
 
@@ -234,6 +240,10 @@ dojops check
 
 # Machine-readable output
 dojops check --output json
+
+# Auto-remediate findings
+dojops check --fix
+dojops check --fix --yes        # auto-approve remediation
 
 # Test provider connectivity
 dojops check provider
@@ -370,7 +380,8 @@ dojops provider remove deepseek
 
 ```bash
 # System diagnostics
-dojops doctor
+dojops status                          # canonical command
+dojops doctor                          # alias
 
 # Browse agents
 dojops agents list
@@ -385,6 +396,8 @@ dojops agents remove sre-specialist
 dojops history list
 dojops history show plan-abc123
 dojops history verify
+dojops history audit                   # view audit log entries
+dojops history repair                  # repair broken audit chain
 
 # Start dashboard
 dojops serve --port=8080
@@ -395,6 +408,9 @@ dojops serve                         # auto-loads key from server.json
 
 # Start without authentication (local development only)
 dojops serve --no-auth
+
+# Enable HTTPS/TLS
+dojops serve --tls-cert=cert.pem --tls-key=key.pem
 
 # Configuration profiles
 dojops config profile create staging

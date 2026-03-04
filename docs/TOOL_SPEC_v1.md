@@ -194,14 +194,21 @@ If no output schema is provided, the LLM response is parsed as raw JSON or treat
 
 ## 8. Verification Command Whitelist
 
-Custom tool verification commands are restricted to the following 16 binaries:
+Custom tool verification commands are restricted to the following 33 binaries:
 
 ```
-terraform    kubectl      helm         ansible-lint
-docker       hadolint     yamllint     jsonlint
-shellcheck   tflint       kubeval      conftest
-checkov      trivy        kube-score   polaris
+terraform       kubectl         helm            ansible-lint
+ansible-playbook docker         hadolint        yamllint
+jsonlint        shellcheck      tflint          kubeval
+conftest        checkov         trivy           kube-score
+polaris         nginx           promtool        systemd-analyze
+make            actionlint      caddy           haproxy
+nomad           podman          fluentd         opa
+vault           circleci        npx             tsc
+cfn-lint
 ```
+
+> **Note:** This list has been expanded since the v1 spec was frozen. The original 16 binaries remain supported; additional binaries were added to support community `.dops` modules.
 
 **Verification execution rules (3-tier check):**
 

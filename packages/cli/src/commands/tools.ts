@@ -3,13 +3,47 @@ import * as path from "path";
 import * as crypto from "crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
+import { z } from "zod";
 import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/tool-registry";
 import { parseDopsFileAny, validateDopsModuleAny } from "@dojops/runtime";
+import { parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
-import { CommandHandler } from "../types";
+import { CommandHandler, CLIContext } from "../types";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { findProjectRoot } from "../state";
+
+// ── Zod schema for LLM-generated module content ────────────────────
+
+const InitModuleResponseSchema = z.object({
+  outputGuidance: z.string().min(1),
+  bestPractices: z.array(z.string().min(1)).min(3).max(10),
+  context7Libraries: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+        query: z.string().min(1),
+      }),
+    )
+    .default([]),
+  prompt: z.string().min(1),
+  keywords: z.array(z.string().min(1)).min(3),
+  scopePatterns: z.array(z.string().min(1)).min(1),
+  riskLevel: z.enum(["LOW", "MEDIUM", "HIGH"]),
+  riskRationale: z.string().min(1),
+  detectionPaths: z.array(z.string().min(1)).min(1),
+  structuralRules: z
+    .array(
+      z.object({
+        path: z.string(),
+        required: z.boolean(),
+        message: z.string(),
+      }),
+    )
+    .default([]),
+});
+
+type InitModuleResponse = z.infer<typeof InitModuleResponseSchema>;
 
 const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
 
@@ -277,7 +311,8 @@ function validateDopsFile(filePath: string): void {
 }
 
 /**
- * `dojops tools init <name>` — scaffolds a .dops file in .dojops/tools/
+ * `dojops tools init <name>` — scaffolds a v2 .dops file in .dojops/modules/
+ * Uses AI to generate best practices and prompts when a provider is configured.
  * Falls back to legacy tool.yaml + input.schema.json with --legacy flag.
  */
 export const toolsInitCommand: CommandHandler = async (args, ctx) => {
@@ -285,9 +320,10 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   const positionalArgs = args.filter((a) => !a.startsWith("-"));
   let toolName = positionalArgs[0];
   let description = "";
-  let format: "yaml" | "json" | "hcl" | "raw" = "yaml";
-  let systemPrompt = "";
-  let filePath = "";
+  let technology = "";
+  let fileFormat = "yaml" as "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
+  let outputFilePath = "";
+  let useLLM = false;
   const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
   const isLegacy = args.includes("--legacy");
 
@@ -312,33 +348,54 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     if (p.isCancel(descInput)) return;
     description = descInput || `${toolName} configuration generator`;
 
+    const techInput = await p.text({
+      message: "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
+      placeholder: toolName.charAt(0).toUpperCase() + toolName.slice(1),
+    });
+    if (p.isCancel(techInput)) return;
+    technology = techInput || toolName.charAt(0).toUpperCase() + toolName.slice(1);
+
     const formatInput = await p.select({
-      message: "Output format:",
+      message: "Output file format:",
       options: [
         { value: "yaml", label: "YAML" },
         { value: "json", label: "JSON" },
         { value: "hcl", label: "HCL" },
-        { value: "raw", label: "Raw text" },
+        { value: "raw", label: "Raw text (conf, ini, etc.)" },
+        { value: "ini", label: "INI" },
+        { value: "toml", label: "TOML" },
       ],
     });
     if (p.isCancel(formatInput)) return;
-    format = formatInput as "yaml" | "json" | "hcl" | "raw";
+    fileFormat = formatInput as typeof fileFormat;
 
-    const promptInput = await p.text({
-      message: "System prompt for the LLM generator:",
-      placeholder: `You are a ${toolName} configuration expert...`,
+    const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
+    const filePathInput = await p.text({
+      message: "Output file path:",
+      placeholder: `${toolName}.${fileExt}`,
     });
-    if (p.isCancel(promptInput)) return;
-    systemPrompt =
-      promptInput ||
-      `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
+    if (p.isCancel(filePathInput)) return;
+    outputFilePath = filePathInput || `${toolName}.${fileExt}`;
 
-    const fileInput = await p.text({
-      message: "Output file path template:",
-      placeholder: `{outputPath}/${toolName}.${format === "raw" ? "conf" : format}`,
-    });
-    if (p.isCancel(fileInput)) return;
-    filePath = fileInput || `{outputPath}/${toolName}.${format === "raw" ? "conf" : format}`;
+    // Only offer LLM generation if not in legacy mode
+    if (!isLegacy) {
+      let providerAvailable = false;
+      try {
+        ctx.getProvider();
+        providerAvailable = true;
+      } catch {
+        // No provider configured
+      }
+
+      if (providerAvailable) {
+        const llmInput = await p.confirm({
+          message: "Generate module content with AI?",
+          initialValue: true,
+        });
+        if (p.isCancel(llmInput)) return;
+        useLLM = llmInput;
+      }
+    }
   }
 
   if (!toolName) {
@@ -355,16 +412,24 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
 
   // Apply defaults for non-interactive mode
   if (!description) description = `${toolName} configuration generator`;
-  if (!systemPrompt)
-    systemPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
-  if (!filePath) filePath = `{outputPath}/${toolName}.${format === "raw" ? "conf" : format}`;
+  if (!technology) technology = toolName.charAt(0).toUpperCase() + toolName.slice(1);
+  const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
+  if (!outputFilePath) outputFilePath = `${toolName}.${fileExt}`;
 
   if (isLegacy) {
     // Legacy mode: scaffold tool.yaml + input.schema.json
-    return scaffoldLegacyTool(toolName, description, format, systemPrompt, filePath);
+    const legacyPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
+    const legacyFilePath = `{outputPath}/${outputFilePath}`;
+    return scaffoldLegacyTool(
+      toolName,
+      description,
+      fileFormat === "ini" || fileFormat === "toml" ? "raw" : fileFormat,
+      legacyPrompt,
+      legacyFilePath,
+    );
   }
 
-  // Default: scaffold .dops file
+  // Default: scaffold v2 .dops file
   const toolsDir = path.resolve(".dojops", "modules");
   const dopsPath = path.join(toolsDir, `${toolName}.dops`);
 
@@ -374,65 +439,223 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
 
   fs.mkdirSync(toolsDir, { recursive: true });
 
-  const dopsContent = `---
-dops: v1
-kind: tool
+  // Try LLM-powered generation
+  let llmContent: InitModuleResponse | undefined;
+  if (useLLM) {
+    llmContent = await generateModuleWithLLM(ctx, {
+      name: toolName,
+      description,
+      technology,
+      fileFormat,
+      outputFilePath,
+    });
+  }
 
-meta:
-  name: ${toolName}
-  version: 0.1.0
-  description: "${description}"
-  tags: []
-
-input:
-  fields:
-    outputPath:
-      type: string
-      required: true
-      description: "Directory to write the configuration file"
-    description:
-      type: string
-      required: true
-      description: "What the configuration should do"
-
-output:
-  type: object
-  required: [content]
-  properties:
-    content:
-      type: object
-
-files:
-  - path: "${filePath}"
-    format: ${format}
-    source: llm
-
-permissions:
-  filesystem: write
-  child_process: none
-  network: none
----
-# ${toolName}
-
-## Prompt
-
-${systemPrompt}
-
-## Constraints
-
-- Respond with valid JSON only, no markdown fences
-- Follow best practices for the target format
-
-## Keywords
-
-${toolName}
-`;
+  const dopsContent = buildV2Template({
+    name: toolName,
+    description,
+    technology,
+    fileFormat,
+    outputFilePath,
+    llm: llmContent,
+  });
 
   fs.writeFileSync(dopsPath, dopsContent, "utf-8");
 
   p.log.success(`Module scaffolded at ${pc.underline(dopsPath)}`);
+  if (llmContent) {
+    p.log.info(`  ${pc.dim("AI-generated best practices and prompt included.")}`);
+  }
   p.log.info(`  ${pc.dim("Edit the .dops file to customize your module.")}`);
 };
+
+// ── LLM-powered module generation ─────────────────────────────────
+
+interface ModuleInitParams {
+  name: string;
+  description: string;
+  technology: string;
+  fileFormat: string;
+  outputFilePath: string;
+}
+
+async function generateModuleWithLLM(
+  ctx: CLIContext,
+  params: ModuleInitParams,
+): Promise<InitModuleResponse | undefined> {
+  const spinner = p.spinner();
+  spinner.start("Generating module content with AI...");
+
+  try {
+    const provider = ctx.getProvider();
+
+    const systemPrompt = `You are a DevOps module designer for the DojOps AI DevOps automation engine.
+Generate a module specification for a "${params.technology}" configuration generator
+that outputs ${params.fileFormat} files.
+
+Module name: ${params.name}
+Description: ${params.description}
+Output file: ${params.outputFilePath}
+
+Respond with JSON containing:
+- outputGuidance: 2-4 sentences instructing an LLM what to generate. Must tell it to output raw ${params.fileFormat} content directly without JSON wrapping or code fences.
+- bestPractices: Array of 5-8 specific, actionable best practices for ${params.technology} configuration. Be specific to the technology, not generic.
+- context7Libraries: Array of [{name, query}] for documentation lookups. Use 1-2 entries with the technology name and a specific documentation query.
+- prompt: A 2-3 paragraph system prompt for the LLM generator. Must include these exact placeholders: {outputGuidance}, {bestPractices}, {context7Docs}, {projectContext}
+- keywords: Array of 5-15 keywords for routing (technology names, config types, related tools)
+- scopePatterns: Array of file glob patterns this module is allowed to write (e.g., ["*.conf", "nginx/*.conf"])
+- riskLevel: "LOW" for read-only configs, "MEDIUM" for service configs that affect runtime, "HIGH" for security/infra changes
+- riskRationale: One sentence explaining the risk classification
+- detectionPaths: Array of file paths or glob patterns to detect existing configs for update mode
+- structuralRules: Array of validation rules [{path, required: true, message}] for basic output validation (e.g., check required YAML keys exist). Can be empty array for raw formats.`;
+
+    const response = await provider.generate({
+      system: systemPrompt,
+      prompt: `Generate the module specification JSON for a ${params.technology} configuration generator.`,
+      schema: InitModuleResponseSchema,
+    });
+
+    const parsed = response.parsed
+      ? (InitModuleResponseSchema.parse(response.parsed) as InitModuleResponse)
+      : parseAndValidate<InitModuleResponse>(response.content, InitModuleResponseSchema);
+
+    spinner.stop("AI content generated");
+    return parsed;
+  } catch (err) {
+    spinner.stop("AI generation failed — using defaults");
+    p.log.warn(pc.dim(`LLM error: ${err instanceof Error ? err.message : String(err)}`));
+    return undefined;
+  }
+}
+
+// ── V2 template builder ───────────────────────────────────────────
+
+interface V2TemplateParams {
+  name: string;
+  description: string;
+  technology: string;
+  fileFormat: string;
+  outputFilePath: string;
+  llm?: InitModuleResponse;
+}
+
+function buildV2Template(params: V2TemplateParams): string {
+  const { name, description, technology, fileFormat, outputFilePath, llm } = params;
+
+  const outputGuidance = llm?.outputGuidance
+    ? indent(llm.outputGuidance.trim(), 4)
+    : indent(
+        `Generate a complete, valid ${technology} configuration file.\nOutput raw file content directly — do NOT wrap in JSON or code fences.`,
+        4,
+      );
+
+  const bestPractices = llm?.bestPractices
+    ? llm.bestPractices.map((bp: string) => `    - "${escapeYaml(bp)}"`).join("\n")
+    : [
+        `    - "Follow official ${technology} documentation conventions"`,
+        `    - "Include comments explaining non-obvious settings"`,
+        `    - "Use secure defaults where applicable"`,
+      ].join("\n");
+
+  const context7Block = llm?.context7Libraries?.length
+    ? `  context7Libraries:\n${llm.context7Libraries.map((lib: { name: string; query: string }) => `    - name: ${lib.name}\n      query: "${escapeYaml(lib.query)}"`).join("\n")}`
+    : `  context7Libraries:\n    - name: ${name}\n      query: "${technology} configuration syntax and best practices"`;
+
+  const detectionPaths = llm?.detectionPaths
+    ? `[${llm.detectionPaths.map((d: string) => `"${d}"`).join(", ")}]`
+    : `["${outputFilePath}"]`;
+
+  const scopeWrite = llm?.scopePatterns
+    ? `[${llm.scopePatterns.map((s: string) => `"${s}"`).join(", ")}]`
+    : `["${outputFilePath}"]`;
+
+  const riskLevel = llm?.riskLevel ?? "LOW";
+  const riskRationale = llm?.riskRationale
+    ? escapeYaml(llm.riskRationale)
+    : "Generates a single configuration file";
+
+  const structuralBlock = llm?.structuralRules?.length
+    ? `\nverification:\n  structural:\n${llm.structuralRules.map((r: { path: string; required: boolean; message: string }) => `    - path: "${r.path}"\n      required: ${r.required}\n      message: "${escapeYaml(r.message)}"`).join("\n")}\n`
+    : "";
+
+  const prompt = llm?.prompt
+    ? llm.prompt.trim()
+    : `You are a ${technology} expert. Generate production-ready configuration.\n\n{outputGuidance}\n\nFollow these best practices:\n{bestPractices}\n\n{context7Docs}\n\nProject context: {projectContext}`;
+
+  const keywords = llm?.keywords ? llm.keywords.join(", ") : `${name}, ${technology.toLowerCase()}`;
+
+  return `---
+dops: v2
+kind: tool
+
+meta:
+  name: ${name}
+  version: 0.1.0
+  description: "${escapeYaml(description)}"
+  tags: []
+
+context:
+  technology: "${technology}"
+  fileFormat: ${fileFormat}
+  outputGuidance: |
+${outputGuidance}
+  bestPractices:
+${bestPractices}
+${context7Block}
+
+files:
+  - path: "${outputFilePath}"
+    format: raw
+
+detection:
+  paths: ${detectionPaths}
+  updateMode: true
+${structuralBlock}
+permissions:
+  filesystem: write
+  child_process: none
+  network: none
+
+scope:
+  write: ${scopeWrite}
+
+risk:
+  level: ${riskLevel}
+  rationale: "${riskRationale}"
+
+execution:
+  mode: generate
+  deterministic: false
+  idempotent: true
+
+update:
+  strategy: replace
+  inputSource: file
+  injectAs: existingContent
+---
+# ${name}
+
+## Prompt
+
+${prompt}
+
+## Keywords
+
+${keywords}
+`;
+}
+
+function escapeYaml(s: string): string {
+  return s.replace(/"/g, '\\"');
+}
+
+function indent(text: string, spaces: number): string {
+  const pad = " ".repeat(spaces);
+  return text
+    .split("\n")
+    .map((line) => pad + line)
+    .join("\n");
+}
 
 function scaffoldLegacyTool(
   toolName: string,

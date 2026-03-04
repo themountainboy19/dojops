@@ -755,16 +755,21 @@ export function printCommandHelp(command: string): void {
     case "tools":
       console.log(`\n${pc.bold("dojops modules")} — Manage DevOps modules (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install]`);
+      console.log(
+        `  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install|search]`,
+      );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
         `  ${pc.cyan("list")}              List all custom modules ${pc.dim("(default)")}`,
       );
-      console.log(`  ${pc.cyan("init <name>")}      Scaffold a new .dops module`);
+      console.log(
+        `  ${pc.cyan("init <name>")}      Scaffold a new v2 .dops module (AI-powered when provider is configured)`,
+      );
       console.log(`  ${pc.cyan("validate <name>")}  Validate a module manifest`);
       console.log(`  ${pc.cyan("load <path>")}      Load a module from a local directory`);
       console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops module to the DojOps Hub`);
       console.log(`  ${pc.cyan("install <name>")}   Install a .dops module from the DojOps Hub`);
+      console.log(`  ${pc.cyan("search <query>")}   Search the DojOps Hub for modules`);
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
@@ -772,8 +777,13 @@ export function printCommandHelp(command: string): void {
       console.log(
         `  ${pc.cyan("--global")}        Install to ~/.dojops/modules/ instead of project`,
       );
+      console.log(`  ${pc.cyan("--legacy")}        Generate legacy v1 .dops format (init only)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Modules are .dops files that define LLM-powered configuration generators.`);
+      console.log(`  Modules are v2 .dops files that define LLM-powered configuration generators.`);
+      console.log(
+        `  When a provider is configured, ${pc.cyan("init")} uses AI to generate best practices,`,
+      );
+      console.log(`  prompts, keywords, and risk classification for your module.`);
       console.log(`  Modules are discovered from:`);
       console.log(`    - ~/.dojops/modules/<name>/    (global)`);
       console.log(`    - .dojops/modules/<name>/      (project, overrides global)`);
@@ -781,6 +791,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops modules`);
       console.log(`  ${pc.dim("$")} dojops modules list`);
       console.log(`  ${pc.dim("$")} dojops modules init my-module`);
+      console.log(`  ${pc.dim("$")} dojops modules init my-module --legacy`);
       console.log(`  ${pc.dim("$")} dojops modules validate my-module`);
       console.log(`  ${pc.dim("$")} dojops modules load /path/to/module`);
       console.log(
@@ -788,6 +799,7 @@ export function printCommandHelp(command: string): void {
       );
       console.log(`  ${pc.dim("$")} dojops modules install nginx-config`);
       console.log(`  ${pc.dim("$")} dojops modules install nginx-config --version 1.0.0 --global`);
+      console.log(`  ${pc.dim("$")} dojops modules search docker`);
       console.log(`  ${pc.dim("$")} dojops modules list --output json`);
       console.log();
       break;
