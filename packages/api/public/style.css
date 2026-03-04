@@ -2926,6 +2926,7 @@ pre {
 
 .auth-submit {
   width: 100%;
+  justify-content: center;
   padding: 10px 0;
   font-weight: 600;
 }
