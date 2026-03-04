@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`dojops upgrade` Command**: New CLI command to check for and install CLI updates. Fetches the latest version from the npm registry, compares with the current version, and runs `npm install -g @dojops/cli@<version>` with interactive confirmation. Supports `--check` flag (check-only, exit 1 if update available), `--yes` for auto-approval, `--non-interactive` mode, and `--output json` for structured output
 
+### Changed
+
+- **Simplified `.dops` v2 Format**: v2 `.dops` files now only require `## Prompt` and `## Keywords` markdown sections. Removed `## Examples` (replaced by Context7 runtime docs), `## Constraints` (merged into `context.bestPractices`), and `## Update Prompt` (generic update fallback is always used). This makes it much easier for users to contribute new `.dops` tool files
+- **All 12 Built-in Modules Updated**: Constraints merged into `context.bestPractices` arrays; `## Examples`, `## Constraints`, and `## Update Prompt` sections removed from all built-in `.dops` modules
+- **36 Community Tools Updated**: All tools in `dojops-dops-tools` updated to the simplified v2 format
+
 ## [1.0.5] - 2026-03-03
 
 ### Added
