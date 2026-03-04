@@ -119,6 +119,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops serve credentials`          | Generate API key for dashboard/API authentication                               |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
 | `dojops doctor`                     | System health diagnostics + project metrics                                     |
+| `dojops upgrade`                    | Check for and install CLI updates (`--check` for check-only)                    |
 
 ---
 
@@ -390,4 +391,13 @@ dojops serve                         # auto-loads key from server.json
 dojops config profile create staging
 dojops config profile use staging
 dojops config profile list
+
+# Check for updates
+dojops upgrade --check
+
+# Upgrade to latest version
+dojops upgrade
+
+# Upgrade without confirmation
+dojops upgrade --yes
 ```

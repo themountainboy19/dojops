@@ -314,6 +314,7 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops serve [--port=N]`           | Start API server + web dashboard                                                          |
 | `dojops init`                       | Initialize `.dojops/` + comprehensive repo scan (11 CI platforms, IaC, scripts, security) |
 | `dojops doctor`                     | System health diagnostics + project metrics                                               |
+| `dojops upgrade`                    | Check for and install CLI updates (`--check` for check-only)                              |
 
 ### Global Options
 
