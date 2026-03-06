@@ -335,34 +335,54 @@ interface InitWizardResult {
   useLLM: boolean;
 }
 
+/** Prompt the user and return undefined if cancelled. */
+async function promptText(
+  message: string,
+  placeholder: string,
+  validate?: (val: string) => string | undefined,
+): Promise<string | undefined> {
+  const input = await p.text({ message, placeholder, validate });
+  return p.isCancel(input) ? undefined : input;
+}
+
+async function promptUseLLM(ctx: CLIContext, isLegacy: boolean): Promise<boolean> {
+  if (isLegacy) return false;
+  try {
+    ctx.getProvider();
+  } catch {
+    return false;
+  }
+  const llmInput = await p.confirm({
+    message: "Generate module content with AI?",
+    initialValue: true,
+  });
+  return p.isCancel(llmInput) ? false : llmInput;
+}
+
 async function runInitWizard(
   ctx: CLIContext,
   isLegacy: boolean,
 ): Promise<InitWizardResult | undefined> {
-  const nameInput = await p.text({
-    message: "Module name (lowercase, hyphens allowed):",
-    placeholder: "my-tool",
-    validate: (val) => {
+  const toolName = await promptText(
+    "Module name (lowercase, hyphens allowed):",
+    "my-tool",
+    (val) => {
       if (!val) return "Name is required";
       if (!/^[a-z0-9-]+$/.test(val)) return "Must be lowercase alphanumeric with hyphens";
       return undefined;
     },
-  });
-  if (p.isCancel(nameInput)) return undefined;
-  const toolName = nameInput;
+  );
+  if (!toolName) return undefined;
 
-  const descInput = await p.text({
-    message: "Short description:",
-    placeholder: `${toolName} configuration generator`,
-  });
-  if (p.isCancel(descInput)) return undefined;
+  const descInput = await promptText("Short description:", `${toolName} configuration generator`);
+  if (descInput === undefined) return undefined;
   const description = descInput || `${toolName} configuration generator`;
 
-  const techInput = await p.text({
-    message: "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
-    placeholder: titleCase(toolName),
-  });
-  if (p.isCancel(techInput)) return undefined;
+  const techInput = await promptText(
+    "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
+    titleCase(toolName),
+  );
+  if (techInput === undefined) return undefined;
   const technology = techInput || titleCase(toolName);
 
   const formatInput = await p.select({
@@ -380,32 +400,11 @@ async function runInitWizard(
   const fileFormat = formatInput as FileFormatType;
 
   const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
-  const filePathInput = await p.text({
-    message: "Output file path:",
-    placeholder: `${toolName}.${fileExt}`,
-  });
-  if (p.isCancel(filePathInput)) return undefined;
+  const filePathInput = await promptText("Output file path:", `${toolName}.${fileExt}`);
+  if (filePathInput === undefined) return undefined;
   const outputFilePath = filePathInput || `${toolName}.${fileExt}`;
 
-  let useLLM = false;
-  if (!isLegacy) {
-    let providerAvailable = false;
-    try {
-      ctx.getProvider();
-      providerAvailable = true;
-    } catch {
-      // No provider configured
-    }
-
-    if (providerAvailable) {
-      const llmInput = await p.confirm({
-        message: "Generate module content with AI?",
-        initialValue: true,
-      });
-      if (p.isCancel(llmInput)) return undefined;
-      useLLM = llmInput;
-    }
-  }
+  const useLLM = await promptUseLLM(ctx, isLegacy);
 
   return { toolName, description, technology, fileFormat, outputFilePath, useLLM };
 }
@@ -897,6 +896,81 @@ function resolveDopsPath(target: string): string {
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  *      DOJOPS_HUB_TOKEN (auth token — obtained from hub session)
  */
+function validateAndParseModule(dopsPath: string): {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  module: any;
+  fileBuffer: Buffer;
+  hash: string;
+} {
+  const module = parseDopsFileAny(dopsPath);
+  const result = validateDopsModuleAny(module);
+  if (!result.valid) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid DOPS module:\n  ${(result.errors ?? []).join("\n  ")}`,
+    );
+  }
+  const fileBuffer = fs.readFileSync(dopsPath);
+  const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
+  return { module, fileBuffer, hash };
+}
+
+function requireHubToken(): string {
+  const token = process.env.DOJOPS_HUB_TOKEN;
+  if (!token) {
+    throw new CLIError(
+      ExitCode.GENERAL_ERROR,
+      `No hub auth token. Set DOJOPS_HUB_TOKEN env variable.\n` +
+        `  Generate one at ${DEFAULT_HUB_URL}/settings/tokens`,
+    );
+  }
+  return token;
+}
+
+function buildMultipartBody(
+  fileBuffer: Buffer,
+  fileName: string,
+  hash: string,
+  changelog: string | undefined,
+): { body: Buffer; boundary: string } {
+  const boundary = `----DojOpsBoundary${Date.now()}`;
+  const parts: Buffer[] = [
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
+    ),
+    fileBuffer,
+    Buffer.from(
+      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="sha256"\r\n\r\n${hash}`,
+    ),
+  ];
+  if (changelog) {
+    parts.push(
+      Buffer.from(
+        `\r\n--${boundary}\r\nContent-Disposition: form-data; name="changelog"\r\n\r\n${changelog}`,
+      ),
+    );
+  }
+  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), boundary };
+}
+
+async function uploadToHub(
+  body: Buffer,
+  boundary: string,
+  token: string,
+): Promise<{ data: Record<string, unknown>; ok: boolean; status: number }> {
+  const res = await fetch(`${DEFAULT_HUB_URL}/api/packages`, {
+    method: "POST",
+    headers: {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      Authorization: `Bearer ${token}`,
+    },
+    body: body as unknown as BodyInit,
+  });
+  const data = (await res.json()) as Record<string, unknown>;
+  return { data, ok: res.ok, status: res.status };
+}
+
 export const toolsPublishCommand: CommandHandler = async (args) => {
   const target = args[0];
   if (!target) {
@@ -904,7 +978,6 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or module name required.");
   }
 
-  // Extract --changelog flag
   let changelog: string | undefined;
   const changelogIdx = args.indexOf("--changelog");
   if (changelogIdx !== -1 && args[changelogIdx + 1]) {
@@ -912,22 +985,12 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
   }
 
   const dopsPath = resolveDopsPath(target);
-
-  // Validate locally before publishing
   const spinner = p.spinner();
   spinner.start("Validating .dops file...");
 
-  let module;
+  let module, fileBuffer: Buffer, hash: string;
   try {
-    module = parseDopsFileAny(dopsPath);
-    const result = validateDopsModuleAny(module);
-    if (!result.valid) {
-      spinner.stop("Validation failed");
-      throw new CLIError(
-        ExitCode.VALIDATION_ERROR,
-        `Invalid DOPS module:\n  ${(result.errors ?? []).join("\n  ")}`,
-      );
-    }
+    ({ module, fileBuffer, hash } = validateAndParseModule(dopsPath));
   } catch (err) {
     spinner.stop("Validation failed");
     if (err instanceof CLIError) throw err;
@@ -937,72 +1000,28 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
   const { meta } = module.frontmatter;
   spinner.stop(`Validated: ${pc.cyan(meta.name)} v${meta.version}`);
 
-  // Check for auth token
-  const token = process.env.DOJOPS_HUB_TOKEN;
-  if (!token) {
-    throw new CLIError(
-      ExitCode.GENERAL_ERROR,
-      `No hub auth token. Set DOJOPS_HUB_TOKEN env variable.\n` +
-        `  Generate one at ${DEFAULT_HUB_URL}/settings/tokens`,
-    );
-  }
-
-  // Compute client-side SHA-256 hash (publisher attestation)
-  const fileBuffer = fs.readFileSync(dopsPath);
-  const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-
+  const token = requireHubToken();
   p.log.info(`${pc.dim("SHA256:")} ${hash}`);
-
-  // Upload to hub
   spinner.start(`Publishing ${pc.cyan(meta.name)} v${meta.version} to hub...`);
 
-  const boundary = `----DojOpsBoundary${Date.now()}`;
-  const fileName = path.basename(dopsPath);
-
-  // Build multipart body manually (no external deps)
-  // Include the client-computed sha256 so the hub can verify integrity
-  const parts: Buffer[] = [];
-  parts.push(
-    Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
-    ),
+  const { body, boundary } = buildMultipartBody(
     fileBuffer,
-    Buffer.from(
-      `\r\n--${boundary}\r\nContent-Disposition: form-data; name="sha256"\r\n\r\n${hash}`,
-    ),
+    path.basename(dopsPath),
+    hash,
+    changelog,
   );
-  if (changelog) {
-    parts.push(
-      Buffer.from(
-        `\r\n--${boundary}\r\nContent-Disposition: form-data; name="changelog"\r\n\r\n${changelog}`,
-      ),
-    );
-  }
-  parts.push(Buffer.from(`\r\n--${boundary}--\r\n`));
-  const body = Buffer.concat(parts);
 
   try {
-    const res = await fetch(`${DEFAULT_HUB_URL}/api/packages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": `multipart/form-data; boundary=${boundary}`,
-        Authorization: `Bearer ${token}`,
-      },
-      body,
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
+    const { data, ok, status } = await uploadToHub(body, boundary, token);
+    if (!ok) {
       spinner.stop("Publish failed");
       throw new CLIError(
         ExitCode.GENERAL_ERROR,
-        `Hub error (${res.status}): ${data.error || "Unknown error"}`,
+        `Hub error (${status}): ${data.error || "Unknown error"}`,
       );
     }
 
     spinner.stop("Published successfully");
-
     p.note(
       [
         `${pc.dim("Name:")}    ${pc.cyan(meta.name)}`,

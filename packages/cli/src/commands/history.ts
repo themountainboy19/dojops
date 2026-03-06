@@ -35,6 +35,84 @@ export async function historyCommand(args: string[], ctx: CLIContext): Promise<v
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PlanState = any;
+
+function applyHistoryFilters(plans: PlanState[], args: string[]): PlanState[] {
+  const statusFilter = extractFlagValue(args, "--status");
+  const sinceFilter = extractFlagValue(args, "--since");
+  const limitFilter = extractFlagValue(args, "--limit");
+
+  let filtered = plans;
+
+  if (statusFilter) {
+    const upper = statusFilter.toUpperCase();
+    filtered = filtered.filter((plan: PlanState) => plan.approvalStatus === upper);
+  }
+
+  if (sinceFilter) {
+    const sinceDate = new Date(sinceFilter);
+    if (!Number.isNaN(sinceDate.getTime())) {
+      filtered = filtered.filter(
+        (plan: PlanState) => new Date(plan.createdAt).getTime() >= sinceDate.getTime(),
+      );
+    }
+  }
+
+  if (limitFilter) {
+    const limit = Number.parseInt(limitFilter, 10);
+    if (!Number.isNaN(limit) && limit > 0) {
+      filtered = filtered.slice(0, limit);
+    }
+  }
+
+  return filtered;
+}
+
+function outputPlansJson(plans: PlanState[]): void {
+  console.log(
+    JSON.stringify(
+      plans.map((plan: PlanState) => ({
+        id: plan.id,
+        goal: plan.goal,
+        status: plan.approvalStatus,
+        createdAt: plan.createdAt,
+        tasks: plan.tasks.length,
+      })),
+      null,
+      2,
+    ),
+  );
+}
+
+function outputPlansYaml(plans: PlanState[]): void {
+  console.log("---");
+  for (const plan of plans) {
+    console.log(`- id: ${plan.id}`);
+    const escapedGoal = plan.goal.replaceAll('"', String.raw`\"`);
+    console.log(`  goal: "${escapedGoal}"`);
+    console.log(`  status: ${plan.approvalStatus}`);
+    console.log(`  createdAt: ${plan.createdAt}`);
+    console.log(`  tasks: ${plan.tasks.length}`);
+  }
+}
+
+function colorizeStatus(approvalStatus: string): string {
+  if (approvalStatus === "APPLIED") return pc.green(approvalStatus);
+  if (approvalStatus === "DENIED") return pc.red(approvalStatus);
+  if (approvalStatus === "PARTIAL") return pc.magenta(approvalStatus);
+  return pc.yellow(approvalStatus);
+}
+
+function outputPlansText(plans: PlanState[]): void {
+  const lines = plans.map((plan: PlanState) => {
+    const status = colorizeStatus(plan.approvalStatus);
+    const date = new Date(plan.createdAt).toLocaleDateString();
+    return `  ${pc.cyan(plan.id.padEnd(16))} ${status.padEnd(20)} ${date}  ${pc.dim(plan.goal.slice(0, 50))}`;
+  });
+  p.note(lines.join("\n"), `Plans (${plans.length})`);
+}
+
 function historyList(args: string[], ctx: CLIContext): void {
   const root = findProjectRoot();
   if (!root) {
@@ -42,85 +120,21 @@ function historyList(args: string[], ctx: CLIContext): void {
     return;
   }
 
-  // Parse filter flags
-  const statusFilter = extractFlagValue(args, "--status");
-  const sinceFilter = extractFlagValue(args, "--since");
-  const limitFilter = extractFlagValue(args, "--limit");
-
-  let plans = listPlans(root);
-  if (plans.length === 0) {
+  const allPlans = listPlans(root);
+  if (allPlans.length === 0) {
     p.log.info("No plans found.");
     return;
   }
 
-  // Apply --status filter (PENDING, APPLIED, DENIED, PARTIAL)
-  if (statusFilter) {
-    const upper = statusFilter.toUpperCase();
-    plans = plans.filter((plan) => plan.approvalStatus === upper);
-  }
-
-  // Apply --since filter (ISO date string)
-  if (sinceFilter) {
-    const sinceDate = new Date(sinceFilter);
-    if (!Number.isNaN(sinceDate.getTime())) {
-      plans = plans.filter((plan) => new Date(plan.createdAt).getTime() >= sinceDate.getTime());
-    }
-  }
-
-  // Apply --limit filter (after other filters)
-  if (limitFilter) {
-    const limit = Number.parseInt(limitFilter, 10);
-    if (!Number.isNaN(limit) && limit > 0) {
-      plans = plans.slice(0, limit);
-    }
-  }
-
+  const plans = applyHistoryFilters(allPlans, args);
   if (plans.length === 0) {
     p.log.info("No plans match the given filters.");
     return;
   }
 
-  if (ctx.globalOpts.output === "json") {
-    console.log(
-      JSON.stringify(
-        plans.map((plan) => ({
-          id: plan.id,
-          goal: plan.goal,
-          status: plan.approvalStatus,
-          createdAt: plan.createdAt,
-          tasks: plan.tasks.length,
-        })),
-        null,
-        2,
-      ),
-    );
-    return;
-  }
-
-  if (ctx.globalOpts.output === "yaml") {
-    console.log("---");
-    for (const plan of plans) {
-      console.log(`- id: ${plan.id}`);
-      const escapedGoal = plan.goal.replaceAll('"', String.raw`\"`);
-      console.log(`  goal: "${escapedGoal}"`);
-      console.log(`  status: ${plan.approvalStatus}`);
-      console.log(`  createdAt: ${plan.createdAt}`);
-      console.log(`  tasks: ${plan.tasks.length}`);
-    }
-    return;
-  }
-
-  const lines = plans.map((plan) => {
-    let status: string;
-    if (plan.approvalStatus === "APPLIED") status = pc.green(plan.approvalStatus);
-    else if (plan.approvalStatus === "DENIED") status = pc.red(plan.approvalStatus);
-    else if (plan.approvalStatus === "PARTIAL") status = pc.magenta(plan.approvalStatus);
-    else status = pc.yellow(plan.approvalStatus);
-    const date = new Date(plan.createdAt).toLocaleDateString();
-    return `  ${pc.cyan(plan.id.padEnd(16))} ${status.padEnd(20)} ${date}  ${pc.dim(plan.goal.slice(0, 50))}`;
-  });
-
-  p.note(lines.join("\n"), `Plans (${plans.length})`);
+  if (ctx.globalOpts.output === "json") return outputPlansJson(plans);
+  if (ctx.globalOpts.output === "yaml") return outputPlansYaml(plans);
+  outputPlansText(plans);
 }
 
 function formatResultStatus(status: string): string {
