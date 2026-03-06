@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as fs from "node:fs";
 import * as execAsyncMod from "../../exec-async";
+import {
+  createEnoentError,
+  createExecError,
+  mockExecSuccess,
+  mockExecError,
+} from "../test-helpers";
 
 vi.mock("../../exec-async");
 vi.mock("node:fs");
@@ -10,18 +16,12 @@ const mockExistsSync = vi.mocked(fs.existsSync);
 const mockReadFileSync = vi.mocked(fs.readFileSync);
 const mockReaddirSync = vi.mocked(fs.readdirSync);
 
-/**
- * Helper: configure mockExecFileAsync to resolve with stdout.
- */
 function mockExecFileSuccess(stdout: string): void {
-  mockExecFileAsync.mockResolvedValue({ stdout, stderr: "" });
+  mockExecSuccess(mockExecFileAsync, stdout);
 }
 
-/**
- * Helper: configure mockExecFileAsync to reject with an error.
- */
 function mockExecFileError(err: Error & { stdout?: string; stderr?: string; code?: string }): void {
-  mockExecFileAsync.mockRejectedValue(err);
+  mockExecError(mockExecFileAsync, err);
 }
 
 beforeEach(() => {
@@ -47,9 +47,7 @@ describe("scanNpm", () => {
       // Only package-lock.json exists
       return s.endsWith("package-lock.json");
     });
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanNpm("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("npm not found");
@@ -87,20 +85,20 @@ describe("scanNpm", () => {
   it("handles npm audit non-zero exit with JSON stdout", async () => {
     const { scanNpm } = await import("../../scanners/npm");
     mockExistsSync.mockImplementation((p) => String(p).endsWith("package-lock.json"));
-    const err = Object.assign(new Error("exit 1"), {
-      stdout: JSON.stringify({
-        vulnerabilities: {
-          pkg: {
-            severity: "critical",
-            via: ["CVE-2024-0001"],
-            fixAvailable: false,
+    mockExecFileError(
+      createExecError("exit 1", {
+        stdout: JSON.stringify({
+          vulnerabilities: {
+            pkg: {
+              severity: "critical",
+              via: ["CVE-2024-0001"],
+              fixAvailable: false,
+            },
           },
-        },
+        }),
+        status: 1,
       }),
-      stderr: "",
-      status: 1,
-    });
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    );
 
     const result = await scanNpm("/project");
     expect(result.findings).toHaveLength(1);
@@ -170,9 +168,7 @@ describe("scanPip", () => {
     mockExistsSync.mockImplementation((p) => {
       return String(p).includes("requirements.txt");
     });
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanPip("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("pip-audit not found");
@@ -256,9 +252,7 @@ describe("scanPip", () => {
 describe("scanTrivy", () => {
   it("skips when trivy not found (ENOENT)", async () => {
     const { scanTrivy } = await import("../../scanners/trivy");
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanTrivy("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("trivy not found");
@@ -326,9 +320,7 @@ describe("scanTrivy", () => {
 describe("scanCheckov", () => {
   it("skips when checkov not found (ENOENT)", async () => {
     const { scanCheckov } = await import("../../scanners/checkov");
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanCheckov("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("checkov not found");
@@ -416,9 +408,7 @@ describe("scanHadolint", () => {
     mockExistsSync.mockImplementation((p) => {
       return String(p).endsWith("Dockerfile");
     });
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanHadolint("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("hadolint not found");
@@ -503,9 +493,7 @@ describe("scanHadolint", () => {
 describe("scanGitleaks", () => {
   it("skips when gitleaks not found (ENOENT)", async () => {
     const { scanGitleaks } = await import("../../scanners/gitleaks");
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanGitleaks("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("gitleaks not found");
@@ -532,15 +520,7 @@ describe("scanGitleaks", () => {
       },
     ]);
     // gitleaks exits 1 when leaks found; report is written to temp file
-    const execErr = new Error("leaks found") as Error & {
-      stdout?: string;
-      stderr?: string;
-      status?: number;
-    };
-    execErr.status = 1;
-    execErr.stdout = "";
-    execErr.stderr = "";
-    mockExecFileError(execErr as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createExecError("leaks found", { status: 1 }));
     mockReadFileSync.mockReturnValue(jsonOutput);
 
     const result = await scanGitleaks("/project");
@@ -590,9 +570,7 @@ describe("scanShellcheck", () => {
       return [] as unknown as fs.Dirent[];
     });
     mockExistsSync.mockReturnValue(false);
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanShellcheck("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("shellcheck not found");
@@ -686,9 +664,7 @@ describe("scanShellcheck", () => {
 describe("scanTrivySbom", () => {
   it("skips when trivy not found (ENOENT)", async () => {
     const { scanTrivySbom } = await import("../../scanners/trivy-sbom");
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanTrivySbom("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toBe("trivy not found");
@@ -713,12 +689,7 @@ describe("scanTrivySbom", () => {
   it("returns sbomOutput even when trivy exits non-zero", async () => {
     const { scanTrivySbom } = await import("../../scanners/trivy-sbom");
     const cyclonedxJson = '{"bomFormat":"CycloneDX"}';
-    const err = Object.assign(new Error("exit 1"), {
-      stdout: cyclonedxJson,
-      stderr: "",
-      status: 1,
-    });
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createExecError("exit 1", { stdout: cyclonedxJson, status: 1 }));
 
     const result = await scanTrivySbom("/project");
     expect(result.sbomOutput).toBe(cyclonedxJson);
@@ -731,9 +702,7 @@ describe("scanTrivySbom", () => {
 describe("scanSemgrep", () => {
   it("skips when semgrep not found (ENOENT)", async () => {
     const { scanSemgrep } = await import("../../scanners/semgrep");
-    const err = new Error("ENOENT") as NodeJS.ErrnoException;
-    err.code = "ENOENT";
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createEnoentError());
     const result = await scanSemgrep("/project");
     expect(result.skipped).toBe(true);
     expect(result.skipReason).toContain("semgrep not found");
@@ -828,12 +797,7 @@ describe("scanSemgrep", () => {
       ],
       errors: [],
     });
-    const err = Object.assign(new Error("exit 1"), {
-      stdout: output,
-      stderr: "",
-      status: 1,
-    });
-    mockExecFileError(err as Error & { stdout?: string; stderr?: string; code?: string });
+    mockExecFileError(createExecError("exit 1", { stdout: output, status: 1 }));
 
     const result = await scanSemgrep("/project");
     expect(result.skipped).toBeUndefined();

@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
+import { LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
 import { createApp, AppDependencies } from "../app";
 import { HistoryStore } from "../store";
+import { createMockProvider, createMockTool } from "./test-helpers";
 
 const mockDiagnosis = {
   errorType: "build" as const,
@@ -41,43 +41,32 @@ const mockTaskGraph = {
   ],
 };
 
-function createMockProvider(): LLMProvider {
-  return {
-    name: "mock",
-    generate: vi.fn().mockImplementation(async (req) => {
-      // Return structured parsed data when schema is provided
-      if (req.schema) {
-        if (req.system?.includes("CI/CD debugger") || req.system?.includes("CI pipeline")) {
-          return { content: JSON.stringify(mockDiagnosis), parsed: mockDiagnosis };
-        }
-        if (req.system?.includes("infrastructure")) {
-          return { content: JSON.stringify(mockAnalysis), parsed: mockAnalysis };
-        }
-        if (req.system?.includes("task planner")) {
-          return { content: JSON.stringify(mockTaskGraph), parsed: mockTaskGraph };
-        }
+function createSmartMockProvider() {
+  const provider = createMockProvider();
+  provider.generate = vi.fn().mockImplementation(async (req) => {
+    // Return structured parsed data when schema is provided
+    if (req.schema) {
+      if (req.system?.includes("CI/CD debugger") || req.system?.includes("CI pipeline")) {
+        return { content: JSON.stringify(mockDiagnosis), parsed: mockDiagnosis };
       }
-      return {
-        content: "Mock response",
-        model: "mock-model",
-        usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-      } satisfies LLMResponse;
-    }),
-  };
-}
-
-function createMockTool(): DevOpsTool {
-  return {
-    name: "mock-tool",
-    description: "A mock tool",
-    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-  };
+      if (req.system?.includes("infrastructure")) {
+        return { content: JSON.stringify(mockAnalysis), parsed: mockAnalysis };
+      }
+      if (req.system?.includes("task planner")) {
+        return { content: JSON.stringify(mockTaskGraph), parsed: mockTaskGraph };
+      }
+    }
+    return {
+      content: "Mock response",
+      model: "mock-model",
+      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+    } satisfies LLMResponse;
+  });
+  return provider;
 }
 
 function createTestDeps(): AppDependencies {
-  const provider = createMockProvider();
+  const provider = createSmartMockProvider();
   const tools = [createMockTool()];
   const router = new AgentRouter(provider);
   const debugger_ = new CIDebugger(provider);

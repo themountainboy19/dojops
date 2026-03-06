@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
 import { createApp, AppDependencies } from "../app";
-import { HistoryStore } from "../store";
 import { resetFailureTracker } from "../middleware";
+import { createTestDeps } from "./test-helpers";
 
 /**
  * Integration tests that exercise full request-to-response workflows
@@ -12,27 +10,7 @@ import { resetFailureTracker } from "../middleware";
  */
 
 function createMockDeps(): AppDependencies {
-  const provider: LLMProvider = {
-    name: "mock",
-    generate: vi.fn().mockResolvedValue({
-      content: "Generated response",
-    } satisfies LLMResponse),
-  };
-
-  const tool: DevOpsTool = {
-    name: "test-tool",
-    description: "A test tool",
-    inputSchema: {} as DevOpsTool["inputSchema"],
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: {} }),
-  };
-
-  const store = new HistoryStore();
-  const router = new AgentRouter(provider);
-  const debugger_ = new CIDebugger(provider);
-  const diffAnalyzer = new InfraDiffAnalyzer(provider);
-
-  return { provider, tools: [tool], router, debugger: debugger_, diffAnalyzer, store };
+  return createTestDeps();
 }
 
 describe("API integration", () => {
@@ -123,7 +101,7 @@ describe("API integration", () => {
       expect(res.body.status).toBe("ok");
       expect(res.body.authRequired).toBe(false);
       expect(res.body.provider).toBe("mock");
-      expect(res.body.tools).toContain("test-tool");
+      expect(res.body.tools).toContain("mock-tool");
       expect(res.body.timestamp).toBeDefined();
     });
 
@@ -150,7 +128,7 @@ describe("API integration", () => {
         .expect(200);
       expect(res.body.authRequired).toBe(true);
       expect(res.body.provider).toBe("mock");
-      expect(res.body.tools).toContain("test-tool");
+      expect(res.body.tools).toContain("mock-tool");
     });
   });
 
@@ -223,7 +201,7 @@ describe("API integration", () => {
           authRequired: false,
           provider: "mock",
           providerStatus: "ok",
-          tools: ["test-tool"],
+          tools: ["mock-tool"],
           customToolCount: 0,
           metricsEnabled: false,
         }),

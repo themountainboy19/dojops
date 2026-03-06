@@ -570,7 +570,7 @@ function getDomainCategory(domain) {
     shell: "automation",
     python: "automation",
   };
-  const d = (domain || "").toLowerCase().replace(/\s+/g, "-");
+  const d = (domain || "").toLowerCase().replaceAll(/\s+/g, "-");
   return map[d] || "general";
 }
 
@@ -845,10 +845,15 @@ async function loadOverview() {
   }
 }
 
+function getHealthLevel(criticalFindings, successRate) {
+  if (criticalFindings > 0) return "critical";
+  if (successRate < 50) return "warning";
+  return "healthy";
+}
+
 function renderHealthBanner(data) {
-  var healthLevel =
-    data.criticalFindings > 0 ? "critical" : data.successRate < 50 ? "warning" : "healthy";
-  var healthIcons = {
+  const healthLevel = getHealthLevel(data.criticalFindings, data.successRate);
+  const healthIcons = {
     healthy:
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
     warning:
@@ -856,22 +861,22 @@ function renderHealthBanner(data) {
     critical:
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
   };
-  var healthLabels = {
+  const healthLabels = {
     healthy: "System Healthy",
     warning: "Needs Attention",
     critical: "Critical Issues Detected",
   };
-  var critDesc = [];
+  const critDesc = [];
   if (data.criticalFindings > 0) critDesc.push(data.criticalFindings + " critical");
   if (data.highFindings > 0) critDesc.push(data.highFindings + " high");
-  var critSummary = critDesc.length ? critDesc.join(" and ") + " severity" : "";
-  var healthDetails = {
+  const critSummary = critDesc.length ? critDesc.join(" and ") + " severity" : "";
+  const healthDetails = {
     healthy: data.successRate + "% success rate across " + data.totalPlans + " plans",
     warning: "Success rate at " + data.successRate + "% — review recent failures",
     critical:
       data.totalFindings +
       " security finding" +
-      (data.totalFindings !== 1 ? "s" : "") +
+      (data.totalFindings === 1 ? "" : "s") +
       " detected (" +
       critSummary +
       ") — includes vulnerabilities and dependency issues",
@@ -899,10 +904,10 @@ function renderHealthBanner(data) {
 }
 
 function renderOverviewStatCards(data) {
-  var html = '<div class="stat-grid--6">';
+  let html = '<div class="stat-grid--6">';
   html += renderStatCard(data.totalPlans, "Total Plans", "");
   html += renderStatCard(
-    data.totalExecutions !== undefined ? data.totalExecutions : "—",
+    data.totalExecutions === undefined ? "—" : data.totalExecutions,
     "Executions",
     "",
   );
@@ -924,7 +929,7 @@ function renderOverviewStatCards(data) {
 
 function renderFindingsSummary(data) {
   if (data.criticalFindings <= 0 && !(data.highFindings && data.highFindings > 0)) return "";
-  var html = '<div class="findings-summary">';
+  let html = '<div class="findings-summary">';
   if (data.criticalFindings > 0) {
     html +=
       '<div class="findings-summary__item">' +
@@ -947,16 +952,16 @@ function renderFindingsSummary(data) {
 
 function renderRecentActivity(data) {
   if (data.recentActivity.length === 0) return "";
-  var html = '<div class="metrics-section">';
+  let html = '<div class="metrics-section">';
   html += '<div class="metrics-section__title">Recent Activity</div>';
   html += '<div class="timeline-list">';
-  var dotMap = {
+  const dotMap = {
     success: "timeline-entry__dot--success",
     failure: "timeline-entry__dot--failure",
   };
   for (const item of data.recentActivity.slice(0, 10)) {
-    var dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
-    var statusChip = statusToChip(item.status);
+    const dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
+    const statusChip = statusToChip(item.status);
     html +=
       '<div class="timeline-entry">' +
       '<span class="timeline-entry__dot ' +
@@ -978,7 +983,7 @@ function renderRecentActivity(data) {
 
 function renderAgentUsageTable(data) {
   if (data.mostUsedAgents.length === 0) return "";
-  var html = '<div class="metrics-section glass-card">';
+  let html = '<div class="metrics-section glass-card">';
   html += '<div class="metrics-section__title">Most Used Commands</div>';
   html +=
     '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
@@ -998,7 +1003,7 @@ function renderFailureReasonsTable(data) {
   if (data.failureReasons.length === 0) {
     return '<div class="metrics-section glass-card"><div class="metrics-section__title">Failure Reasons</div><div style="color:var(--text-muted);font-size:13px;padding:8px 0">No failures recorded</div></div>';
   }
-  var html = '<div class="metrics-section glass-card">';
+  let html = '<div class="metrics-section glass-card">';
   html += '<div class="metrics-section__title">Failure Reasons</div>';
   html +=
     '<table class="metric-table"><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>';
@@ -1015,7 +1020,7 @@ function renderFailureReasonsTable(data) {
 }
 
 function renderOverview(data) {
-  var html = renderHealthBanner(data);
+  let html = renderHealthBanner(data);
   html += renderOverviewStatCards(data);
   html += renderFindingsSummary(data);
   html += renderRecentActivity(data);
@@ -1251,22 +1256,16 @@ function renderSecurity(data) {
     html += '<label class="filter-label">Severity</label>';
     html += '<select id="issues-sev-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
-    for (let si = 0; si < severities.length; si++) {
-      html +=
-        '<option value="' +
-        escapeHtml(severities[si]) +
-        '">' +
-        escapeHtml(severities[si]) +
-        "</option>";
+    for (const sev of severities) {
+      html += '<option value="' + escapeHtml(sev) + '">' + escapeHtml(sev) + "</option>";
     }
     html += "</select></div>";
     html += '<div class="filter-group">';
     html += '<label class="filter-label">Tool</label>';
     html += '<select id="issues-tool-filter" class="filter-select" data-action="filterIssues">';
     html += '<option value="">All</option>';
-    for (let ti = 0; ti < tools.length; ti++) {
-      html +=
-        '<option value="' + escapeHtml(tools[ti]) + '">' + escapeHtml(tools[ti]) + "</option>";
+    for (const tool of tools) {
+      html += '<option value="' + escapeHtml(tool) + '">' + escapeHtml(tool) + "</option>";
     }
     html += "</select></div></div>";
 
@@ -1494,9 +1493,8 @@ function renderIssuesPage() {
     html +=
       '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px">No issues match the selected filters</td></tr>';
   }
-  for (let j = 0; j < pageItems.length; j++) {
-    let issue = pageItems[j];
-    let sevClass = "severity-" + issue.severity;
+  for (const issue of pageItems) {
+    const sevClass = "severity-" + issue.severity;
     html +=
       "<tr>" +
       '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' +
@@ -1549,8 +1547,7 @@ function renderScanHistoryPage() {
 
   let html =
     '<table class="metric-table"><thead><tr><th>ID</th><th>Time</th><th>Total</th><th>Critical</th><th>High</th><th>Duration</th></tr></thead><tbody>';
-  for (let k = 0; k < pageItems.length; k++) {
-    let scan = pageItems[k];
+  for (const scan of pageItems) {
     html +=
       "<tr>" +
       '<td><code style="font-family:var(--font-mono);font-size:11px;color:var(--cyan)">' +

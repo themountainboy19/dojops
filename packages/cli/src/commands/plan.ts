@@ -113,45 +113,50 @@ function outputPlanResult(
   p.log.info(pc.dim("To execute this plan, run: dojops apply " + planId));
 }
 
-export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
+/** Parse plan command flags and extract the prompt text. */
+function parsePlanArgs(
+  args: string[],
+  ctx: CLIContext,
+): { prompt: string; executeMode: boolean; autoApprove: boolean; skipVerify: boolean } {
   const executeMode = hasFlag(args, "--execute");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const skipVerify = hasFlag(args, "--skip-verify");
-
   const prompt = stripFlags(
     args,
     new Set(["--execute", "--yes", "--skip-verify", "--force", "--allow-all-paths"]),
     new Set<string>(),
   ).join(" ");
+  return { prompt, executeMode, autoApprove, skipVerify };
+}
 
-  if (!prompt) {
-    p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
+/** Filter tools to a single tool if --tool flag is set. */
+function applyToolFilter(
+  tools: ReturnType<ToolRegistry["getAll"]>,
+  toolName: string | undefined,
+  isJson: boolean,
+): ReturnType<ToolRegistry["getAll"]> {
+  if (!toolName) return tools;
+  const match = tools.find((t) => t.name === toolName);
+  if (!match) {
+    const available = tools.map((t) => t.name).join(", ");
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Module "${toolName}" not found. Available: ${available}`,
+    );
   }
+  if (!isJson) p.log.info(`Using module: ${pc.bold(toolName)}`);
+  return [match];
+}
 
-  const provider = ctx.getProvider();
-
-  // Load repo context for context-aware file placement
-  const projectRoot = findProjectRoot();
-  const registry = createToolRegistry(provider, projectRoot ?? undefined);
-  let tools = registry.getAll();
-  const repoContext = projectRoot ? loadContext(projectRoot) : null;
-  const isJson = ctx.globalOpts.output === "json";
-
-  // --tool flag: restrict decomposition to a single tool
-  if (ctx.globalOpts.tool) {
-    const toolName = ctx.globalOpts.tool;
-    const match = tools.find((t) => t.name === toolName);
-    if (!match) {
-      const available = tools.map((t) => t.name).join(", ");
-      throw new CLIError(
-        ExitCode.VALIDATION_ERROR,
-        `Module "${toolName}" not found. Available: ${available}`,
-      );
-    }
-    tools = [match];
-    if (!isJson) p.log.info(`Using module: ${pc.bold(toolName)}`);
-  }
+/** Run the decomposition and display verbose output if enabled. */
+async function runDecomposition(
+  prompt: string,
+  provider: ReturnType<CLIContext["getProvider"]>,
+  tools: ReturnType<ToolRegistry["getAll"]>,
+  repoContext: ReturnType<typeof loadContext> | null,
+  ctx: CLIContext,
+  isJson: boolean,
+): Promise<TaskGraph> {
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
   if (ctx.globalOpts.verbose) {
@@ -174,25 +179,27 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
       p.log.info(`  ${pc.blue(task.id)} -> tool: ${pc.bold(task.tool)}`);
     }
   }
+  return graph;
+}
 
-  enrichTasksWithMetadata(graph, registry);
-
-  if (!isJson) {
-    displayTaskGraph(graph);
-  }
-
-  // Save plan to .dojops/plans/
+/** Save the plan and update session state. Returns the plan ID. */
+function persistPlan(
+  graph: TaskGraph,
+  registry: ToolRegistry,
+  ctx: CLIContext,
+  providerName: string,
+  skipVerify: boolean,
+  isJson: boolean,
+): { planId: string; root: string } {
   let root = findProjectRoot();
   if (!root) {
     root = ctx.cwd;
     initProject(root);
   }
-
   const planId = generatePlanId();
-  const savedPlan = buildPlanState(planId, graph, registry, ctx, provider.name, skipVerify);
+  const savedPlan = buildPlanState(planId, graph, registry, ctx, providerName, skipVerify);
   savePlan(root, savedPlan);
 
-  // Update session
   const session = loadSession(root);
   session.currentPlan = planId;
   session.mode = "PLAN";
@@ -201,23 +208,53 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   if (!isJson) {
     p.log.success(`Plan saved as ${pc.bold(planId)}`);
   }
+  return { planId, root };
+}
 
+/** Build apply arguments and delegate to the apply command. */
+async function delegateToApply(
+  planId: string,
+  args: string[],
+  autoApprove: boolean,
+  skipVerify: boolean,
+  ctx: CLIContext,
+): Promise<void> {
+  const { applyCommand } = await import("./apply");
+  const applyArgs = [planId];
+  if (autoApprove) applyArgs.push("--yes");
+  if (skipVerify) applyArgs.push("--skip-verify");
+  if (hasFlag(args, "--force")) applyArgs.push("--force");
+  if (hasFlag(args, "--allow-all-paths")) applyArgs.push("--allow-all-paths");
+  return applyCommand(applyArgs, ctx);
+}
+
+export async function planCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const { prompt, executeMode, autoApprove, skipVerify } = parsePlanArgs(args, ctx);
+
+  if (!prompt) {
+    p.log.info(`  ${pc.dim("$")} dojops plan <prompt>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
+  }
+
+  const provider = ctx.getProvider();
+  const projectRoot = findProjectRoot();
+  const registry = createToolRegistry(provider, projectRoot ?? undefined);
+  const repoContext = projectRoot ? loadContext(projectRoot) : null;
+  const isJson = ctx.globalOpts.output === "json";
+
+  const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.tool, isJson);
+  const graph = await runDecomposition(prompt, provider, tools, repoContext, ctx, isJson);
+
+  enrichTasksWithMetadata(graph, registry);
+  if (!isJson) displayTaskGraph(graph);
+
+  const { planId, root } = persistPlan(graph, registry, ctx, provider.name, skipVerify, isJson);
   const startTime = Date.now();
 
   if (executeMode) {
-    // Delegate to apply command which has full safety features
-    // (git dirty check, drift warnings, impact summary, SIGINT handling)
-    const { applyCommand } = await import("./apply");
-    const applyArgs = [planId];
-    if (autoApprove) applyArgs.push("--yes");
-    if (skipVerify) applyArgs.push("--skip-verify");
-    if (hasFlag(args, "--force")) applyArgs.push("--force");
-    if (hasFlag(args, "--allow-all-paths")) applyArgs.push("--allow-all-paths");
-    return applyCommand(applyArgs, ctx);
+    return delegateToApply(planId, args, autoApprove, skipVerify, ctx);
   }
 
-  // Plan-only mode: show decomposed tasks without executing
-  // Task graph is already displayed above via p.note()
   appendAudit(root, {
     timestamp: new Date().toISOString(),
     user: getCurrentUser(),

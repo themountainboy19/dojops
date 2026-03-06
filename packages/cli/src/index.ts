@@ -275,6 +275,52 @@ async function dispatchCommand(
   await generateCommand(remapped, ctx);
 }
 
+/** Handle --help / -h flag, printing appropriate help and exiting. */
+function handleHelpFlag(rawArgs: string[], command: string[]): void {
+  if (!rawArgs.includes("--help") && !rawArgs.includes("-h")) return;
+  if (command.length > 0) {
+    printCommandHelp(command.join(" "));
+  } else {
+    printHelp();
+  }
+  process.exit(0);
+}
+
+/** Build the CLIContext from parsed options. */
+function buildCLIContext(
+  globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
+  config: ReturnType<typeof loadProfileConfig>,
+): CLIContext {
+  return {
+    globalOpts,
+    config,
+    cwd: process.cwd(),
+    resolvedTemperature: resolveTemperature(globalOpts.temperature, config),
+    getProvider: buildLazyProvider(globalOpts, config),
+  };
+}
+
+/** Determine whether to show the DojOps banner. */
+function shouldShowBanner(
+  command: string[],
+  isCI: boolean,
+  globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
+): boolean {
+  const isQuiet = command.length > 0 && QUIET_COMMANDS.has(command[0]);
+  return !isQuiet && !isCI && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table";
+}
+
+/** Handle caught errors from command dispatch. */
+function handleCommandError(err: unknown, debug: boolean): never {
+  if (err instanceof CLIError) {
+    if (err.message) p.log.error(err.message);
+    process.exit(err.exitCode);
+  }
+  p.log.error(toErrorMessage(err));
+  if (debug) console.error(err);
+  process.exit(ExitCode.GENERAL_ERROR);
+}
+
 async function main() {
   process.on("SIGINT", () => {
     process.stdout.write("\x1b[?25h");
@@ -293,42 +339,19 @@ async function main() {
   const remapped = remapLegacyArgs(remaining);
   const { command, positional } = parseCommandPath(remapped);
 
-  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
-    if (command.length > 0) {
-      printCommandHelp(command.join(" "));
-    } else {
-      printHelp();
-    }
-    process.exit(0);
-  }
+  handleHelpFlag(rawArgs, command);
 
   const resolved = resolveCommand(command, positional);
   const config = loadProfileConfig(globalOpts.profile);
-  const getProvider = buildLazyProvider(globalOpts, config);
+  const ctx = buildCLIContext(globalOpts, config);
 
-  const ctx: CLIContext = {
-    globalOpts,
-    config,
-    cwd: process.cwd(),
-    resolvedTemperature: resolveTemperature(globalOpts.temperature, config),
-    getProvider,
-  };
-
-  const isQuiet = command.length > 0 && QUIET_COMMANDS.has(command[0]);
-  const showBanner =
-    !isQuiet && !isCI && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table";
+  const showBanner = shouldShowBanner(command, isCI, globalOpts);
   if (showBanner) printBanner();
 
   try {
     await dispatchCommand(resolved, command, remapped, ctx);
   } catch (err) {
-    if (err instanceof CLIError) {
-      if (err.message) p.log.error(err.message);
-      process.exit(err.exitCode);
-    }
-    p.log.error(toErrorMessage(err));
-    if (globalOpts.debug) console.error(err);
-    process.exit(ExitCode.GENERAL_ERROR);
+    handleCommandError(err, globalOpts.debug);
   }
 
   if (showBanner) p.outro("Done.");

@@ -9,16 +9,19 @@ export interface DecomposeOptions {
   repoContext?: RepoContext;
 }
 
-/** Collect bullet-point lines describing the detected project context. */
-function collectContextBullets(ctx: RepoContext): string[] {
+/** Collect CI-related context bullets. */
+function collectCIBullets(ctx: RepoContext): string[] {
+  if (ctx.ci.length === 0) return [];
+  const platforms = [...new Set(ctx.ci.map((c) => c.platform))].join(", ");
+  return [
+    `- Existing CI: ${platforms}`,
+    ...ctx.ci.map((ci) => `  - ${ci.platform}: ${ci.configPath}`),
+  ];
+}
+
+/** Collect infra/container/meta bullets. */
+function collectInfraBullets(ctx: RepoContext): string[] {
   const bullets: string[] = [];
-  if (ctx.primaryLanguage) bullets.push(`- Primary language: ${ctx.primaryLanguage}`);
-  if (ctx.packageManager) bullets.push(`- Package manager: ${ctx.packageManager.name}`);
-  if (ctx.ci.length > 0) {
-    const platforms = [...new Set(ctx.ci.map((c) => c.platform))].join(", ");
-    bullets.push(`- Existing CI: ${platforms}`);
-    for (const ci of ctx.ci) bullets.push(`  - ${ci.platform}: ${ci.configPath}`);
-  }
   if (ctx.container.hasDockerfile) bullets.push("- Has Dockerfile");
   if (ctx.container.hasCompose && ctx.container.composePath) {
     bullets.push(`- Has Compose: ${ctx.container.composePath}`);
@@ -33,6 +36,16 @@ function collectContextBullets(ctx: RepoContext): string[] {
   if (ctx.infra.hasAnsible) bullets.push("- Has Ansible playbooks");
   if (ctx.meta.isMonorepo) bullets.push("- Monorepo structure");
   if (ctx.meta.hasMakefile) bullets.push("- Has Makefile");
+  return bullets;
+}
+
+/** Collect bullet-point lines describing the detected project context. */
+function collectContextBullets(ctx: RepoContext): string[] {
+  const bullets: string[] = [];
+  if (ctx.primaryLanguage) bullets.push(`- Primary language: ${ctx.primaryLanguage}`);
+  if (ctx.packageManager) bullets.push(`- Package manager: ${ctx.packageManager.name}`);
+  bullets.push(...collectCIBullets(ctx));
+  bullets.push(...collectInfraBullets(ctx));
   return bullets;
 }
 

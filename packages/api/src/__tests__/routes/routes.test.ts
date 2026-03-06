@@ -1,39 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
-import { createApp, AppDependencies } from "../../app";
-import { HistoryStore } from "../../store";
-
-function createMockProvider(): LLMProvider {
-  return {
-    name: "mock",
-    generate: vi.fn().mockResolvedValue({
-      content: "Mock response",
-    } satisfies LLMResponse),
-  };
-}
-
-function createMockTool(): DevOpsTool {
-  return {
-    name: "mock-tool",
-    description: "A mock tool",
-    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-  };
-}
-
-function createTestDeps(): AppDependencies {
-  const provider = createMockProvider();
-  const tools = [createMockTool()];
-  const router = new AgentRouter(provider);
-  const debugger_ = new CIDebugger(provider);
-  const diffAnalyzer = new InfraDiffAnalyzer(provider);
-  const store = new HistoryStore();
-
-  return { provider, tools, router, debugger: debugger_, diffAnalyzer, store };
-}
+import { createApp } from "../../app";
+import { createTestDeps } from "../test-helpers";
 
 describe("Chat routes", () => {
   let app: ReturnType<typeof createApp>;

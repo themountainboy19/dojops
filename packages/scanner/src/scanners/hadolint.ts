@@ -72,6 +72,29 @@ export async function scanHadolint(projectPath: string): Promise<ScannerResult> 
   return { tool: "hadolint", findings: allFindings, rawOutput: combinedRawOutput };
 }
 
+const COMMON_DOCKER_DIRS = ["docker", "build", ".docker"];
+
+function checkCommonLocations(basePath: string, add: (filePath: string) => void): void {
+  for (const loc of COMMON_DOCKER_DIRS) {
+    const dir = path.join(basePath, loc);
+    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+      checkDirForDockerfiles(dir, add);
+    }
+  }
+}
+
+function checkSubProject(childPath: string, add: (filePath: string) => void): void {
+  const childDockerfile = path.join(childPath, "Dockerfile");
+  if (fs.existsSync(childDockerfile)) add(childDockerfile);
+
+  checkCommonLocations(childPath, add);
+
+  for (const grandchild of listSubDirs(childPath)) {
+    const gcDockerfile = path.join(childPath, grandchild, "Dockerfile");
+    if (fs.existsSync(gcDockerfile)) add(gcDockerfile);
+  }
+}
+
 function findDockerfiles(projectPath: string): string[] {
   const results: string[] = [];
   const seen = new Set<string>();
@@ -83,47 +106,13 @@ function findDockerfiles(projectPath: string): string[] {
     }
   }
 
-  // Explicit root check (works even when readdirSync is unavailable)
   const rootDockerfile = path.join(projectPath, "Dockerfile");
-  if (fs.existsSync(rootDockerfile)) {
-    addDockerfile(rootDockerfile);
-  }
+  if (fs.existsSync(rootDockerfile)) addDockerfile(rootDockerfile);
 
-  // Check common locations at root level
-  const commonLocations = ["docker", "build", ".docker"];
-  for (const loc of commonLocations) {
-    const dir = path.join(projectPath, loc);
-    if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
-      checkDirForDockerfiles(dir, addDockerfile);
-    }
-  }
+  checkCommonLocations(projectPath, addDockerfile);
 
-  // Check sub-project directories (level 1 + level 2)
   for (const child of listSubDirs(projectPath)) {
-    const childPath = path.join(projectPath, child);
-
-    // Explicit Dockerfile check in sub-project
-    const childDockerfile = path.join(childPath, "Dockerfile");
-    if (fs.existsSync(childDockerfile)) {
-      addDockerfile(childDockerfile);
-    }
-
-    // Check common locations inside sub-projects
-    for (const loc of commonLocations) {
-      const subDir = path.join(childPath, loc);
-      if (fs.existsSync(subDir) && fs.statSync(subDir).isDirectory()) {
-        checkDirForDockerfiles(subDir, addDockerfile);
-      }
-    }
-
-    // Check level 2 children (packages/app/)
-    for (const grandchild of listSubDirs(childPath)) {
-      const gcPath = path.join(childPath, grandchild);
-      const gcDockerfile = path.join(gcPath, "Dockerfile");
-      if (fs.existsSync(gcDockerfile)) {
-        addDockerfile(gcDockerfile);
-      }
-    }
+    checkSubProject(path.join(projectPath, child), addDockerfile);
   }
 
   return results;

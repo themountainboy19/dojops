@@ -245,6 +245,62 @@ function npmInstallGlobal(pkg: string): void {
  * Detects permission issues and uses sudo when needed.
  * Returns the list of successfully installed package names.
  */
+/** Prompt user to select tools and resolve sudo requirements. Returns packages to install and whether to use sudo. */
+async function selectToolsForInstall(
+  missing: ToolDependency[],
+): Promise<{ selected: string[]; useSudo: boolean } | null> {
+  const selected = await p.multiselect({
+    message: "Select tools to install globally:",
+    options: missing.map((dep) => ({
+      value: dep.npmPackage,
+      label: dep.name,
+      hint: dep.description,
+    })),
+    required: false,
+  });
+
+  if (p.isCancel(selected) || selected.length === 0) return null;
+
+  const useSudo = needsSudo();
+  if (useSudo && !hasSudo()) {
+    const cmds = selected.map((pkg) => `  sudo npm install -g ${pkg}`);
+    p.log.warn(
+      `Global npm directory requires elevated permissions.\nRun manually:\n${cmds.join("\n")}`,
+    );
+    return null;
+  }
+
+  if (useSudo) {
+    p.log.info(pc.dim("Elevated permissions required — using sudo for global install."));
+  }
+
+  return { selected, useSudo };
+}
+
+/** Install a list of npm packages globally. Returns successfully installed package names. */
+function installNpmPackages(
+  packages: string[],
+  missing: ToolDependency[],
+  useSudo: boolean,
+): string[] {
+  const installed: string[] = [];
+  for (const pkg of packages) {
+    const dep = missing.find((d) => d.npmPackage === pkg)!;
+    const prefix = useSudo ? "sudo " : "";
+    const s = p.spinner();
+    s.start(`Installing ${dep.name} (${prefix}npm install -g ${pkg})...`);
+    try {
+      (useSudo ? npmInstallGlobalSudo : npmInstallGlobal)(pkg);
+      s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
+      installed.push(pkg);
+    } catch (err) {
+      s.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
+      p.log.warn(`Failed to install ${dep.name}: ${toErrorMessage(err)}`);
+    }
+  }
+  return installed;
+}
+
 export async function offerToolInstall(options?: {
   nonInteractive?: boolean;
   domains?: string[];
@@ -263,56 +319,12 @@ export async function offerToolInstall(options?: {
   );
   p.log.warn(`${missing.length} optional tool(s) not found:\n${lines.join("\n")}`);
 
-  if (options?.nonInteractive) {
-    return [];
-  }
+  if (options?.nonInteractive) return [];
 
-  const selected = await p.multiselect({
-    message: "Select tools to install globally:",
-    options: missing.map((dep) => ({
-      value: dep.npmPackage,
-      label: dep.name,
-      hint: dep.description,
-    })),
-    required: false,
-  });
+  const selection = await selectToolsForInstall(missing);
+  if (!selection) return [];
 
-  if (p.isCancel(selected) || selected.length === 0) {
-    return [];
-  }
-
-  // Detect if we need elevated permissions
-  const useSudo = needsSudo();
-  const sudoAvailable = useSudo ? hasSudo() : false;
-
-  if (useSudo && !sudoAvailable) {
-    const cmds = selected.map((pkg) => `  sudo npm install -g ${pkg}`);
-    p.log.warn(
-      `Global npm directory requires elevated permissions.\nRun manually:\n${cmds.join("\n")}`,
-    );
-    return [];
-  }
-
-  if (useSudo) {
-    p.log.info(pc.dim("Elevated permissions required — using sudo for global install."));
-  }
-
-  const installed: string[] = [];
-  for (const pkg of selected) {
-    const dep = missing.find((d) => d.npmPackage === pkg)!;
-    const prefix = useSudo ? "sudo " : "";
-    const s = p.spinner();
-    s.start(`Installing ${dep.name} (${prefix}npm install -g ${pkg})...`);
-    try {
-      (useSudo ? npmInstallGlobalSudo : npmInstallGlobal)(pkg);
-      s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
-      installed.push(pkg);
-    } catch (err) {
-      s.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
-      p.log.warn(`Failed to install ${dep.name}: ${toErrorMessage(err)}`);
-    }
-  }
-
+  const installed = installNpmPackages(selection.selected, missing, selection.useSudo);
   if (installed.length > 0) {
     p.log.success(`${installed.length} tool(s) installed.`);
   }

@@ -203,6 +203,51 @@ export class SafeExecutor {
     }
   }
 
+  /** Run the generate phase, returning the output or an early ExecutionResult on failure. */
+  private async runGeneratePhase(
+    taskId: string,
+    tool: DevOpsTool,
+    input: unknown,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<{ output: ToolOutput } | { result: ExecutionResult }> {
+    try {
+      const output = await withTimeout(
+        tool.generate(input as never),
+        this.policy.generateTimeoutMs ?? this.policy.timeoutMs,
+      );
+      this.accumulateTokenUsage(output.usage);
+      if (!output.success) {
+        return {
+          result: this.buildResult(taskId, tool.name, "failed", startTime, {
+            error: output.error,
+            output: output.data,
+            filesWritten: [],
+            usage: output.usage,
+            metadata: meta,
+          }),
+        };
+      }
+      return { output };
+    } catch (err) {
+      const { status, error } = this.handleTimeoutError(err, "Generate");
+      return {
+        result: this.buildResult(taskId, tool.name, status, startTime, {
+          error,
+          filesWritten: [],
+          metadata: meta,
+        }),
+      };
+    }
+  }
+
+  /** Check pre-execution policy on declared output paths. Returns violation message or undefined. */
+  private checkDeclaredPathPolicy(generateOutput: ToolOutput): string | undefined {
+    if (!this.policy.allowWrite || !generateOutput.data) return undefined;
+    const declaredPaths = this.extractDeclaredPaths(generateOutput.data);
+    return this.checkFilePaths(declaredPaths);
+  }
+
   async executeTask(
     taskId: string,
     tool: DevOpsTool,
@@ -210,44 +255,20 @@ export class SafeExecutor {
     metadata?: Record<string, unknown>,
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
-    const filesWritten: string[] = [];
     const meta = metadata;
 
     const validation = tool.validate(input);
     if (!validation.valid) {
       return this.buildResult(taskId, tool.name, "failed", startTime, {
         error: `Validation failed: ${validation.error}`,
-        filesWritten,
+        filesWritten: [],
         metadata: meta,
       });
     }
 
-    let generateOutput: ToolOutput;
-    try {
-      generateOutput = await withTimeout(
-        tool.generate(input as never),
-        this.policy.generateTimeoutMs ?? this.policy.timeoutMs,
-      );
-    } catch (err) {
-      const { status, error } = this.handleTimeoutError(err, "Generate");
-      return this.buildResult(taskId, tool.name, status, startTime, {
-        error,
-        filesWritten,
-        metadata: meta,
-      });
-    }
-
-    this.accumulateTokenUsage(generateOutput.usage);
-
-    if (!generateOutput.success) {
-      return this.buildResult(taskId, tool.name, "failed", startTime, {
-        error: generateOutput.error,
-        output: generateOutput.data,
-        filesWritten,
-        usage: generateOutput.usage,
-        metadata: meta,
-      });
-    }
+    const genResult = await this.runGeneratePhase(taskId, tool, input, startTime, meta);
+    if ("result" in genResult) return genResult.result;
+    const generateOutput = genResult.output;
 
     const verifyResult = await this.runVerification(tool, generateOutput);
     if (!verifyResult.ok) {
@@ -255,7 +276,7 @@ export class SafeExecutor {
         error: verifyResult.error,
         output: generateOutput.data,
         verification: verifyResult.verification,
-        filesWritten,
+        filesWritten: [],
         usage: generateOutput.usage,
         metadata: meta,
       });
@@ -267,7 +288,7 @@ export class SafeExecutor {
         output: generateOutput.data,
         approval: "skipped",
         verification,
-        filesWritten,
+        filesWritten: [],
         usage: generateOutput.usage,
         metadata: meta,
       });
@@ -279,26 +300,23 @@ export class SafeExecutor {
         output: generateOutput.data,
         approval,
         verification,
-        filesWritten,
+        filesWritten: [],
         usage: generateOutput.usage,
         metadata: meta,
       });
     }
 
-    if (this.policy.allowWrite && generateOutput.data) {
-      const declaredPaths = this.extractDeclaredPaths(generateOutput.data);
-      const violation = this.checkFilePaths(declaredPaths);
-      if (violation) {
-        return this.buildResult(taskId, tool.name, "failed", startTime, {
-          error: `Pre-execution policy violation on declared output path: ${violation}`,
-          output: generateOutput.data,
-          approval,
-          verification,
-          filesWritten,
-          usage: generateOutput.usage,
-          metadata: meta,
-        });
-      }
+    const pathViolation = this.checkDeclaredPathPolicy(generateOutput);
+    if (pathViolation) {
+      return this.buildResult(taskId, tool.name, "failed", startTime, {
+        error: `Pre-execution policy violation on declared output path: ${pathViolation}`,
+        output: generateOutput.data,
+        approval,
+        verification,
+        filesWritten: [],
+        usage: generateOutput.usage,
+        metadata: meta,
+      });
     }
 
     return this.runExecution({

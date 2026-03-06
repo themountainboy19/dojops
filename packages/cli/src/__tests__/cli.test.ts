@@ -17,6 +17,17 @@ function run(...args: string[]): string {
   }
 }
 
+function expectHelpContains(command: string, expected: string[], notExpected: string[] = []) {
+  const output = run(command, "--help");
+  for (const s of expected) expect(output).toContain(s);
+  for (const s of notExpected) expect(output).not.toContain(s);
+}
+
+function expectRunContains(args: string[], expected: string[]) {
+  const output = run(...args);
+  for (const s of expected) expect(output).toContain(s);
+}
+
 describe("CLI", () => {
   describe("--help", () => {
     it("shows help text with --help flag", () => {
@@ -119,12 +130,6 @@ describe("CLI", () => {
       ["modules", ["dojops modules", "list", "init", "validate", "load"]],
     ];
 
-    function expectHelpContains(command: string, expected: string[], notExpected: string[] = []) {
-      const output = run(command, "--help");
-      for (const s of expected) expect(output).toContain(s);
-      for (const s of notExpected) expect(output).not.toContain(s);
-    }
-
     for (const [cmd, expected, notExpected] of helpCases) {
       it(`shows ${cmd}-specific help with dojops ${cmd} --help`, () => {
         expectHelpContains(cmd, expected, notExpected);
@@ -151,11 +156,6 @@ describe("CLI", () => {
   });
 
   describe("subcommand routing", () => {
-    function expectRunContains(args: string[], expected: string[]) {
-      const output = run(...args);
-      for (const s of expected) expect(output).toContain(s);
-    }
-
     it("status runs without LLM provider", () => {
       expectRunContains(["status"], ["Node.js version", "System Diagnostics"]);
     });

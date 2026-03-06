@@ -156,7 +156,6 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
       } else if (stripped.startsWith("reason:") && currentIgnoreEntry) {
         currentIgnoreEntry.reason = stripQuotes(stripped.slice(7));
       }
-      continue;
     }
   }
 

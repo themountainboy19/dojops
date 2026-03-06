@@ -90,6 +90,22 @@ const LANGUAGE_INDICATORS: Array<{
  * Detect languages at root and in immediate child directories.
  * Returns one entry per (language, indicator path) pair.
  */
+/** Try to match any file indicator for a single language in a directory. */
+function matchLanguageInDir(
+  lang: { name: string; files: string[]; confidence: number },
+  absDir: string,
+  dir: string,
+): LanguageDetection | null {
+  for (const file of lang.files) {
+    const matched = matchFileIndicator(absDir, file);
+    if (!matched) continue;
+    const indicator = dir ? `${dir}/${matched}` : matched;
+    const confidence = dir ? lang.confidence * 0.9 : lang.confidence;
+    return { name: lang.name, confidence, indicator };
+  }
+  return null;
+}
+
 /** Check a single directory for language indicators and append results. */
 function detectLanguagesInDir(
   dir: string,
@@ -101,15 +117,10 @@ function detectLanguagesInDir(
   for (const lang of LANGUAGE_INDICATORS) {
     const key = `${lang.name}:${dir}`;
     if (seen.has(key)) continue;
-    for (const file of lang.files) {
-      const matched = matchFileIndicator(absDir, file);
-      if (matched) {
-        const indicator = dir ? `${dir}/${matched}` : matched;
-        const confidence = dir ? lang.confidence * 0.9 : lang.confidence;
-        results.push({ name: lang.name, confidence, indicator });
-        seen.add(key);
-        break;
-      }
+    const detection = matchLanguageInDir(lang, absDir, dir);
+    if (detection) {
+      results.push(detection);
+      seen.add(key);
     }
   }
 }
@@ -678,6 +689,41 @@ export function detectMetadata(root: string): Metadata {
 
 // ── Domain mapping ───────────────────────────────────────────────────
 
+/** Derive domains from CI detection results. */
+function deriveCIDomains(ci: CIDetection[], domains: string[]): void {
+  if (ci.length > 0) domains.push("ci-cd");
+  if (ci.some((c) => c.platform === "github-actions")) domains.push("ci-debugging");
+}
+
+/** Derive domains from container detection results. */
+function deriveContainerDomains(container: ContainerDetection, domains: string[]): void {
+  if (container.hasDockerfile || container.hasCompose) domains.push("containerization");
+  if (container.hasSwarm) domains.push("container-orchestration");
+}
+
+/** Derive domains from infrastructure detection results. */
+function deriveInfraDomains(infra: InfraDetection, domains: string[]): void {
+  if (infra.hasTerraform) domains.push("infrastructure");
+  if (infra.hasKubernetes || infra.hasHelm) domains.push("container-orchestration");
+  if (infra.hasAnsible) domains.push("infrastructure");
+  if (infra.tfProviders.length > 0) domains.push("cloud-architecture");
+  if (infra.hasKustomize) domains.push("container-orchestration");
+  if (infra.hasPulumi || infra.hasCloudFormation) {
+    domains.push("infrastructure", "cloud-architecture");
+  }
+  if (infra.hasPacker) domains.push("infrastructure");
+}
+
+/** Derive domains from monitoring detection results. */
+function deriveMonitoringDomains(monitoring: MonitoringDetection, domains: string[]): void {
+  if (monitoring.hasPrometheus) domains.push("observability");
+  if (monitoring.hasNginx) domains.push("networking");
+  if (monitoring.hasSystemd) domains.push("shell-scripting");
+  if (monitoring.hasHaproxy || monitoring.hasApache || monitoring.hasCaddy || monitoring.hasEnvoy) {
+    domains.push("networking");
+  }
+}
+
 export function deriveRelevantDomains(
   ci: CIDetection[],
   container: ContainerDetection,
@@ -688,25 +734,10 @@ export function deriveRelevantDomains(
 ): string[] {
   const domains: string[] = [];
 
-  if (ci.length > 0) domains.push("ci-cd");
-  if (ci.some((c) => c.platform === "github-actions")) domains.push("ci-debugging");
-  if (container.hasDockerfile || container.hasCompose) domains.push("containerization");
-  if (infra.hasTerraform) domains.push("infrastructure");
-  if (infra.hasKubernetes || infra.hasHelm) domains.push("container-orchestration");
-  if (infra.hasAnsible) domains.push("infrastructure");
-  if (infra.tfProviders.length > 0) domains.push("cloud-architecture");
-  if (infra.hasKustomize) domains.push("container-orchestration");
-  if (infra.hasPulumi || infra.hasCloudFormation) {
-    domains.push("infrastructure", "cloud-architecture");
-  }
-  if (infra.hasPacker) domains.push("infrastructure");
-  if (container.hasSwarm) domains.push("container-orchestration");
-  if (monitoring.hasPrometheus) domains.push("observability");
-  if (monitoring.hasNginx) domains.push("networking");
-  if (monitoring.hasSystemd) domains.push("shell-scripting");
-  if (monitoring.hasHaproxy || monitoring.hasApache || monitoring.hasCaddy || monitoring.hasEnvoy) {
-    domains.push("networking");
-  }
+  deriveCIDomains(ci, domains);
+  deriveContainerDomains(container, domains);
+  deriveInfraDomains(infra, domains);
+  deriveMonitoringDomains(monitoring, domains);
 
   if (scripts) {
     if (scripts.shellScripts.length > 0) domains.push("shell-scripting");
@@ -750,22 +781,36 @@ function collectContainerFiles(
   }
 }
 
+/** Check if a filename is a Terraform-related file. */
+function isTerraformFile(filename: string): boolean {
+  return (
+    filename.endsWith(".tf") ||
+    filename === "terraform.tfvars" ||
+    filename === "terraform.tfvars.json"
+  );
+}
+
+/** Scan a single directory for Terraform files and add them to the set. */
+function collectTfFilesFromDir(files: Set<string>, dirPath: string, prefix: string): void {
+  try {
+    if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) return;
+    const entries = fs.readdirSync(dirPath);
+    for (const f of entries) {
+      if (isTerraformFile(f)) {
+        files.add(prefix ? `${prefix}/${f}` : f);
+      }
+    }
+  } catch {
+    // Unreadable
+  }
+}
+
 /** Collect Terraform .tf and .tfvars files from known directories. */
 function collectTerraformFiles(files: Set<string>, root: string): void {
   const tfDirs = ["", "terraform", "infra", "infrastructure", "tf", "iac", "terraform-iac"];
   for (const dir of tfDirs) {
     const dirPath = dir ? path.join(root, dir) : root;
-    try {
-      if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) continue;
-      const entries = fs.readdirSync(dirPath);
-      for (const f of entries) {
-        if (f.endsWith(".tf") || f === "terraform.tfvars" || f === "terraform.tfvars.json") {
-          files.add(dir ? `${dir}/${f}` : f);
-        }
-      }
-    } catch {
-      // Unreadable
-    }
+    collectTfFilesFromDir(files, dirPath, dir);
   }
 }
 
@@ -897,53 +942,83 @@ const NOISE_DIRS = new Set([
 
 const MAX_TREE_ENTRIES = 200;
 
+/** Check if a directory entry should be skipped in the tree output. */
+function isSkippedDir(entry: fs.Dirent): boolean {
+  return NOISE_DIRS.has(entry.name) || entry.name.startsWith(".");
+}
+
+/** Sort directory entries: directories first, then files, alphabetical within each group. */
+function sortDirEntries(entries: fs.Dirent[]): void {
+  entries.sort((a, b) => {
+    if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/** Read and sort directory entries. Returns empty array on failure. */
+function readSortedEntries(dir: string): fs.Dirent[] {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    sortDirEntries(entries);
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+/** Process a single directory entry and add it to the tree lines. */
+function processTreeEntry(
+  entry: fs.Dirent,
+  dir: string,
+  prefix: string,
+  connector: string,
+  childPrefix: string,
+  depth: number,
+  maxDepth: number,
+  lines: string[],
+): void {
+  if (entry.isDirectory()) {
+    if (isSkippedDir(entry)) return;
+    lines.push(`${prefix}${connector}${entry.name}/`);
+    if (depth < maxDepth) {
+      walkTree(path.join(dir, entry.name), `${prefix}${childPrefix}`, depth + 1, maxDepth, lines);
+    }
+  } else {
+    lines.push(`${prefix}${connector}${entry.name}`);
+  }
+}
+
+/** Recursively walk a directory tree, appending indented lines. */
+function walkTree(
+  dir: string,
+  prefix: string,
+  depth: number,
+  maxDepth: number,
+  lines: string[],
+): void {
+  if (lines.length >= MAX_TREE_ENTRIES) return;
+  const entries = readSortedEntries(dir);
+
+  for (let i = 0; i < entries.length; i++) {
+    if (lines.length >= MAX_TREE_ENTRIES) {
+      lines.push(`${prefix}... (truncated)`);
+      return;
+    }
+    const isLast = i === entries.length - 1;
+    const connector = isLast ? "└── " : "├── ";
+    const childPrefix = isLast ? "    " : "│   ";
+    processTreeEntry(entries[i], dir, prefix, connector, childPrefix, depth, maxDepth, lines);
+  }
+}
+
 /**
  * Walk the filesystem up to `maxDepth` levels deep, producing an
  * indented tree string. Skips noise directories and dotfiles.
  */
 export function generateDirectoryTree(root: string, maxDepth = 2): string {
   const lines: string[] = [];
-
-  function walk(dir: string, prefix: string, depth: number): void {
-    if (lines.length >= MAX_TREE_ENTRIES) return;
-    let entries: fs.Dirent[];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    // Sort: directories first, then files, alphabetical within each group
-    entries.sort((a, b) => {
-      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-
-    for (let i = 0; i < entries.length; i++) {
-      if (lines.length >= MAX_TREE_ENTRIES) {
-        lines.push(`${prefix}... (truncated)`);
-        return;
-      }
-
-      const entry = entries[i];
-      const isLast = i === entries.length - 1;
-      const connector = isLast ? "└── " : "├── ";
-      const childPrefix = isLast ? "    " : "│   ";
-
-      if (entry.isDirectory()) {
-        if (NOISE_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
-        lines.push(`${prefix}${connector}${entry.name}/`);
-        if (depth < maxDepth) {
-          walk(path.join(dir, entry.name), `${prefix}${childPrefix}`, depth + 1);
-        }
-      } else {
-        lines.push(`${prefix}${connector}${entry.name}`);
-      }
-    }
-  }
-
   lines.push(`${path.basename(root)}/`);
-  walk(root, "", 1);
+  walkTree(root, "", 1, maxDepth, lines);
   return lines.join("\n");
 }
 

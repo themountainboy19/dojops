@@ -1,12 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
-import { createApp, AppDependencies } from "../../app";
-import { HistoryStore } from "../../store";
+import { createApp } from "../../app";
+import { createTestDeps } from "../test-helpers";
 
 function createTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-route-test-"));
@@ -19,38 +17,6 @@ function setupOda(rootDir: string) {
   fs.mkdirSync(path.join(dojopsDir, "scan-history"), { recursive: true });
   fs.mkdirSync(path.join(dojopsDir, "history"), { recursive: true });
   return dojopsDir;
-}
-
-function createMockProvider(): LLMProvider {
-  return {
-    name: "mock",
-    generate: vi.fn().mockResolvedValue({
-      content: "Mock response",
-      model: "mock-model",
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-    } satisfies LLMResponse),
-  };
-}
-
-function createMockTool(): DevOpsTool {
-  return {
-    name: "mock-tool",
-    description: "A mock tool",
-    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-  };
-}
-
-function createTestDeps(rootDir?: string): AppDependencies {
-  const provider = createMockProvider();
-  const tools = [createMockTool()];
-  const router = new AgentRouter(provider);
-  const debugger_ = new CIDebugger(provider);
-  const diffAnalyzer = new InfraDiffAnalyzer(provider);
-  const store = new HistoryStore();
-
-  return { provider, tools, router, debugger: debugger_, diffAnalyzer, store, rootDir };
 }
 
 describe("Metrics API routes", () => {
