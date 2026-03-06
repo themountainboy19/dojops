@@ -266,6 +266,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
 
     try {
       execFileSync(parts[0], parts.slice(1), {
+        // NOSONAR — S4721: execFileSync with whitelisted verification binary and array args
         cwd: this.toolDir,
         encoding: "utf-8",
         timeout: 10_000,

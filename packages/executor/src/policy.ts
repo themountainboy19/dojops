@@ -69,7 +69,7 @@ export function matchesAllowlistPattern(filePath: string, pattern: string): bool
   if (pattern.includes("*")) {
     const regexStr =
       "^" + pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]*") + "$"; // NOSONAR - replacement strings, not regex patterns
-    const regex = new RegExp(regexStr);
+    const regex = new RegExp(regexStr); // NOSONAR — S5852: regexStr built from escaped path components
     // Match against the full relative path or just the basename for simple patterns
     if (!pattern.includes("/")) {
       const basename = normalized.includes("/") ? normalized.split("/").pop()! : normalized;

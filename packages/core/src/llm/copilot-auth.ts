@@ -230,11 +230,11 @@ export async function getCopilotUserInfo(githubToken: string): Promise<CopilotUs
 
 export function saveCopilotAuth(auth: StoredCopilotAuth): void {
   if (!fs.existsSync(getTokenDir())) {
-    fs.mkdirSync(getTokenDir(), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(getTokenDir(), { recursive: true, mode: 0o700 }); // NOSONAR — S2612: restrictive permissions, owner-only access for token storage
   }
   // Atomic write: tmp + rename to prevent corruption on kill
   const tmpFile = getTokenFile() + ".tmp";
-  fs.writeFileSync(tmpFile, JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 });
+  fs.writeFileSync(tmpFile, JSON.stringify(auth, null, 2) + "\n", { mode: 0o600 }); // NOSONAR — S2612: restrictive permissions, owner-only read/write for credentials
   fs.renameSync(tmpFile, getTokenFile());
 }
 

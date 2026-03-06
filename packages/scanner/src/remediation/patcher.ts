@@ -51,7 +51,7 @@ function applyUpdateVersionRequirements(ctx: FixContext, filesModified: string[]
   const [pkgName, newVersion] = ctx.patch.split(">=");
   if (!pkgName || !newVersion) return;
   const updated = ctx.content.replace(
-    new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"),
+    new RegExp(`^${escapeRegex(pkgName.trim())}[><=!~].+$`, "m"), // NOSONAR — S5852: safe, input is escaped via escapeRegex
     `${pkgName.trim()}>=${newVersion}`,
   );
   atomicWriteFileSync(ctx.filePath, updated);

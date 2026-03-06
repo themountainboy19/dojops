@@ -437,14 +437,14 @@ describe("checkGitDirty", () => {
 
   it("detects dirty working tree in a git repo", () => {
     // Init a git repo
-    execFileSync("git", ["init"], { cwd: tmpDir, stdio: "pipe" });
-    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: tmpDir, stdio: "pipe" });
-    execFileSync("git", ["config", "user.name", "Test"], { cwd: tmpDir, stdio: "pipe" });
+    execFileSync("git", ["init"], { cwd: tmpDir, stdio: "pipe" }); // NOSONAR — S4721: test setup, hardcoded git commands
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: tmpDir, stdio: "pipe" }); // NOSONAR — S4721: test setup, hardcoded git commands
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: tmpDir, stdio: "pipe" }); // NOSONAR — S4721: test setup, hardcoded git commands
 
     // Create and commit a file
     fs.writeFileSync(path.join(tmpDir, "clean.txt"), "clean", "utf-8");
-    execFileSync("git", ["add", "."], { cwd: tmpDir, stdio: "pipe" });
-    execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, stdio: "pipe" });
+    execFileSync("git", ["add", "."], { cwd: tmpDir, stdio: "pipe" }); // NOSONAR — S4721: test setup, hardcoded git commands
+    execFileSync("git", ["commit", "-m", "init"], { cwd: tmpDir, stdio: "pipe" }); // NOSONAR — S4721: test setup, hardcoded git commands
 
     // Clean state
     const clean = checkGitDirty(tmpDir);

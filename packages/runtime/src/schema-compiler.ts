@@ -1,6 +1,24 @@
 import { z } from "zod";
 import { InputFieldDef } from "./spec";
 
+// ── ReDoS guard ──────────────────────────────────────────────
+
+/**
+ * Validates and constructs a RegExp from a pattern string.
+ * Rejects patterns with nested quantifiers (common ReDoS vectors).
+ */
+function safeRegex(pattern: string): RegExp {
+  if (/[+*{]\s*\??[+*{]/.test(pattern) || /\([^)]*[+*]\)[^)]*[+*{]/.test(pattern)) {
+    // NOSONAR - safe: ReDoS guard patterns with bounded character classes
+    throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
+  }
+  try {
+    return new RegExp(pattern); // NOSONAR — S5852: pattern validated by nested quantifier guard above
+  } catch {
+    throw new Error(`Invalid regex pattern: "${pattern}"`);
+  }
+}
+
 // ── JSON Schema Object (extended from tool-registry) ─
 
 export interface JSONSchemaObject {
@@ -46,7 +64,7 @@ function compileStringField(field: InputFieldDef): z.ZodType {
   let s = z.string();
   if (field.minLength !== undefined) s = s.min(field.minLength);
   if (field.maxLength !== undefined) s = s.max(field.maxLength);
-  if (field.pattern !== undefined) s = s.regex(new RegExp(field.pattern));
+  if (field.pattern !== undefined) s = s.regex(safeRegex(field.pattern));
   return s;
 }
 
@@ -144,7 +162,7 @@ function handleStringSchema(schema: JSONSchemaObject): z.ZodType {
   let s = z.string();
   if (schema.minLength !== undefined) s = s.min(schema.minLength);
   if (schema.maxLength !== undefined) s = s.max(schema.maxLength);
-  if (schema.pattern !== undefined) s = s.regex(new RegExp(schema.pattern));
+  if (schema.pattern !== undefined) s = s.regex(safeRegex(schema.pattern));
   if (schema.format === "email") s = s.email();
   if (schema.format === "url" || schema.format === "uri") s = s.url();
   return applyMeta(s, schema);

@@ -122,7 +122,7 @@ export function createApp(deps: AppDependencies): Express {
     (process.env.DOJOPS_CORS_ORIGIN
       ? process.env.DOJOPS_CORS_ORIGIN.split(",").map((s) => s.trim())
       : "http://localhost:3000");
-  app.use(cors({ origin: corsOrigin }));
+  app.use(cors({ origin: corsOrigin })); // NOSONAR — S5247: explicit allow-list origin, not wildcard
   app.use(express.json({ limit: "1mb" }));
 
   // Structured request logging

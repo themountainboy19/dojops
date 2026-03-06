@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
@@ -24,6 +24,14 @@ function compareSemver(a: string, b: string): number {
   return 0;
 }
 
+const SEMVER_RE = /^\d+\.\d+\.\d+(-[\w.]+)?$/;
+
+function validateSemver(version: string): void {
+  if (!SEMVER_RE.test(version)) {
+    throw new Error(`Invalid version string from registry: ${version}`);
+  }
+}
+
 async function fetchLatestVersion(): Promise<string> {
   const resp = await fetch(NPM_REGISTRY_URL);
   if (!resp.ok) {
@@ -33,6 +41,7 @@ async function fetchLatestVersion(): Promise<string> {
   if (!data.version) {
     throw new Error("Could not parse version from npm registry response");
   }
+  validateSemver(data.version);
   return data.version;
 }
 
@@ -74,8 +83,8 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
   if (!confirmed) return;
 
   try {
-    execSync(`npm install -g @dojops/cli@${latestVersion}`, {
-      // NOSONAR
+    execFileSync("npm", ["install", "-g", `@dojops/cli@${latestVersion}`], {
+      // NOSONAR — S4721: execFileSync with array args, version validated by SEMVER_RE
       stdio: "inherit",
       timeout: 120_000,
     });

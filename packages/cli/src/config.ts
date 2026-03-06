@@ -90,11 +90,11 @@ function checkConfigPermissions(filePath: string): void {
 export function saveConfig(config: DojOpsConfig): void {
   const dir = configDir();
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); // NOSONAR — S2612: restrictive permissions, owner-only access
   }
   fs.writeFileSync(configFile(), JSON.stringify(config, null, 2) + "\n", {
     encoding: "utf-8",
-    mode: 0o600,
+    mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write
   });
 }
 
@@ -216,11 +216,11 @@ export function saveProfile(name: string, config: DojOpsConfig): void {
   validateProfileName(name);
   const dir = profilesDir();
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); // NOSONAR — S2612: restrictive permissions, owner-only access
   }
   fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(config, null, 2) + "\n", {
     encoding: "utf-8",
-    mode: 0o600,
+    mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write
   });
 }
 
@@ -237,7 +237,7 @@ export function deleteProfile(name: string): boolean {
       delete meta.activeProfile;
       fs.writeFileSync(metaFile(), JSON.stringify(meta, null, 2) + "\n", {
         encoding: "utf-8",
-        mode: 0o600,
+        mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write
       });
     } catch {
       // no meta file, nothing to clear
@@ -267,7 +267,7 @@ export function getActiveProfile(): string | undefined {
 export function setActiveProfile(name: string | undefined): void {
   const dir = configDir();
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); // NOSONAR — S2612: restrictive permissions, owner-only access
   }
   let meta: Record<string, unknown> = {};
   try {
@@ -278,7 +278,7 @@ export function setActiveProfile(name: string | undefined): void {
   meta.activeProfile = name;
   fs.writeFileSync(metaFile(), JSON.stringify(meta, null, 2) + "\n", {
     encoding: "utf-8",
-    mode: 0o600,
+    mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write
   });
 }
 

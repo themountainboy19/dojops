@@ -14,6 +14,7 @@ export function execFileAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     execFile(command, args, options, (err, stdout, stderr) => {
+      // NOSONAR — S4721: execFile wrapper with array args, no shell injection
       if (err) {
         // Attach stdout/stderr to the error for callers that need partial output
         const enrichedErr = err as Error & { stdout?: string; stderr?: string };

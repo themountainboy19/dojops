@@ -7,6 +7,7 @@ const CLI_PATH = path.resolve(__dirname, "..", "..", "dist", "index.js");
 function run(...args: string[]): string {
   try {
     return execFileSync("node", [CLI_PATH, ...args], {
+      // NOSONAR — S4721: test helper, execFileSync with array args
       encoding: "utf-8",
       env: { ...process.env, DOJOPS_PROVIDER: "ollama" },
       timeout: 5000,

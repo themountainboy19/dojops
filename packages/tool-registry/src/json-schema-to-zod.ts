@@ -25,7 +25,7 @@ function safeRegex(pattern: string): RegExp {
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }
   try {
-    return new RegExp(pattern);
+    return new RegExp(pattern); // NOSONAR — S5852: pattern is from tool schema, validated by safeRegex guard
   } catch {
     throw new Error(`Invalid regex pattern: "${pattern}"`);
   }

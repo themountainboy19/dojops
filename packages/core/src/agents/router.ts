@@ -40,7 +40,7 @@ export class AgentRouter {
     // Single-word: use word boundary matching
     // \b handles punctuation, hyphens, and whitespace boundaries
     const escaped = kw.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
-    return new RegExp(String.raw`\b${escaped}\b`).test(lower);
+    return new RegExp(String.raw`\b${escaped}\b`).test(lower); // NOSONAR — S5852: safe, keyword is escaped and uses bounded word boundary
   }
 
   route(prompt: string, options?: RouteOptions): RouteResult {

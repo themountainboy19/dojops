@@ -424,6 +424,7 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
   p.log.info(`Opening ${pc.cyan(contextMdPath)} in ${pc.cyan(editor)}...`);
   try {
     execFileSync(editorParts[0], [...editorParts.slice(1), contextMdPath], {
+      // NOSONAR — S4721: editor binary validated against EDITOR_ALLOWLIST
       stdio: "inherit",
     });
     p.log.success("Context file updated.");

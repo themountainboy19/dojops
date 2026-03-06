@@ -131,6 +131,7 @@ async function verifyTerraformContent(hcl: string): Promise<VerificationResult> 
     // Step 1: terraform init
     try {
       execFileSync("terraform", ["-chdir=" + tmpDir, "init", "-backend=false", "-input=false"], {
+        // NOSONAR — S4721: execFileSync with array args, no shell injection
         encoding: "utf-8",
         timeout: 60_000,
         stdio: "pipe",
@@ -155,6 +156,7 @@ async function verifyTerraformContent(hcl: string): Promise<VerificationResult> 
     let rawOutput: string;
     try {
       rawOutput = execFileSync("terraform", ["-chdir=" + tmpDir, "validate", "-json"], {
+        // NOSONAR — S4721: execFileSync with array args, no shell injection
         encoding: "utf-8",
         timeout: 30_000,
         stdio: "pipe",
@@ -228,6 +230,7 @@ async function verifyHelmContent(
 
     try {
       const rawOutput = execFileSync("helm", ["lint", chartDir], {
+        // NOSONAR — S4721: execFileSync with array args, no shell injection
         encoding: "utf-8",
         timeout: 30_000,
         stdio: "pipe",

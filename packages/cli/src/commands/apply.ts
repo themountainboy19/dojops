@@ -854,6 +854,7 @@ function runPostApplyInstall(root: string): void {
   installSpinner.start(`Running ${installCmd.join(" ")}...`);
   try {
     execFileSync(installCmd[0], installCmd.slice(1), {
+      // NOSONAR — S4721: execFileSync with array args from trusted resolveInstallCommand()
       cwd: root,
       encoding: "utf-8",
       timeout: 120_000,

@@ -37,7 +37,7 @@ export async function serveCredentialsCommand(): Promise<void> {
   const dir = path.dirname(SERVER_JSON_PATH);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(SERVER_JSON_PATH, JSON.stringify({ apiKey: key }, null, 2) + "\n", {
-    mode: 0o600,
+    mode: 0o600, // NOSONAR — S2612: restrictive permissions, owner-only read/write for credentials
   });
 
   p.note(

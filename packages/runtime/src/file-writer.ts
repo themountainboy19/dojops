@@ -226,7 +226,7 @@ function matchesSinglePattern(normalizedResolved: string, normalizedExpanded: st
       "^" +
       normalizedExpanded.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll("*", "[^/]*") +
       "$"; // NOSONAR - escape-for-regex pattern
-    return new RegExp(regexStr).test(normalizedResolved);
+    return new RegExp(regexStr).test(normalizedResolved); // NOSONAR — S5852: regexStr built from escaped path components
   }
 
   return false;

@@ -4,7 +4,7 @@ import { CLIContext } from "../../types";
 
 // Mock child_process
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }));
 
 // Mock @clack/prompts
@@ -35,7 +35,7 @@ vi.mock("../../state", () => ({
 
 import { upgradeCommand } from "../../commands/upgrade";
 import { getDojopsVersion } from "../../state";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as clack from "@clack/prompts";
 
 function makeCtx(overrides?: Partial<CLIContext["globalOpts"]>): CLIContext {
@@ -109,8 +109,9 @@ describe("upgrade command", () => {
     it("shows versions and triggers install with --yes", async () => {
       mockFetch("1.1.0");
       await upgradeCommand(["--yes"], makeCtx());
-      expect(vi.mocked(execSync)).toHaveBeenCalledWith(
-        "npm install -g @dojops/cli@1.1.0",
+      expect(vi.mocked(execFileSync)).toHaveBeenCalledWith(
+        "npm",
+        ["install", "-g", "@dojops/cli@1.1.0"],
         expect.objectContaining({ stdio: "inherit" }),
       );
       expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("1.1.0"));
@@ -119,8 +120,9 @@ describe("upgrade command", () => {
     it("auto-approves in non-interactive mode", async () => {
       mockFetch("2.0.0");
       await upgradeCommand([], makeCtx({ nonInteractive: true }));
-      expect(vi.mocked(execSync)).toHaveBeenCalledWith(
-        "npm install -g @dojops/cli@2.0.0",
+      expect(vi.mocked(execFileSync)).toHaveBeenCalledWith(
+        "npm",
+        ["install", "-g", "@dojops/cli@2.0.0"],
         expect.objectContaining({ stdio: "inherit" }),
       );
     });
@@ -130,14 +132,14 @@ describe("upgrade command", () => {
       vi.mocked(clack.confirm).mockResolvedValue(true);
       await upgradeCommand([], makeCtx());
       expect(clack.confirm).toHaveBeenCalled();
-      expect(vi.mocked(execSync)).toHaveBeenCalled();
+      expect(vi.mocked(execFileSync)).toHaveBeenCalled();
     });
 
     it("cancels when user declines", async () => {
       mockFetch("1.1.0");
       vi.mocked(clack.confirm).mockResolvedValue(false);
       await upgradeCommand([], makeCtx());
-      expect(vi.mocked(execSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
       expect(mockLog.info).toHaveBeenCalledWith("Upgrade cancelled.");
     });
   });
@@ -151,7 +153,7 @@ describe("upgrade command", () => {
       } catch (err) {
         expect((err as CLIError).exitCode).toBe(ExitCode.GENERAL_ERROR);
       }
-      expect(vi.mocked(execSync)).not.toHaveBeenCalled();
+      expect(vi.mocked(execFileSync)).not.toHaveBeenCalled();
     });
 
     it("succeeds when already up to date", async () => {
@@ -176,7 +178,7 @@ describe("upgrade command", () => {
   describe("npm install failure", () => {
     it("shows error when install fails", async () => {
       mockFetch("1.1.0");
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error("npm ERR!");
       });
       await expect(upgradeCommand(["--yes"], makeCtx())).rejects.toThrow("npm install failed");
@@ -215,7 +217,7 @@ describe("upgrade command", () => {
 
     it("outputs JSON after successful upgrade", async () => {
       mockFetch("1.1.0");
-      vi.mocked(execSync).mockReturnValue("");
+      vi.mocked(execFileSync).mockReturnValue("");
       await upgradeCommand(["--yes"], makeCtx({ output: "json" }));
       const output = JSON.parse(consoleSpy.mock.calls[0][0]);
       expect(output).toEqual({

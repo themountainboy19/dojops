@@ -39,6 +39,7 @@ export function resolveBinary(name: string): string | undefined {
   try {
     const bin = process.platform === "win32" ? "where" : "which";
     const result = execFileSync(bin, [name], {
+      // NOSONAR — S4721: execFileSync with hardcoded which/where binary
       timeout: 5_000,
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -63,6 +64,7 @@ export function resolveModule(npmPackage: string): string | undefined {
   // Check npm global prefix (handles globally-installed library-only packages)
   try {
     const prefix = execSync("npm config get prefix", {
+      // NOSONAR — S4721: hardcoded npm command
       timeout: 5_000,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf-8",
@@ -201,6 +203,7 @@ export function collectMissingToolsForDomains(domains: string[]): ToolDependency
 function needsSudo(): boolean {
   try {
     const prefix = execSync("npm config get prefix", {
+      // NOSONAR — S4721: hardcoded npm command
       timeout: 5_000,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf-8",
@@ -224,6 +227,7 @@ function hasSudo(): boolean {
  */
 function npmInstallGlobalSudo(pkg: string): void {
   execFileSync("sudo", ["npm", "install", "-g", pkg], {
+    // NOSONAR — S4721: execFileSync with array args, user-selected package
     timeout: 120_000,
     stdio: "pipe",
   });
@@ -234,6 +238,7 @@ function npmInstallGlobalSudo(pkg: string): void {
  */
 function npmInstallGlobal(pkg: string): void {
   execFileSync("npm", ["install", "-g", pkg], {
+    // NOSONAR — S4721: execFileSync with array args, user-selected package
     timeout: 120_000,
     stdio: "pipe",
   });
