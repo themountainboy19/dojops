@@ -16,6 +16,21 @@ class MockTool extends BaseTool<{ projectPath: string; enabled: boolean }> {
   }
 }
 
+function makeMockProvider(parsed: unknown): LLMProvider {
+  return {
+    name: "mock",
+    generate: vi.fn().mockResolvedValue({ content: JSON.stringify(parsed), parsed }),
+  };
+}
+
+const singleTaskGraph = (
+  tool = "mock-tool",
+  input: Record<string, unknown> = { projectPath: "./test" },
+) => ({
+  goal: "test",
+  tasks: [{ id: "t1", tool, description: "test", dependsOn: [], input }],
+});
+
 describe("decompose", () => {
   it("returns a valid TaskGraph from the LLM response", async () => {
     const mockGraph = {
@@ -38,14 +53,7 @@ describe("decompose", () => {
       ],
     };
 
-    const provider: LLMProvider = {
-      name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: JSON.stringify(mockGraph),
-        parsed: mockGraph,
-      }),
-    };
-
+    const provider = makeMockProvider(mockGraph);
     const result = await decompose("deploy app", provider, [new MockTool()]);
 
     expect(result.goal).toBe("deploy app");
@@ -58,25 +66,7 @@ describe("decompose", () => {
   });
 
   it("passes available tools to the LLM system prompt", async () => {
-    const provider: LLMProvider = {
-      name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: "{}",
-        parsed: {
-          goal: "test",
-          tasks: [
-            {
-              id: "t1",
-              tool: "mock-tool",
-              description: "test",
-              dependsOn: [],
-              input: { projectPath: "./test" },
-            },
-          ],
-        },
-      }),
-    };
-
+    const provider = makeMockProvider(singleTaskGraph());
     await decompose("test", provider, [new MockTool()]);
 
     const call = vi.mocked(provider.generate).mock.calls[0][0];
@@ -85,25 +75,7 @@ describe("decompose", () => {
   });
 
   it("includes tool input schema in system prompt", async () => {
-    const provider: LLMProvider = {
-      name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: "{}",
-        parsed: {
-          goal: "test",
-          tasks: [
-            {
-              id: "t1",
-              tool: "mock-tool",
-              description: "test",
-              dependsOn: [],
-              input: { projectPath: "./test" },
-            },
-          ],
-        },
-      }),
-    };
-
+    const provider = makeMockProvider(singleTaskGraph());
     await decompose("test schema", provider, [new MockTool()]);
 
     const call = vi.mocked(provider.generate).mock.calls[0][0];
@@ -148,24 +120,13 @@ describe("decompose", () => {
       }
     }
 
-    const provider: LLMProvider = {
-      name: "mock",
-      generate: vi.fn().mockResolvedValue({
-        content: "{}",
-        parsed: {
-          goal: "deploy",
-          tasks: [
-            {
-              id: "t1",
-              tool: "terraform",
-              description: "create infra",
-              dependsOn: [],
-              input: { projectPath: "./infra", provider: "aws", resources: "EC2 + RDS" },
-            },
-          ],
-        },
+    const provider = makeMockProvider(
+      singleTaskGraph("terraform", {
+        projectPath: "./infra",
+        provider: "aws",
+        resources: "EC2 + RDS",
       }),
-    };
+    );
 
     await decompose("deploy to AWS", provider, [new TerraformLikeTool()]);
 

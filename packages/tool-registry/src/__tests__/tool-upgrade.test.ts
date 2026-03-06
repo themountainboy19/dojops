@@ -52,194 +52,117 @@ function createMockProvider(): LLMProvider {
   };
 }
 
+let tmpDir: string;
+let projectDir: string;
+let globalToolsDir: string;
+let origHome: string | undefined;
+
+function setupTmpEnv() {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-upgrade-test-"));
+  projectDir = path.join(tmpDir, "project");
+  fs.mkdirSync(projectDir, { recursive: true });
+  globalToolsDir = path.join(tmpDir, ".dojops", "tools");
+  fs.mkdirSync(globalToolsDir, { recursive: true });
+  origHome = process.env.HOME;
+  process.env.HOME = tmpDir;
+}
+
+function teardownTmpEnv() {
+  process.env.HOME = origHome;
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+/** Modify a field in a tool's YAML manifest. */
+function modifyManifest(toolName: string, mutate: (m: Record<string, unknown>) => void) {
+  const manifestPath = path.join(globalToolsDir, toolName, "tool.yaml");
+  const manifest = yaml.load(fs.readFileSync(manifestPath, "utf-8")) as Record<string, unknown>;
+  mutate(manifest);
+  fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
+}
+
 describe("Tool hash changes on manifest modification", () => {
-  let tmpDir: string;
-  let projectDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-upgrade-test-"));
-    projectDir = path.join(tmpDir, "project");
-    fs.mkdirSync(projectDir, { recursive: true });
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  beforeEach(setupTmpEnv);
+  afterEach(teardownTmpEnv);
 
   it("hash changes when systemPrompt is modified", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "hash-test");
-
-    const before = discoverTools(projectDir);
-    const hashBefore = before[0].source.toolHash;
-
-    // Modify the systemPrompt in the manifest
-    const manifestPath = path.join(globalToolsDir, "hash-test", "tool.yaml");
-    const content = fs.readFileSync(manifestPath, "utf-8");
-    const manifest = yaml.load(content) as Record<string, unknown>;
-    (manifest.generator as Record<string, unknown>).systemPrompt = "Modified prompt.";
-    fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
-
-    const after = discoverTools(projectDir);
-    const hashAfter = after[0].source.toolHash;
-
-    expect(hashBefore).not.toBe(hashAfter);
+    const hashBefore = discoverTools(projectDir)[0].source.toolHash;
+    modifyManifest("hash-test", (m) => {
+      (m.generator as Record<string, unknown>).systemPrompt = "Modified prompt.";
+    });
+    expect(discoverTools(projectDir)[0].source.toolHash).not.toBe(hashBefore);
   });
 
   it("hash changes when version is bumped", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "version-test");
-
-    const before = discoverTools(projectDir);
-    const hashBefore = before[0].source.toolHash;
-
-    // Bump version
-    const manifestPath = path.join(globalToolsDir, "version-test", "tool.yaml");
-    const content = fs.readFileSync(manifestPath, "utf-8");
-    const manifest = yaml.load(content) as Record<string, unknown>;
-    manifest.version = "2.0.0";
-    fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
-
-    const after = discoverTools(projectDir);
-    const hashAfter = after[0].source.toolHash;
-
-    expect(hashBefore).not.toBe(hashAfter);
+    const hashBefore = discoverTools(projectDir)[0].source.toolHash;
+    modifyManifest("version-test", (m) => {
+      m.version = "2.0.0";
+    });
+    expect(discoverTools(projectDir)[0].source.toolHash).not.toBe(hashBefore);
   });
 
   it("hash is stable when nothing changes", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "stable-test");
-
-    const first = discoverTools(projectDir);
-    const second = discoverTools(projectDir);
-
-    expect(first[0].source.toolHash).toBe(second[0].source.toolHash);
+    expect(discoverTools(projectDir)[0].source.toolHash).toBe(
+      discoverTools(projectDir)[0].source.toolHash,
+    );
   });
 
   it("hash only covers tool.yaml (modifying input.schema.json does not change hash)", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "schema-test");
-
-    const before = discoverTools(projectDir);
-    const hashBefore = before[0].source.toolHash;
-
-    // Modify input.schema.json
+    const hashBefore = discoverTools(projectDir)[0].source.toolHash;
     const schemaPath = path.join(globalToolsDir, "schema-test", "input.schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
     schema.properties.extra = { type: "number" };
     fs.writeFileSync(schemaPath, JSON.stringify(schema, null, 2), "utf-8");
-
-    const after = discoverTools(projectDir);
-    const hashAfter = after[0].source.toolHash;
-
-    expect(hashBefore).toBe(hashAfter);
+    expect(discoverTools(projectDir)[0].source.toolHash).toBe(hashBefore);
   });
 });
 
 describe("Tool upgrade simulation", () => {
-  let tmpDir: string;
-  let projectDir: string;
-  let origHome: string | undefined;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-upgrade-sim-"));
-    projectDir = path.join(tmpDir, "project");
-    fs.mkdirSync(projectDir, { recursive: true });
-    origHome = process.env.HOME;
-    process.env.HOME = tmpDir;
-  });
-
-  afterEach(() => {
-    process.env.HOME = origHome;
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
+  beforeEach(setupTmpEnv);
+  afterEach(teardownTmpEnv);
 
   it("detects hash mismatch between saved plan hash and current tool hash", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "upgrade-tool");
-
-    const before = discoverTools(projectDir);
-    const savedHash = before[0].source.toolHash;
-
-    // Simulate upgrade: modify manifest
-    const manifestPath = path.join(globalToolsDir, "upgrade-tool", "tool.yaml");
-    const content = fs.readFileSync(manifestPath, "utf-8");
-    const manifest = yaml.load(content) as Record<string, unknown>;
-    manifest.version = "2.0.0";
-    (manifest.generator as Record<string, unknown>).systemPrompt = "Upgraded system prompt.";
-    fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
-
+    const savedHash = discoverTools(projectDir)[0].source.toolHash;
+    modifyManifest("upgrade-tool", (m) => {
+      m.version = "2.0.0";
+      (m.generator as Record<string, unknown>).systemPrompt = "Upgraded system prompt.";
+    });
     const after = discoverTools(projectDir);
-    const currentHash = after[0].source.toolHash;
-
-    expect(savedHash).not.toBe(currentHash);
+    expect(after[0].source.toolHash).not.toBe(savedHash);
     expect(after[0].manifest.version).toBe("2.0.0");
   });
 
   it("detects missing tool when tool directory is deleted", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "removed-tool");
-
-    const before = discoverTools(projectDir);
-    expect(before).toHaveLength(1);
-
-    // Remove the tool
+    expect(discoverTools(projectDir)).toHaveLength(1);
     fs.rmSync(path.join(globalToolsDir, "removed-tool"), { recursive: true, force: true });
-
-    const after = discoverTools(projectDir);
-    expect(after).toHaveLength(0);
+    expect(discoverTools(projectDir)).toHaveLength(0);
   });
 
   it("detects systemPromptHash mismatch between two CustomTool instances", () => {
     const provider = createMockProvider();
-
-    const manifestV1: ToolManifest = {
-      spec: 1,
+    const mV1 = makeManifest({
       name: "prompt-tool",
-      version: "1.0.0",
-      type: "tool",
-      description: "Test",
-      inputSchema: "input.schema.json",
       generator: { strategy: "llm", systemPrompt: "Original prompt." },
-      files: [{ path: "out.yaml", serializer: "yaml" }],
-    };
-
-    const manifestV2: ToolManifest = {
-      ...manifestV1,
+    });
+    const mV2 = makeManifest({
+      name: "prompt-tool",
       version: "2.0.0",
       generator: { strategy: "llm", systemPrompt: "Changed prompt." },
-    };
+    });
+    const source = makeSource();
 
-    const source: ToolSource = {
-      type: "custom",
-      location: "project",
-      toolVersion: "1.0.0",
-      toolHash: "abc123",
-    };
-
-    const inputSchema = {
-      type: "object",
-      properties: { name: { type: "string" } },
-      required: ["name"],
-    };
-
-    const toolV1 = new CustomTool(manifestV1, provider, "/tmp", source, inputSchema);
+    const toolV1 = new CustomTool(mV1, provider, "/tmp", source, DEFAULT_INPUT_SCHEMA);
     const toolV2 = new CustomTool(
-      manifestV2,
+      mV2,
       provider,
       "/tmp",
       { ...source, toolVersion: "2.0.0" },
-      inputSchema,
+      DEFAULT_INPUT_SCHEMA,
     );
 
     expect(toolV1.systemPromptHash).not.toBe(toolV2.systemPromptHash);
@@ -248,54 +171,54 @@ describe("Tool upgrade simulation", () => {
   });
 
   it("version string change is visible in ToolSource after re-discovery", () => {
-    const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-    fs.mkdirSync(globalToolsDir, { recursive: true });
     createTestTool(globalToolsDir, "versioned-tool", { version: "1.0.0" });
-
-    const before = discoverTools(projectDir);
-    expect(before[0].source.toolVersion).toBe("1.0.0");
-
-    // Bump version
-    const manifestPath = path.join(globalToolsDir, "versioned-tool", "tool.yaml");
-    const content = fs.readFileSync(manifestPath, "utf-8");
-    const manifest = yaml.load(content) as Record<string, unknown>;
-    manifest.version = "1.1.0";
-    fs.writeFileSync(manifestPath, yaml.dump(manifest), "utf-8");
-
-    const after = discoverTools(projectDir);
-    expect(after[0].source.toolVersion).toBe("1.1.0");
+    expect(discoverTools(projectDir)[0].source.toolVersion).toBe("1.0.0");
+    modifyManifest("versioned-tool", (m) => {
+      m.version = "1.1.0";
+    });
+    expect(discoverTools(projectDir)[0].source.toolVersion).toBe("1.1.0");
   });
 });
+
+const DEFAULT_INPUT_SCHEMA = {
+  type: "object",
+  properties: { name: { type: "string" } },
+  required: ["name"],
+};
+
+function makeManifest(overrides?: Partial<ToolManifest>): ToolManifest {
+  return {
+    spec: 1,
+    name: "test-tool",
+    version: "1.0.0",
+    type: "tool",
+    description: "Test",
+    inputSchema: "input.schema.json",
+    generator: { strategy: "llm", systemPrompt: "Test prompt." },
+    files: [{ path: "out.yaml", serializer: "yaml" }],
+    ...overrides,
+  };
+}
+
+function makeSource(overrides?: Partial<ToolSource>): ToolSource {
+  return {
+    type: "custom",
+    location: "project",
+    toolVersion: "1.0.0",
+    toolHash: "abc123",
+    ...overrides,
+  };
+}
 
 describe("ToolRegistry metadata integration", () => {
   it("getToolMetadata returns systemPromptHash for custom tools", () => {
     const provider = createMockProvider();
-
-    const manifest: ToolManifest = {
-      spec: 1,
+    const manifest = makeManifest({
       name: "meta-tool",
-      version: "1.0.0",
-      type: "tool",
-      description: "Test",
-      inputSchema: "input.schema.json",
       generator: { strategy: "llm", systemPrompt: "Test prompt for metadata." },
-      files: [{ path: "out.yaml", serializer: "yaml" }],
-    };
-
-    const source: ToolSource = {
-      type: "custom",
-      location: "project",
-      toolVersion: "1.0.0",
-      toolHash: "deadbeef",
-    };
-
-    const inputSchema = {
-      type: "object",
-      properties: { name: { type: "string" } },
-      required: ["name"],
-    };
-
-    const customTool = new CustomTool(manifest, provider, "/tmp", source, inputSchema);
+    });
+    const source = makeSource({ toolHash: "deadbeef" });
+    const customTool = new CustomTool(manifest, provider, "/tmp", source, DEFAULT_INPUT_SCHEMA);
     const registry = new ToolRegistry([], [customTool]);
 
     const metadata = registry.getToolMetadata("meta-tool");

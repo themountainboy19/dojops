@@ -3,9 +3,7 @@ import request from "supertest";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
-import { HistoryStore } from "../../store";
+import { createTestDeps } from "../test-helpers";
 
 // Mock @dojops/scanner -- controls the behavior of runScan in the scan route
 const mockRunScan = vi.fn();
@@ -13,37 +11,7 @@ vi.mock("@dojops/scanner", () => ({
   runScan: (...args: unknown[]) => mockRunScan(...args),
 }));
 
-import { createApp, AppDependencies } from "../../app";
-
-function createMockProvider(): LLMProvider {
-  return {
-    name: "mock",
-    generate: vi.fn().mockResolvedValue({
-      content: "Mock response",
-    } satisfies LLMResponse),
-  };
-}
-
-function createMockTool(): DevOpsTool {
-  return {
-    name: "mock-tool",
-    description: "A mock tool",
-    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-  };
-}
-
-function createTestDeps(rootDir: string): AppDependencies {
-  const provider = createMockProvider();
-  const tools = [createMockTool()];
-  const router = new AgentRouter(provider);
-  const debugger_ = new CIDebugger(provider);
-  const diffAnalyzer = new InfraDiffAnalyzer(provider);
-  const store = new HistoryStore();
-
-  return { provider, tools, router, debugger: debugger_, diffAnalyzer, store, rootDir };
-}
+import { createApp } from "../../app";
 
 describe("T-7: Scan timeout (DOJOPS_SCAN_TIMEOUT_MS) functional tests", () => {
   let tmpDir: string;

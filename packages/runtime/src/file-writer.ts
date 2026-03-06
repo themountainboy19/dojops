@@ -158,7 +158,7 @@ function renderTemplate(template: string, data: unknown): string {
   return template.replaceAll(/\{\{\s*\.Values\.(\w+)\s*\}\}/g, (_match, key: string) => {
     // NOSONAR - capture group regex
     const val = obj[key];
-    return val == null ? "" : String(val);
+    return val == null ? "" : String(val); // NOSONAR — explicit String() conversion
   });
 }
 

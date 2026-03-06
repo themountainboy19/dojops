@@ -83,6 +83,16 @@ function setupCaddyTool(projectDir: string) {
 }
 
 /**
+ * Write an Envoy tool into projectDir's .dojops/tools, discover it,
+ * and return the first discovered entry.
+ */
+function setupEnvoyTool(projectDir: string) {
+  const projectToolsDir = path.join(projectDir, ".dojops", "tools");
+  writeEnvoyTool(projectToolsDir);
+  return discoverTools(projectDir)[0];
+}
+
+/**
  * Create a CustomTool from a discovered tool entry with the given provider.
  */
 function createCustomToolFromEntry(
@@ -99,6 +109,33 @@ function createCustomToolFromEntry(
     undefined,
     anchorDir,
   );
+}
+
+/** Standard Caddy tool input for generate/execute tests. */
+function caddyInput(outputPath: string) {
+  return {
+    domain: "example.com",
+    description: "Reverse proxy",
+    outputPath,
+  };
+}
+
+/**
+ * Common setup for Caddy tool execute tests: discovers the tool,
+ * creates a CustomTool anchored to toolDir, and returns convenient accessors.
+ */
+function setupCaddyExecute(projectDir: string, provider: LLMProvider) {
+  const entry = setupCaddyTool(projectDir);
+  const outputDir = "output";
+  const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
+  const filePath = path.join(entry.toolDir, outputDir, "Caddyfile");
+  return {
+    entry,
+    tool,
+    outputDir,
+    filePath,
+    execute: (input: Record<string, unknown>) => tool.execute(input),
+  };
 }
 
 /** Write a realistic Caddy tool to disk */
@@ -259,52 +296,40 @@ describe("Tool E2E: Manifest Validation", () => {
     expect(result.manifest!.permissions!.child_process).toBe("required");
   });
 
-  it("rejects manifest with path traversal in inputSchema", () => {
-    const result = validateManifest({
-      spec: 1,
-      name: "evil",
-      version: "1.0.0",
-      type: "tool",
-      description: "test",
-      inputSchema: "../../../etc/passwd",
-      generator: { strategy: "llm", systemPrompt: "test" },
+  it.each([
+    {
+      label: "path traversal in inputSchema",
+      overrides: { name: "evil", inputSchema: "../../../etc/passwd" },
       files: [{ path: "out.yaml", serializer: "yaml" }],
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain("traversal");
-  });
-
-  it("rejects manifest with path traversal in file path", () => {
-    const result = validateManifest({
-      spec: 1,
-      name: "evil",
-      version: "1.0.0",
-      type: "tool",
-      description: "test",
-      inputSchema: "input.schema.json",
-      generator: { strategy: "llm", systemPrompt: "test" },
+      expectedError: "traversal",
+    },
+    {
+      label: "path traversal in file path",
+      overrides: { name: "evil" },
       files: [{ path: "../../etc/shadow", serializer: "raw" }],
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain("traversal");
-  });
-
-  it("rejects manifest with invalid name (uppercase)", () => {
+      expectedError: "traversal",
+    },
+    {
+      label: "invalid name (uppercase)",
+      overrides: { name: "CaddyConfig" },
+      files: [{ path: "out.yaml", serializer: "yaml" }],
+      expectedError: "lowercase",
+    },
+  ])("rejects manifest with $label", ({ overrides, files, expectedError }) => {
     const result = validateManifest({
       spec: 1,
-      name: "CaddyConfig",
+      name: "valid-name",
       version: "1.0.0",
       type: "tool",
       description: "test",
       inputSchema: "input.schema.json",
       generator: { strategy: "llm", systemPrompt: "test" },
-      files: [{ path: "out.yaml", serializer: "yaml" }],
+      files,
+      ...overrides,
     });
 
     expect(result.valid).toBe(false);
-    expect(result.error).toContain("lowercase");
+    expect(result.error).toContain(expectedError);
   });
 });
 
@@ -372,17 +397,7 @@ describe("Tool E2E: Discovery & Registry", () => {
     const entries = discoverTools(ctx.projectDir);
     const provider = createMockProvider();
 
-    const customTools = entries.map(
-      (entry) =>
-        new CustomTool(
-          entry.manifest,
-          provider,
-          entry.toolDir,
-          entry.source,
-          entry.inputSchemaRaw,
-          entry.outputSchemaRaw,
-        ),
-    );
+    const customTools = entries.map((entry) => createCustomToolFromEntry(entry, provider));
 
     // Create registry with mock built-in tools + real custom tools
     const mockBuiltIn = [
@@ -444,10 +459,7 @@ describe("Tool E2E: Discovery & Registry", () => {
 
     const entries = discoverTools(ctx.projectDir);
     const provider = createMockProvider();
-    const customTools = entries.map(
-      (entry) =>
-        new CustomTool(entry.manifest, provider, entry.toolDir, entry.source, entry.inputSchemaRaw),
-    );
+    const customTools = entries.map((entry) => createCustomToolFromEntry(entry, provider));
 
     const mockBuiltInNginx = {
       name: "nginx",
@@ -529,35 +541,22 @@ describe("Tool E2E: JSON Schema to Zod Conversion", () => {
 
     const zodSchema = jsonSchemaToZod(schema);
 
-    // Valid
-    const valid = zodSchema.safeParse({
+    const validEnvoyInput = {
       serviceName: "web-api",
       listenPort: 8080,
       upstreamHost: "backend",
       upstreamPort: 3000,
       outputPath: "/tmp",
-    });
-    expect(valid.success).toBe(true);
+    };
+
+    // Valid
+    expect(zodSchema.safeParse(validEnvoyInput).success).toBe(true);
 
     // Port out of range
-    const badPort = zodSchema.safeParse({
-      serviceName: "web-api",
-      listenPort: 99999,
-      upstreamHost: "backend",
-      upstreamPort: 3000,
-      outputPath: "/tmp",
-    });
-    expect(badPort.success).toBe(false);
+    expect(zodSchema.safeParse({ ...validEnvoyInput, listenPort: 99999 }).success).toBe(false);
 
     // Port must be integer
-    const floatPort = zodSchema.safeParse({
-      serviceName: "web-api",
-      listenPort: 80.5,
-      upstreamHost: "backend",
-      upstreamPort: 3000,
-      outputPath: "/tmp",
-    });
-    expect(floatPort.success).toBe(false);
+    expect(zodSchema.safeParse({ ...validEnvoyInput, listenPort: 80.5 }).success).toBe(false);
   });
 });
 
@@ -609,22 +608,15 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: { caddyfile: caddyfileContent },
     });
 
-    const entry = setupCaddyTool(ctx.projectDir);
-    const outputDir = "output";
-    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
+    const { outputDir, filePath, execute } = setupCaddyExecute(ctx.projectDir, provider);
 
-    const result = await tool.execute({
-      domain: "example.com",
-      description: "Reverse proxy",
-      outputPath: outputDir,
-    });
+    const result = await execute(caddyInput(outputDir));
 
     expect(result.success).toBe(true);
 
     // Check file was written — serializer is "raw", so it should write the raw content
     // The raw serializer converts objects to JSON string (since data.generated is an object)
     // resolveFilePath now anchors to toolDir, so paths are absolute under entry.toolDir
-    const filePath = path.join(entry.toolDir, outputDir, "Caddyfile");
     expect(fs.existsSync(filePath)).toBe(true);
     const content = fs.readFileSync(filePath, "utf-8");
     // "raw" serializer: object → JSON.stringify
@@ -643,19 +635,12 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
       parsed: undefined, // no structured output, falls back to raw string
     });
 
-    const entry = setupCaddyTool(ctx.projectDir);
-    const outputDir = "output";
-    const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
+    const { filePath, execute } = setupCaddyExecute(ctx.projectDir, provider);
 
-    const result = await tool.execute({
-      domain: "example.com",
-      description: "Reverse proxy",
-      outputPath: outputDir,
-    });
+    const result = await execute(caddyInput("output"));
 
     expect(result.success).toBe(true);
 
-    const filePath = path.join(entry.toolDir, outputDir, "Caddyfile");
     const content = fs.readFileSync(filePath, "utf-8");
     // raw serializer: string → string as-is
     expect(content).toBe(rawContent);
@@ -695,10 +680,7 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
 
     const provider = createMockProvider({ parsed: envoyConfig });
 
-    const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
-    writeEnvoyTool(projectToolsDir);
-
-    const entry = discoverTools(ctx.projectDir)[0];
+    const entry = setupEnvoyTool(ctx.projectDir);
     const outputDir = "output";
     const tool = createCustomToolFromEntry(entry, provider, entry.toolDir);
 
@@ -757,24 +739,29 @@ describe("Tool E2E: CustomTool Generate & Execute", () => {
     expect(result.filesModified).toContain(filePath);
   });
 
-  it("input validation rejects invalid input", () => {
+  it.each([
+    { label: "empty object", input: {}, expected: false },
+    {
+      label: "missing description and outputPath",
+      input: { domain: "example.com" },
+      expected: false,
+    },
+    {
+      label: "domain minLength violation",
+      input: { domain: "", description: "test", outputPath: "/out" },
+      expected: false,
+    },
+    {
+      label: "all required fields present",
+      input: { domain: "example.com", description: "test", outputPath: "/out" },
+      expected: true,
+    },
+  ])("input validation: $label", ({ input, expected }) => {
     const provider = createMockProvider();
     const entry = setupCaddyTool(ctx.projectDir);
     const tool = createCustomToolFromEntry(entry, provider);
 
-    // Missing required fields
-    expect(tool.validate({}).valid).toBe(false);
-    expect(tool.validate({ domain: "example.com" }).valid).toBe(false);
-
-    // domain minLength violation
-    expect(tool.validate({ domain: "", description: "test", outputPath: "/out" }).valid).toBe(
-      false,
-    );
-
-    // Valid
-    expect(
-      tool.validate({ domain: "example.com", description: "test", outputPath: "/out" }).valid,
-    ).toBe(true);
+    expect(tool.validate(input).valid).toBe(expected);
   });
 });
 
@@ -797,9 +784,7 @@ describe("Tool E2E: Verification", () => {
     { timeout: 15_000 },
     async () => {
       const provider = createMockProvider();
-      const projectToolsDir = path.join(ctx.projectDir, ".dojops", "tools");
-      writeEnvoyTool(projectToolsDir);
-      const entry = discoverTools(ctx.projectDir)[0];
+      const entry = setupEnvoyTool(ctx.projectDir);
       const tool = createCustomToolFromEntry(entry, provider);
 
       // yamllint IS in the whitelist and child_process is "required",
@@ -820,33 +805,26 @@ describe("Tool E2E: Verification", () => {
 describe("Tool E2E: Policy Filtering", () => {
   const ctx = useTempDir();
 
-  it("blockedTools prevents tool from being loaded", () => {
-    // Write policy file
+  it.each([
+    {
+      label: "blockedTools prevents tool from being loaded",
+      policyData: { blockedTools: ["caddy-config"] },
+      expectations: { "caddy-config": false, "envoy-config": true },
+    },
+    {
+      label: "allowedTools restricts to only listed tools",
+      policyData: { allowedTools: ["caddy-config"] },
+      expectations: { "caddy-config": true, "envoy-config": false },
+    },
+  ])("$label", ({ policyData, expectations }) => {
     const dojopsDir = path.join(ctx.tmpDir, ".dojops");
     fs.mkdirSync(dojopsDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dojopsDir, "policy.yaml"),
-      yaml.dump({ blockedTools: ["caddy-config"] }),
-      "utf-8",
-    );
+    fs.writeFileSync(path.join(dojopsDir, "policy.yaml"), yaml.dump(policyData), "utf-8");
 
     const policy = loadToolPolicy(ctx.tmpDir);
-    expect(isToolAllowed("caddy-config", policy)).toBe(false);
-    expect(isToolAllowed("envoy-config", policy)).toBe(true);
-  });
-
-  it("allowedTools restricts to only listed tools", () => {
-    const dojopsDir = path.join(ctx.tmpDir, ".dojops");
-    fs.mkdirSync(dojopsDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(dojopsDir, "policy.yaml"),
-      yaml.dump({ allowedTools: ["caddy-config"] }),
-      "utf-8",
-    );
-
-    const policy = loadToolPolicy(ctx.tmpDir);
-    expect(isToolAllowed("caddy-config", policy)).toBe(true);
-    expect(isToolAllowed("envoy-config", policy)).toBe(false);
+    for (const [toolName, allowed] of Object.entries(expectations)) {
+      expect(isToolAllowed(toolName, policy)).toBe(allowed);
+    }
   });
 
   it("no policy file means everything is allowed", () => {
@@ -856,32 +834,46 @@ describe("Tool E2E: Policy Filtering", () => {
 });
 
 describe("Tool E2E: Serialization", () => {
-  it("raw serializer handles string data", () => {
-    const data = "example.com {\n  reverse_proxy localhost:3000\n}\n";
-    const result = serialize(data, "raw");
-    expect(result).toBe(data);
-  });
-
-  it("raw serializer converts object to JSON", () => {
-    const data = { key: "value", nested: { a: 1 } };
-    const result = serialize(data, "raw");
-    expect(JSON.parse(result)).toEqual(data);
-  });
-
-  it("yaml serializer produces valid YAML", () => {
-    const data = {
-      admin: { address: "0.0.0.0:9901" },
-      static_resources: { listeners: [{ name: "main" }] },
-    };
-    const result = serialize(data, "yaml");
-    const parsed = yaml.load(result) as Record<string, unknown>;
-    expect(parsed).toEqual(data);
-  });
-
-  it("json serializer produces indented JSON", () => {
-    const data = { key: "value" };
-    const result = serialize(data, "json");
-    expect(result).toBe('{\n  "key": "value"\n}\n');
+  it.each([
+    {
+      label: "raw serializer handles string data",
+      data: "example.com {\n  reverse_proxy localhost:3000\n}\n",
+      format: "raw" as const,
+      verify: (result: string, data: unknown) => {
+        expect(result).toBe(data);
+      },
+    },
+    {
+      label: "raw serializer converts object to JSON",
+      data: { key: "value", nested: { a: 1 } },
+      format: "raw" as const,
+      verify: (result: string, data: unknown) => {
+        expect(JSON.parse(result)).toEqual(data);
+      },
+    },
+    {
+      label: "yaml serializer produces valid YAML",
+      data: {
+        admin: { address: "0.0.0.0:9901" },
+        static_resources: { listeners: [{ name: "main" }] },
+      },
+      format: "yaml" as const,
+      verify: (result: string, data: unknown) => {
+        const parsed = yaml.load(result) as Record<string, unknown>;
+        expect(parsed).toEqual(data);
+      },
+    },
+    {
+      label: "json serializer produces indented JSON",
+      data: { key: "value" },
+      format: "json" as const,
+      verify: (result: string) => {
+        expect(result).toBe('{\n  "key": "value"\n}\n');
+      },
+    },
+  ])("$label", ({ data, format, verify }) => {
+    const result = serialize(data, format);
+    verify(result, data);
   });
 });
 

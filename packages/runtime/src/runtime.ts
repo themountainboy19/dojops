@@ -26,6 +26,33 @@ import {
   matchesScopePattern,
 } from "./file-writer";
 
+/** Compute SHA-256 hex hash of a string. */
+function sha256(content: string): string {
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+/** Compute hashes for a DopsModule (v1 or v2). */
+function computeModuleHashes(module: { sections: { prompt: string }; raw: string }): {
+  systemPromptHash: string;
+  moduleHash: string;
+} {
+  return {
+    systemPromptHash: sha256(module.sections.prompt),
+    moduleHash: sha256(module.raw),
+  };
+}
+
+/** Detect existing content from a module's detection config. */
+function detectContent(
+  detection: { paths: string[] } | undefined,
+  existingContent: string | undefined,
+  basePath: string,
+): string | undefined {
+  if (existingContent) return existingContent;
+  if (!detection) return undefined;
+  return detectExistingContent(detection.paths, basePath) ?? undefined;
+}
+
 export interface DopsRuntimeOptions {
   /** Base path for file detection (defaults to cwd) */
   basePath?: string;
@@ -129,13 +156,9 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
     // Compile output schema from JSON Schema in YAML
     this.outputSchema = compileOutputSchema(module.frontmatter.output as Record<string, unknown>);
 
-    // Compute hashes
-    this._systemPromptHash = crypto
-      .createHash("sha256")
-      .update(module.sections.prompt)
-      .digest("hex");
-
-    this._moduleHash = crypto.createHash("sha256").update(module.raw).digest("hex");
+    const hashes = computeModuleHashes(module);
+    this._systemPromptHash = hashes.systemPromptHash;
+    this._moduleHash = hashes.moduleHash;
   }
 
   validate(input: unknown): { valid: boolean; error?: string } {
@@ -145,15 +168,12 @@ export class DopsRuntime implements DevOpsTool<Record<string, unknown>> {
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
     try {
       // 1. Detect existing content
-      let existingContent: string | undefined = input.existingContent as string | undefined;
       const basePath = this.options.basePath ?? process.cwd();
-
-      if (!existingContent && this.module.frontmatter.detection) {
-        const detected = detectExistingContent(this.module.frontmatter.detection.paths, basePath);
-        if (detected) {
-          existingContent = detected;
-        }
-      }
+      const existingContent = detectContent(
+        this.module.frontmatter.detection,
+        input.existingContent as string | undefined,
+        basePath,
+      );
 
       // 2. Compile prompt
       const context: PromptContext = {
@@ -406,12 +426,9 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
       existingContent: z.string().optional(),
     });
 
-    this._systemPromptHash = crypto
-      .createHash("sha256")
-      .update(module.sections.prompt)
-      .digest("hex");
-
-    this._moduleHash = crypto.createHash("sha256").update(module.raw).digest("hex");
+    const hashes = computeModuleHashes(module);
+    this._systemPromptHash = hashes.systemPromptHash;
+    this._moduleHash = hashes.moduleHash;
   }
 
   validate(input: unknown): { valid: boolean; error?: string } {
@@ -421,15 +438,12 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
     try {
       // 1. Detect existing content
-      let existingContent = input.existingContent as string | undefined;
       const basePath = this.options.basePath ?? process.cwd();
-
-      if (!existingContent && this.module.frontmatter.detection) {
-        const detected = detectExistingContent(this.module.frontmatter.detection.paths, basePath);
-        if (detected) {
-          existingContent = detected;
-        }
-      }
+      const existingContent = detectContent(
+        this.module.frontmatter.detection,
+        input.existingContent as string | undefined,
+        basePath,
+      );
 
       // 2. Fetch Context7 docs from declared libraries
       let context7Docs = "";

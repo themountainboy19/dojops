@@ -8,85 +8,61 @@ vi.mock("node:child_process", () => ({
 
 import { verifyWithBinary, ALLOWED_VERIFICATION_BINARIES } from "../binary-verifier";
 
+/** Create a NodeJS.ErrnoException with the given code. */
+function makeEnoent(): NodeJS.ErrnoException {
+  const err = new Error("ENOENT") as NodeJS.ErrnoException;
+  err.code = "ENOENT";
+  return err;
+}
+
+/** Terraform verify config used by multiple tests. */
+const TF_VALIDATE_CONFIG = {
+  command: "terraform init && terraform validate -json",
+  parser: "terraform-json",
+  timeout: 30000,
+  cwd: "output",
+} as const;
+
+/** Common args for terraform network safety tests. */
+function tfNetworkSafetyArgs(networkPermission?: string) {
+  return {
+    content: 'resource "aws_s3_bucket" "b" {}',
+    filename: "main.tf",
+    config: TF_VALIDATE_CONFIG,
+    childProcessPermission: "required" as const,
+    ...(networkPermission !== undefined ? { networkPermission } : {}),
+  };
+}
+
 describe("verifyWithBinary", () => {
   beforeEach(() => {
     mockExecFileSync.mockReset();
   });
 
   describe("E-8: network safety", () => {
-    it("adds -get=false to terraform init when network permission is none", async () => {
-      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
-      enoent.code = "ENOENT";
+    it.each([
+      ["adds -get=false when network permission is none", "none", true],
+      ["does not add -get=false when network permission is required", "required", false],
+    ] as const)("%s", async (_label, networkPerm, expectGetFalse) => {
       mockExecFileSync.mockImplementation(() => {
-        throw enoent;
+        throw makeEnoent();
       });
-
-      await verifyWithBinary({
-        content: 'resource "aws_s3_bucket" "b" {}',
-        filename: "main.tf",
-        config: {
-          command: "terraform init && terraform validate -json",
-          parser: "terraform-json",
-          timeout: 30000,
-          cwd: "output",
-        },
-        childProcessPermission: "required",
-        networkPermission: "none",
-      });
-
-      // The first call should be "terraform" with args including "-get=false"
+      await verifyWithBinary(tfNetworkSafetyArgs(networkPerm));
       expect(mockExecFileSync).toHaveBeenCalled();
       const firstCall = mockExecFileSync.mock.calls[0];
       expect(firstCall[0]).toBe("terraform");
-      expect(firstCall[1]).toContain("-get=false");
-    });
-
-    it("does not add -get=false when network permission is required", async () => {
-      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
-      enoent.code = "ENOENT";
-      mockExecFileSync.mockImplementation(() => {
-        throw enoent;
-      });
-
-      await verifyWithBinary({
-        content: 'resource "aws_s3_bucket" "b" {}',
-        filename: "main.tf",
-        config: {
-          command: "terraform init && terraform validate -json",
-          parser: "terraform-json",
-          timeout: 30000,
-          cwd: "output",
-        },
-        childProcessPermission: "required",
-        networkPermission: "required",
-      });
-
-      expect(mockExecFileSync).toHaveBeenCalled();
-      const firstCall = mockExecFileSync.mock.calls[0];
-      expect(firstCall[0]).toBe("terraform");
-      expect(firstCall[1]).not.toContain("-get=false");
+      if (expectGetFalse) {
+        expect(firstCall[1]).toContain("-get=false");
+      } else {
+        expect(firstCall[1]).not.toContain("-get=false");
+      }
     });
 
     it("adds -get=false when network permission is absent (defaults to none)", async () => {
-      const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
-      enoent.code = "ENOENT";
       mockExecFileSync.mockImplementation(() => {
-        throw enoent;
+        throw makeEnoent();
       });
-
-      await verifyWithBinary({
-        content: 'resource "aws_s3_bucket" "b" {}',
-        filename: "main.tf",
-        config: {
-          command: "terraform init && terraform validate -json",
-          parser: "terraform-json",
-          timeout: 30000,
-          cwd: "output",
-        },
-        childProcessPermission: "required",
-        // networkPermission omitted — defaults to undefined (not "required")
-      });
-
+      await verifyWithBinary(tfNetworkSafetyArgs());
       expect(mockExecFileSync).toHaveBeenCalled();
       const firstCall = mockExecFileSync.mock.calls[0];
       expect(firstCall[0]).toBe("terraform");
@@ -99,12 +75,7 @@ describe("verifyWithBinary", () => {
     const result = await verifyWithBinary({
       content: "test content",
       filename: "test.tf",
-      config: {
-        command: "terraform validate -json",
-        parser: "terraform-json",
-        timeout: 30000,
-        cwd: "output",
-      },
+      config: TF_VALIDATE_CONFIG,
       childProcessPermission: "none",
     });
     expect(result.passed).toBe(true);
@@ -116,12 +87,7 @@ describe("verifyWithBinary", () => {
     const result = await verifyWithBinary({
       content: "test",
       filename: "test.txt",
-      config: {
-        command: "rm -rf /",
-        parser: "generic-stderr",
-        timeout: 30000,
-        cwd: "output",
-      },
+      config: { command: "rm -rf /", parser: "generic-stderr", timeout: 30000, cwd: "output" },
       childProcessPermission: "required",
     });
     expect(result.passed).toBe(false);
@@ -145,21 +111,13 @@ describe("verifyWithBinary", () => {
   });
 
   it("handles binary not found gracefully", async () => {
-    const enoent = new Error("ENOENT") as NodeJS.ErrnoException;
-    enoent.code = "ENOENT";
     mockExecFileSync.mockImplementation(() => {
-      throw enoent;
+      throw makeEnoent();
     });
-
     const result = await verifyWithBinary({
       content: "test content",
       filename: "main.tf",
-      config: {
-        command: "terraform validate -json",
-        parser: "terraform-json",
-        timeout: 30000,
-        cwd: "output",
-      },
+      config: TF_VALIDATE_CONFIG,
       childProcessPermission: "required",
     });
     expect(result.passed).toBe(true);

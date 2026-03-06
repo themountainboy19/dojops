@@ -39,6 +39,23 @@ export async function providerCommand(args: string[], ctx: CLIContext): Promise<
   }
 }
 
+/** Validate a provider name argument, throwing CLIError if missing or unknown. */
+function requireProviderArg(args: string[], usage: string): string {
+  const name = args[0];
+  if (!name) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `${usage}\nSupported: ${VALID_PROVIDERS.join(", ")}`,
+    );
+  }
+  try {
+    validateProvider(name);
+  } catch (err) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
+  }
+  return name;
+}
+
 /** Get the display detail for a provider in the list. */
 function getProviderDetail(name: string, config: ReturnType<typeof loadConfig>): string {
   if (name === "ollama") return pc.dim("(local)");
@@ -82,20 +99,7 @@ async function providerList(args: string[], ctx: CLIContext): Promise<void> {
 }
 
 async function providerDefault(args: string[]): Promise<void> {
-  const name = args[0];
-  if (!name) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Usage: dojops provider default <name>\nSupported: ${VALID_PROVIDERS.join(", ")}`,
-    );
-  }
-
-  try {
-    validateProvider(name);
-  } catch (err) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
-  }
-
+  const name = requireProviderArg(args, "Usage: dojops provider default <name>");
   const config = loadConfig();
 
   // Warn if no token configured (but allow it)
@@ -107,6 +111,16 @@ async function providerDefault(args: string[]): Promise<void> {
   config.defaultProvider = name;
   saveConfig(config);
   p.log.success(`Default provider set to ${pc.bold(name)}.`);
+}
+
+/** Show a hint that the default provider is unchanged and how to switch. */
+function logDefaultRemains(config: ReturnType<typeof loadConfig>, name: string): void {
+  const switchCmd = pc.cyan(`dojops provider default ${name}`);
+  p.log.info(
+    pc.dim(
+      `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd} to switch.`,
+    ),
+  );
 }
 
 /** Log default-provider status after adding a provider. */
@@ -128,12 +142,7 @@ function logProviderSetupResult(
   }
   saveConfig(config);
   p.log.success(`${pc.bold(name)} is available.`);
-  const switchCmd = pc.cyan(`dojops provider default ${name}`);
-  p.log.info(
-    pc.dim(
-      `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd} to switch.`,
-    ),
-  );
+  logDefaultRemains(config, name);
 }
 
 /** Run the GitHub Copilot OAuth Device Flow. */
@@ -323,30 +332,12 @@ async function addTokenProvider(
   if (isFirst && config.defaultProvider === name) {
     p.log.info(pc.dim(`${pc.bold(name)} set as default provider (first configured provider).`));
   } else if (config.defaultProvider !== name) {
-    const switchCmd = pc.cyan(`dojops provider default ${name}`);
-    p.log.info(
-      pc.dim(
-        `Default provider remains ${pc.bold(config.defaultProvider ?? "openai")}. Use ${switchCmd} to switch.`,
-      ),
-    );
+    logDefaultRemains(config, name);
   }
 }
 
 async function providerAdd(args: string[], ctx: CLIContext): Promise<void> {
-  const name = args[0];
-  if (!name) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Usage: dojops provider add <name> [--token KEY]\nSupported: ${VALID_PROVIDERS.join(", ")}`,
-    );
-  }
-
-  try {
-    validateProvider(name);
-  } catch (err) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
-  }
-
+  const name = requireProviderArg(args, "Usage: dojops provider add <name> [--token KEY]");
   const config = loadConfig();
 
   if (name === "github-copilot") return addCopilotProvider(config, name, ctx);
@@ -411,19 +402,7 @@ function warnRemovedDefault(config: ReturnType<typeof loadConfig>, name: string)
 }
 
 async function providerRemove(args: string[]): Promise<void> {
-  const name = args[0];
-  if (!name) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Usage: dojops provider remove <name>\nSupported: ${VALID_PROVIDERS.join(", ")}`,
-    );
-  }
-
-  try {
-    validateProvider(name);
-  } catch (err) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
-  }
+  const name = requireProviderArg(args, "Usage: dojops provider remove <name>");
 
   if (name === "ollama") {
     p.log.info("Ollama is a local provider and cannot be removed.");

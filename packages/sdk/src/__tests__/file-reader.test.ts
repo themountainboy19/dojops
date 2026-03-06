@@ -4,15 +4,15 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { readExistingConfig, backupFile, atomicWriteFileSync, restoreBackup } from "../file-reader";
 
+function cleanDir(dir: string): void {
+  for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f));
+}
+
 describe("readExistingConfig", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-test-"));
   const testFile = path.join(tmpDir, "test.yml");
 
-  afterEach(() => {
-    for (const f of fs.readdirSync(tmpDir)) {
-      fs.unlinkSync(path.join(tmpDir, f));
-    }
-  });
+  afterEach(() => cleanDir(tmpDir));
 
   it("returns null for non-existent file", () => {
     expect(readExistingConfig(path.join(tmpDir, "missing.yml"))).toBeNull();
@@ -41,11 +41,7 @@ describe("backupFile", () => {
   const testFile = path.join(tmpDir, "config.yml");
   const bakFile = `${testFile}.bak`;
 
-  afterEach(() => {
-    for (const f of fs.readdirSync(tmpDir)) {
-      fs.unlinkSync(path.join(tmpDir, f));
-    }
-  });
+  afterEach(() => cleanDir(tmpDir));
 
   it("creates .bak copy of existing file", () => {
     fs.writeFileSync(testFile, "original content", "utf-8");
@@ -71,11 +67,7 @@ describe("atomicWriteFileSync", () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-atomic-"));
   const testFile = path.join(tmpDir, "atomic.yml");
 
-  afterEach(() => {
-    for (const f of fs.readdirSync(tmpDir)) {
-      fs.unlinkSync(path.join(tmpDir, f));
-    }
-  });
+  afterEach(() => cleanDir(tmpDir));
 
   it("writes file content", () => {
     atomicWriteFileSync(testFile, "hello: world");
@@ -107,11 +99,7 @@ describe("restoreBackup", () => {
   const testFile = path.join(tmpDir, "config.yml");
   const bakFile = `${testFile}.bak`;
 
-  afterEach(() => {
-    for (const f of fs.readdirSync(tmpDir)) {
-      fs.unlinkSync(path.join(tmpDir, f));
-    }
-  });
+  afterEach(() => cleanDir(tmpDir));
 
   it("restores file from .bak", () => {
     fs.writeFileSync(testFile, "modified content", "utf-8");

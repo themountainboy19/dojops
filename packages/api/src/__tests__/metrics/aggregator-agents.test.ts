@@ -1,13 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import crypto from "node:crypto";
 import { MetricsAggregator } from "../../metrics/aggregator";
-
-function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-agents-test-"));
-}
+import { createTempDir, writeAuditEntries } from "./test-helpers";
 
 function setupDojops(rootDir: string) {
   const dojopsDir = path.join(rootDir, ".dojops");
@@ -15,31 +10,20 @@ function setupDojops(rootDir: string) {
   return dojopsDir;
 }
 
-function computeAuditHash(entry: Record<string, unknown>): string {
-  const payload = [
-    entry.seq,
-    entry.timestamp,
-    entry.user,
-    entry.command,
-    entry.action,
-    (entry.planId as string) ?? "",
-    entry.status,
-    entry.durationMs,
-    (entry.previousHash as string) ?? "genesis",
-  ].join("\0");
-  return crypto.createHash("sha256").update(payload).digest("hex");
-}
-
-function writeAuditEntries(dojopsDir: string, entries: Array<Record<string, unknown>>) {
-  let previousHash = "genesis";
-  const lines: string[] = [];
-  for (let i = 0; i < entries.length; i++) {
-    const e = { ...entries[i], seq: i + 1, previousHash };
-    e.hash = computeAuditHash(e);
-    previousHash = e.hash as string;
-    lines.push(JSON.stringify(e));
-  }
-  fs.writeFileSync(path.join(dojopsDir, "history", "audit.jsonl"), lines.join("\n") + "\n");
+/** Create an audit entry with sensible defaults and an auto-incrementing timestamp. */
+function makeAuditEntry(
+  overrides?: Partial<Record<string, unknown>>,
+  index = 0,
+): Record<string, unknown> {
+  return {
+    timestamp: `2024-01-01T00:${String(index).padStart(2, "0")}:00Z`,
+    user: "test",
+    command: "generate",
+    action: "generate",
+    status: "success",
+    durationMs: 100,
+    ...overrides,
+  };
 }
 
 describe("MetricsAggregator mostUsedAgents (M-2)", () => {
@@ -58,154 +42,55 @@ describe("MetricsAggregator mostUsedAgents (M-2)", () => {
   describe("agent field extraction", () => {
     it("uses entry.agent when present (not command string)", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "generate terraform config",
-          action: "generate",
-          agent: "terraform-specialist",
-          status: "success",
-          durationMs: 100,
-        },
+        makeAuditEntry({ command: "generate terraform config", agent: "terraform-specialist" }),
       ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents).toEqual([{ agent: "terraform-specialist", count: 1 }]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents).toEqual([
+        { agent: "terraform-specialist", count: 1 },
+      ]);
     });
 
     it("falls back to command verb when agent absent", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan deploy infra",
-          action: "decompose",
-          status: "success",
-          durationMs: 100,
-        },
+        makeAuditEntry({ command: "plan deploy infra", action: "decompose" }),
       ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents).toEqual([{ agent: "plan", count: 1 }]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents).toEqual([
+        { agent: "plan", count: 1 },
+      ]);
     });
 
     it("agent field takes priority over command", () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "generate",
-          action: "generate",
-          agent: "security-auditor",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents[0].agent).toBe("security-auditor");
+      writeAuditEntries(dojopsDir, [makeAuditEntry({ agent: "security-auditor" })]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents[0].agent).toBe(
+        "security-auditor",
+      );
     });
 
     it('uses "unknown" when both missing', () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "",
-          action: "test",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents[0].agent).toBe("unknown");
+      writeAuditEntries(dojopsDir, [makeAuditEntry({ command: "", action: "test" })]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents[0].agent).toBe("unknown");
     });
   });
 
   describe("aggregation", () => {
     it("counts multiple entries for same agent correctly", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "generate",
-          action: "generate",
-          agent: "terraform-specialist",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "generate",
-          action: "generate",
-          agent: "terraform-specialist",
-          status: "success",
-          durationMs: 200,
-        },
-        {
-          timestamp: "2024-01-01T00:02:00Z",
-          user: "test",
-          command: "generate",
-          action: "generate",
-          agent: "terraform-specialist",
-          status: "success",
-          durationMs: 300,
-        },
+        makeAuditEntry({ agent: "terraform-specialist" }, 0),
+        makeAuditEntry({ agent: "terraform-specialist", durationMs: 200 }, 1),
+        makeAuditEntry({ agent: "terraform-specialist", durationMs: 300 }, 2),
       ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents).toEqual([{ agent: "terraform-specialist", count: 3 }]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents).toEqual([
+        { agent: "terraform-specialist", count: 3 },
+      ]);
     });
 
     it("sorts agents by count descending", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "g",
-          action: "g",
-          agent: "agent-b",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "g",
-          action: "g",
-          agent: "agent-a",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:02:00Z",
-          user: "test",
-          command: "g",
-          action: "g",
-          agent: "agent-a",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:03:00Z",
-          user: "test",
-          command: "g",
-          action: "g",
-          agent: "agent-a",
-          status: "success",
-          durationMs: 100,
-        },
+        makeAuditEntry({ command: "g", action: "g", agent: "agent-b" }, 0),
+        makeAuditEntry({ command: "g", action: "g", agent: "agent-a" }, 1),
+        makeAuditEntry({ command: "g", action: "g", agent: "agent-a" }, 2),
+        makeAuditEntry({ command: "g", action: "g", agent: "agent-a" }, 3),
       ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
+      const result = new MetricsAggregator(rootDir).getOverview();
       expect(result.mostUsedAgents[0]).toEqual({ agent: "agent-a", count: 3 });
       expect(result.mostUsedAgents[1]).toEqual({ agent: "agent-b", count: 1 });
     });
@@ -232,28 +117,12 @@ describe("MetricsAggregator mostUsedAgents (M-2)", () => {
 
     it("handles mix of entries with/without agent field", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          agent: "ops-cortex",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "apply",
-          action: "execute",
-          status: "success",
-          durationMs: 200,
-        },
+        makeAuditEntry({ command: "plan", action: "decompose", agent: "ops-cortex" }, 0),
+        makeAuditEntry({ command: "apply", action: "execute", durationMs: 200 }, 1),
       ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      const agents = result.mostUsedAgents.map((a) => a.agent);
+      const agents = new MetricsAggregator(rootDir)
+        .getOverview()
+        .mostUsedAgents.map((a) => a.agent);
       expect(agents).toContain("ops-cortex");
       expect(agents).toContain("apply");
     });
@@ -261,62 +130,23 @@ describe("MetricsAggregator mostUsedAgents (M-2)", () => {
 
   describe("edge cases", () => {
     it('empty command string → "unknown"', () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "",
-          action: "test",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents[0].agent).toBe("unknown");
+      writeAuditEntries(dojopsDir, [makeAuditEntry({ command: "", action: "test" })]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents[0].agent).toBe("unknown");
     });
 
     it("command with no spaces → uses single word", () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "scan",
-          action: "scan",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents[0].agent).toBe("scan");
+      writeAuditEntries(dojopsDir, [makeAuditEntry({ command: "scan", action: "scan" })]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents[0].agent).toBe("scan");
     });
 
     it("agent field as empty string → falls back to command", () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "generate",
-          action: "generate",
-          agent: "",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
-
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
+      writeAuditEntries(dojopsDir, [makeAuditEntry({ agent: "" })]);
       // Empty string is falsy, so should fall back to command verb
-      expect(result.mostUsedAgents[0].agent).toBe("generate");
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents[0].agent).toBe("generate");
     });
 
     it("returns empty array when no audit entries", () => {
-      const agg = new MetricsAggregator(rootDir);
-      const result = agg.getOverview();
-      expect(result.mostUsedAgents).toEqual([]);
+      expect(new MetricsAggregator(rootDir).getOverview().mostUsedAgents).toEqual([]);
     });
   });
 });

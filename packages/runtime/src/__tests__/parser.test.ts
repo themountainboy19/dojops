@@ -1,6 +1,23 @@
 import { describe, it, expect } from "vitest";
 import { parseDopsString, validateDopsModule } from "../parser";
 
+/** Build a .dops v1 string with customizable frontmatter and markdown sections. */
+function makeDops(opts?: {
+  meta?: Record<string, unknown>;
+  frontmatter?: string;
+  sections?: string;
+}): string {
+  const meta = opts?.meta
+    ? Object.entries(opts.meta)
+        .map(([k, v]) => `  ${k}: ${typeof v === "string" ? `"${v}"` : v}`)
+        .join("\n")
+    : '  name: test-tool\n  version: 1.0.0\n  description: "A test tool"';
+  const extra =
+    opts?.frontmatter ?? 'output:\n  type: object\nfiles:\n  - path: "out.yaml"\n    format: yaml';
+  const sections = opts?.sections ?? "## Prompt\n\nGenerate.\n\n## Keywords\n\ntest";
+  return `---\ndops: v1\nkind: tool\nmeta:\n${meta}\n${extra}\n---\n${sections}\n`;
+}
+
 const MINIMAL_DOPS = `---
 dops: v1
 kind: tool
@@ -194,133 +211,63 @@ describe("validateDopsModule", () => {
   });
 
   it("catches missing ## Prompt", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: no-prompt
-  version: 1.0.0
-  description: "No prompt"
-output:
-  type: object
-files:
-  - path: "out.yaml"
----
-## Keywords
-
-test
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "no-prompt", version: "1.0.0", description: "No prompt" },
+        sections: "## Keywords\n\ntest",
+      }),
+    );
     const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Prompt section");
   });
 
   it("catches missing ## Keywords", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: no-keywords
-  version: 1.0.0
-  description: "No keywords"
-output:
-  type: object
-files:
-  - path: "out.yaml"
----
-## Prompt
-
-Some prompt.
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "no-keywords", version: "1.0.0", description: "No keywords" },
+        sections: "## Prompt\n\nSome prompt.",
+      }),
+    );
     const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Keywords section");
   });
 
   it("catches unknown verification parser", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: bad-parser
-  version: 1.0.0
-  description: "Bad parser"
-output:
-  type: object
-files:
-  - path: "out.yaml"
-verification:
-  binary:
-    command: "unknown-tool"
-    parser: unknown-parser
----
-## Prompt
-
-Prompt.
-
-## Keywords
-
-test
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "bad-parser", version: "1.0.0", description: "Bad parser" },
+        frontmatter:
+          'output:\n  type: object\nfiles:\n  - path: "out.yaml"\nverification:\n  binary:\n    command: "unknown-tool"\n    parser: unknown-parser',
+      }),
+    );
     const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors![0]).toContain("Unknown verification parser");
   });
 
   it("catches scope write path with path traversal", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: bad-scope
-  version: 1.0.0
-  description: "Bad scope"
-output:
-  type: object
-files:
-  - path: "out.yaml"
-scope:
-  write: ["../etc/passwd"]
----
-## Prompt
-
-Prompt.
-
-## Keywords
-
-test
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "bad-scope", version: "1.0.0", description: "Bad scope" },
+        frontmatter:
+          'output:\n  type: object\nfiles:\n  - path: "out.yaml"\nscope:\n  write: ["../etc/passwd"]',
+      }),
+    );
     const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Scope write path contains path traversal: '../etc/passwd'");
   });
 
   it("catches network required with risk declared", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: net-risk
-  version: 1.0.0
-  description: "Net risk"
-output:
-  type: object
-files:
-  - path: "out.yaml"
-risk:
-  level: LOW
-  rationale: "Test tool"
-permissions:
-  network: required
----
-## Prompt
-
-Prompt.
-
-## Keywords
-
-test
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "net-risk", version: "1.0.0", description: "Net risk" },
+        frontmatter:
+          'output:\n  type: object\nfiles:\n  - path: "out.yaml"\nrisk:\n  level: LOW\n  rationale: "Test tool"\npermissions:\n  network: required',
+      }),
+    );
     const result = validateDopsModule(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("network permission must be 'none' for v1 tools");
@@ -385,52 +332,26 @@ test
   });
 
   it("parses meta.icon as HTTPS URL", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: icon-tool
-  version: 1.0.0
-  description: "Tool with icon"
-  icon: "https://registry.dojops.ai/icons/terraform.svg"
-output:
-  type: object
-files:
-  - path: "out.yaml"
----
-## Prompt
-
-Prompt.
-
-## Keywords
-
-test
-`;
-    const module = parseDopsString(dops);
+    const module = parseDopsString(
+      makeDops({
+        meta: { name: "icon-tool", version: "1.0.0", description: "Tool with icon" },
+        frontmatter:
+          '  icon: "https://registry.dojops.ai/icons/terraform.svg"\noutput:\n  type: object\nfiles:\n  - path: "out.yaml"',
+      }),
+    );
     expect(module.frontmatter.meta.icon).toBe("https://registry.dojops.ai/icons/terraform.svg");
   });
 
   it("rejects non-HTTPS icon URL", () => {
-    const dops = `---
-dops: v1
-meta:
-  name: bad-icon
-  version: 1.0.0
-  description: "Bad icon"
-  icon: "http://example.com/icon.png"
-output:
-  type: object
-files:
-  - path: "out.yaml"
----
-## Prompt
-
-Prompt.
-
-## Keywords
-
-test
-`;
-    expect(() => parseDopsString(dops)).toThrow("Invalid DOPS frontmatter");
+    expect(() =>
+      parseDopsString(
+        makeDops({
+          meta: { name: "bad-icon", version: "1.0.0", description: "Bad icon" },
+          frontmatter:
+            '  icon: "http://example.com/icon.png"\noutput:\n  type: object\nfiles:\n  - path: "out.yaml"',
+        }),
+      ),
+    ).toThrow("Invalid DOPS frontmatter");
   });
 
   it("meta.icon is optional", () => {

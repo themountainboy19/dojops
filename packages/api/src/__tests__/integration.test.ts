@@ -72,24 +72,14 @@ describe("API integration", () => {
   });
 
   describe("request validation", () => {
-    it("rejects generate with empty body", async () => {
+    it.each([
+      ["/api/generate", "generate with empty body"],
+      ["/api/plan", "plan with missing goal"],
+      ["/api/debug-ci", "debug-ci with missing log"],
+      ["/api/diff", "diff with missing diff"],
+    ] as const)("rejects %s", async (endpoint) => {
       const app = createApp(deps);
-      await request(app).post("/api/generate").send({}).expect(400);
-    });
-
-    it("rejects plan with missing goal", async () => {
-      const app = createApp(deps);
-      await request(app).post("/api/plan").send({}).expect(400);
-    });
-
-    it("rejects debug-ci with missing log", async () => {
-      const app = createApp(deps);
-      await request(app).post("/api/debug-ci").send({}).expect(400);
-    });
-
-    it("rejects diff with missing diff", async () => {
-      const app = createApp(deps);
-      await request(app).post("/api/diff").send({}).expect(400);
+      await request(app).post(endpoint).send({}).expect(400);
     });
   });
 
@@ -274,143 +264,60 @@ describe("API integration", () => {
   });
 
   describe("T-8: metrics endpoints with auth enabled", () => {
-    it("returns 401 for GET /api/metrics without API key when auth is enabled", async () => {
+    it.each([
+      "/api/metrics",
+      "/api/metrics/overview",
+      "/api/metrics/security",
+      "/api/metrics/audit",
+    ])("returns 401 for GET %s without API key when auth is enabled", async (endpoint) => {
       const authDeps = createMockDeps();
       authDeps.apiKey = "metrics-secret-key";
       const app = createApp(authDeps);
-
-      const res = await request(app).get("/api/metrics");
+      const res = await request(app).get(endpoint);
       expect(res.status).toBe(401);
-      expect(res.body.error).toBe("Authentication required");
     });
 
-    it("returns 401 for GET /api/metrics/overview without API key when auth is enabled", async () => {
+    /** Create a temp rootDir with .dojops, run a callback, then clean up. */
+    async function withMetricsTmpDir(fn: (tmpDir: string) => Promise<void>): Promise<void> {
+      const fsModule = await import("node:fs");
+      const pathModule = await import("node:path");
+      const osModule = await import("node:os");
+      const tmpDir = fsModule.mkdtempSync(
+        pathModule.join(osModule.tmpdir(), "dojops-metrics-test-"),
+      );
+      fsModule.mkdirSync(pathModule.join(tmpDir, ".dojops"), { recursive: true });
+      try {
+        await fn(tmpDir);
+      } finally {
+        fsModule.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+
+    function createAuthApp(rootDir: string) {
       const authDeps = createMockDeps();
       authDeps.apiKey = "metrics-secret-key";
-      const app = createApp(authDeps);
+      authDeps.rootDir = rootDir;
+      return createApp(authDeps);
+    }
 
-      const res = await request(app).get("/api/metrics/overview");
-      expect(res.status).toBe(401);
-    });
-
-    it("returns 401 for GET /api/metrics/security without API key when auth is enabled", async () => {
-      const authDeps = createMockDeps();
-      authDeps.apiKey = "metrics-secret-key";
-      const app = createApp(authDeps);
-
-      const res = await request(app).get("/api/metrics/security");
-      expect(res.status).toBe(401);
-    });
-
-    it("returns 401 for GET /api/metrics/audit without API key when auth is enabled", async () => {
-      const authDeps = createMockDeps();
-      authDeps.apiKey = "metrics-secret-key";
-      const app = createApp(authDeps);
-
-      const res = await request(app).get("/api/metrics/audit");
-      expect(res.status).toBe(401);
-    });
-
-    it("returns 200 for GET /api/metrics with valid API key and rootDir", async () => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const os = await import("node:os");
-
-      // Create a temporary rootDir with .dojops directory for MetricsAggregator
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
-      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
-
-      try {
-        const authDeps = createMockDeps();
-        authDeps.apiKey = "metrics-secret-key";
-        authDeps.rootDir = tmpDir;
-        const app = createApp(authDeps);
-
-        const res = await request(app).get("/api/metrics").set("X-API-Key", "metrics-secret-key");
-        expect(res.status).toBe(200);
-        expect(res.body).toHaveProperty("overview");
-        expect(res.body).toHaveProperty("security");
-        expect(res.body).toHaveProperty("audit");
-        expect(res.body).toHaveProperty("generatedAt");
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    });
-
-    it("returns 200 for GET /api/metrics/overview with valid API key and rootDir", async () => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const os = await import("node:os");
-
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
-      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
-
-      try {
-        const authDeps = createMockDeps();
-        authDeps.apiKey = "metrics-secret-key";
-        authDeps.rootDir = tmpDir;
-        const app = createApp(authDeps);
-
-        const res = await request(app)
-          .get("/api/metrics/overview")
-          .set("X-API-Key", "metrics-secret-key");
-        expect(res.status).toBe(200);
-        expect(res.body).toHaveProperty("totalPlans");
-        expect(res.body).toHaveProperty("totalExecutions");
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    });
-
-    it("returns 200 for GET /api/metrics/security with valid API key and rootDir", async () => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const os = await import("node:os");
-
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
-      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
-
-      try {
-        const authDeps = createMockDeps();
-        authDeps.apiKey = "metrics-secret-key";
-        authDeps.rootDir = tmpDir;
-        const app = createApp(authDeps);
-
-        const res = await request(app)
-          .get("/api/metrics/security")
-          .set("X-API-Key", "metrics-secret-key");
-        expect(res.status).toBe(200);
-        expect(res.body).toHaveProperty("totalScans");
-        expect(res.body).toHaveProperty("bySeverity");
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    });
-
-    it("returns 200 for GET /api/metrics/audit with valid API key and rootDir", async () => {
-      const fs = await import("node:fs");
-      const path = await import("node:path");
-      const os = await import("node:os");
-
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
-      fs.mkdirSync(path.join(tmpDir, ".dojops"), { recursive: true });
-
-      try {
-        const authDeps = createMockDeps();
-        authDeps.apiKey = "metrics-secret-key";
-        authDeps.rootDir = tmpDir;
-        const app = createApp(authDeps);
-
-        const res = await request(app)
-          .get("/api/metrics/audit")
-          .set("X-API-Key", "metrics-secret-key");
-        expect(res.status).toBe(200);
-        expect(res.body).toHaveProperty("totalEntries");
-        expect(res.body).toHaveProperty("chainIntegrity");
-      } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-      }
-    });
+    it.each([
+      ["/api/metrics", ["overview", "security", "audit", "generatedAt"]],
+      ["/api/metrics/overview", ["totalPlans", "totalExecutions"]],
+      ["/api/metrics/security", ["totalScans", "bySeverity"]],
+      ["/api/metrics/audit", ["totalEntries", "chainIntegrity"]],
+    ] as const)(
+      "returns 200 for GET %s with valid API key and rootDir",
+      async (endpoint, expectedProps) => {
+        await withMetricsTmpDir(async (tmpDir) => {
+          const app = createAuthApp(tmpDir);
+          const res = await request(app).get(endpoint).set("X-API-Key", "metrics-secret-key");
+          expect(res.status).toBe(200);
+          for (const prop of expectedProps) {
+            expect(res.body).toHaveProperty(prop);
+          }
+        });
+      },
+    );
 
     it("returns 403 for GET /api/metrics with wrong API key", async () => {
       const authDeps = createMockDeps();

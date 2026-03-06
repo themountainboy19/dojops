@@ -1,13 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
-import crypto from "node:crypto";
 import { MetricsAggregator } from "../../metrics/aggregator";
-
-function createTempDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "dojops-metrics-test-"));
-}
+import { createTempDir, computeAuditHash, writeAuditEntries } from "./test-helpers";
 
 function setupOda(rootDir: string) {
   const dojopsDir = path.join(rootDir, ".dojops");
@@ -36,31 +31,20 @@ function writeScanReport(dojopsDir: string, report: Record<string, unknown>) {
   );
 }
 
-function computeAuditHash(entry: Record<string, unknown>): string {
-  const payload = [
-    entry.seq,
-    entry.timestamp,
-    entry.user,
-    entry.command,
-    entry.action,
-    (entry.planId as string) ?? "",
-    entry.status,
-    entry.durationMs,
-    (entry.previousHash as string) ?? "genesis",
-  ].join("\0");
-  return crypto.createHash("sha256").update(payload).digest("hex");
-}
-
-function writeAuditEntries(dojopsDir: string, entries: Array<Record<string, unknown>>) {
-  let previousHash = "genesis";
-  const lines: string[] = [];
-  for (let i = 0; i < entries.length; i++) {
-    const e = { ...entries[i], seq: i + 1, previousHash };
-    e.hash = computeAuditHash(e);
-    previousHash = e.hash as string;
-    lines.push(JSON.stringify(e));
-  }
-  fs.writeFileSync(path.join(dojopsDir, "history", "audit.jsonl"), lines.join("\n") + "\n");
+/** Create an audit entry with sensible defaults and auto-incrementing timestamp. */
+function makeAuditEntry(
+  overrides?: Partial<Record<string, unknown>>,
+  index = 0,
+): Record<string, unknown> {
+  return {
+    timestamp: `2024-01-01T00:${String(index).padStart(2, "0")}:00Z`,
+    user: "test",
+    command: "plan",
+    action: "decompose",
+    status: "success",
+    durationMs: 100,
+    ...overrides,
+  };
 }
 
 describe("MetricsAggregator", () => {
@@ -175,30 +159,9 @@ describe("MetricsAggregator", () => {
 
     it("extracts most used agents from audit entries", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 200,
-        },
-        {
-          timestamp: "2024-01-01T00:02:00Z",
-          user: "test",
-          command: "apply",
-          action: "execute",
-          status: "success",
-          durationMs: 300,
-        },
+        makeAuditEntry({ durationMs: 100 }, 0),
+        makeAuditEntry({ durationMs: 200 }, 1),
+        makeAuditEntry({ command: "apply", action: "execute", durationMs: 300 }, 2),
       ]);
 
       const agg = new MetricsAggregator(rootDir);
@@ -320,22 +283,11 @@ describe("MetricsAggregator", () => {
 
     it("verifies valid audit chain", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "apply",
-          action: "execute",
-          status: "failure",
-          durationMs: 200,
-        },
+        makeAuditEntry({}, 0),
+        makeAuditEntry(
+          { command: "apply", action: "execute", status: "failure", durationMs: 200 },
+          1,
+        ),
       ]);
 
       const agg = new MetricsAggregator(rootDir);
@@ -348,16 +300,7 @@ describe("MetricsAggregator", () => {
     });
 
     it("detects tampered audit chain", () => {
-      writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 100,
-        },
-      ]);
+      writeAuditEntries(dojopsDir, [makeAuditEntry()]);
 
       // Tamper with the file
       const auditFile = path.join(dojopsDir, "history", "audit.jsonl");
@@ -375,30 +318,9 @@ describe("MetricsAggregator", () => {
 
     it("computes command distribution", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "plan",
-          action: "decompose",
-          status: "success",
-          durationMs: 200,
-        },
-        {
-          timestamp: "2024-01-01T00:02:00Z",
-          user: "test",
-          command: "apply",
-          action: "execute",
-          status: "success",
-          durationMs: 300,
-        },
+        makeAuditEntry({}, 0),
+        makeAuditEntry({ durationMs: 200 }, 1),
+        makeAuditEntry({ command: "apply", action: "execute", durationMs: 300 }, 2),
       ]);
 
       const agg = new MetricsAggregator(rootDir);
@@ -412,22 +334,8 @@ describe("MetricsAggregator", () => {
 
     it("returns timeline in reverse order (newest first)", () => {
       writeAuditEntries(dojopsDir, [
-        {
-          timestamp: "2024-01-01T00:00:00Z",
-          user: "test",
-          command: "plan",
-          action: "first",
-          status: "success",
-          durationMs: 100,
-        },
-        {
-          timestamp: "2024-01-01T00:01:00Z",
-          user: "test",
-          command: "apply",
-          action: "second",
-          status: "success",
-          durationMs: 200,
-        },
+        makeAuditEntry({ action: "first" }, 0),
+        makeAuditEntry({ command: "apply", action: "second", durationMs: 200 }, 1),
       ]);
 
       const agg = new MetricsAggregator(rootDir);
@@ -540,18 +448,7 @@ describe("MetricsAggregator", () => {
           durationMs: 100,
           previousHash,
         };
-        const payload = [
-          entry.seq,
-          entry.timestamp,
-          entry.user,
-          entry.command,
-          entry.action,
-          "",
-          entry.status,
-          entry.durationMs,
-          entry.previousHash,
-        ].join("\0");
-        const hash = crypto.createHash("sha256").update(payload).digest("hex");
+        const hash = computeAuditHash(entry);
         lines.push(JSON.stringify({ ...entry, hash }));
         previousHash = hash;
       }

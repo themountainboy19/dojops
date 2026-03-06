@@ -3,12 +3,20 @@ import { BaseTool, ToolOutput, z } from "@dojops/sdk";
 import { PlannerExecutor, PlannerLogger } from "../executor";
 import { TaskGraph } from "../types";
 
-const SuccessInputSchema = z.object({}).passthrough();
+// ---------------------------------------------------------------------------
+// Shared schemas
+// ---------------------------------------------------------------------------
+
+const PassthroughSchema = z.object({}).passthrough();
+
+// ---------------------------------------------------------------------------
+// Mock tools
+// ---------------------------------------------------------------------------
 
 class SuccessTool extends BaseTool<Record<string, unknown>> {
   name = "success-tool";
   description = "Always succeeds";
-  inputSchema = SuccessInputSchema;
+  inputSchema = PassthroughSchema;
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
     return { success: true, data: { result: "ok", ...input } };
   }
@@ -17,7 +25,7 @@ class SuccessTool extends BaseTool<Record<string, unknown>> {
 class FailTool extends BaseTool<Record<string, unknown>> {
   name = "fail-tool";
   description = "Always fails";
-  inputSchema = SuccessInputSchema;
+  inputSchema = PassthroughSchema;
   async generate(): Promise<ToolOutput> {
     return { success: false, error: "intentional failure" };
   }
@@ -28,7 +36,7 @@ const timestamps: { id: string; start: number; end: number }[] = [];
 class TimingTool extends BaseTool<Record<string, unknown>> {
   name = "timing-tool";
   description = "Records execution timestamps";
-  inputSchema = SuccessInputSchema;
+  inputSchema = PassthroughSchema;
   async generate(input: Record<string, unknown>): Promise<ToolOutput> {
     const id = (input.taskId as string) ?? "unknown";
     const start = Date.now();
@@ -50,24 +58,64 @@ class StrictTool extends BaseTool<{ name: string }> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared tool instances and factory helpers
+// ---------------------------------------------------------------------------
+
+const successTool = new SuccessTool();
+const failTool = new FailTool();
+const timingTool = new TimingTool();
+const strictTool = new StrictTool();
+
+/** All tool sets used across tests, pre-built for reuse. */
+const TOOL_SETS = {
+  success: [successTool],
+  successAndFail: [successTool, failTool],
+  timing: [timingTool],
+  successAndStrict: [successTool, strictTool],
+} as const;
+
+/** Create a task with sensible defaults. */
+function makeTask(
+  overrides: Partial<TaskGraph["tasks"][number]> & { id: string },
+): TaskGraph["tasks"][number] {
+  return {
+    tool: "success-tool",
+    description: overrides.id,
+    dependsOn: [],
+    input: {},
+    ...overrides,
+  };
+}
+
+/** Create a TaskGraph from minimal task definitions. */
+function makeGraph(
+  goal: string,
+  tasks: Array<Partial<TaskGraph["tasks"][number]> & { id: string }>,
+): TaskGraph {
+  return { goal, tasks: tasks.map(makeTask) };
+}
+
+/** Create a PlannerExecutor with a named tool set. */
+function makeExecutor(
+  toolSet: keyof typeof TOOL_SETS = "success",
+  logger?: PlannerLogger,
+): PlannerExecutor {
+  return new PlannerExecutor([...TOOL_SETS[toolSet]], logger);
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe("PlannerExecutor", () => {
   it("executes a chain of tasks in dependency order", async () => {
-    const graph: TaskGraph = {
-      goal: "test chain",
-      tasks: [
-        { id: "t1", tool: "success-tool", description: "first", dependsOn: [], input: {} },
-        {
-          id: "t2",
-          tool: "success-tool",
-          description: "second",
-          dependsOn: ["t1"],
-          input: { prev: "$ref:t1" },
-        },
-      ],
-    };
+    const graph = makeGraph("test chain", [
+      { id: "t1" },
+      { id: "t2", dependsOn: ["t1"], input: { prev: "$ref:t1" } },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool()]);
-    const result = await executor.execute(graph);
+    const result = await makeExecutor().execute(graph);
 
     expect(result.success).toBe(true);
     expect(result.results).toHaveLength(2);
@@ -77,22 +125,12 @@ describe("PlannerExecutor", () => {
   });
 
   it("skips downstream tasks when a dependency fails", async () => {
-    const graph: TaskGraph = {
-      goal: "test failure cascade",
-      tasks: [
-        { id: "t1", tool: "fail-tool", description: "will fail", dependsOn: [], input: {} },
-        {
-          id: "t2",
-          tool: "success-tool",
-          description: "depends on t1",
-          dependsOn: ["t1"],
-          input: {},
-        },
-      ],
-    };
+    const graph = makeGraph("test failure cascade", [
+      { id: "t1", tool: "fail-tool", description: "will fail" },
+      { id: "t2", description: "depends on t1", dependsOn: ["t1"] },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool(), new FailTool()]);
-    const result = await executor.execute(graph);
+    const result = await makeExecutor("successAndFail").execute(graph);
 
     expect(result.success).toBe(false);
     expect(result.results[0].status).toBe("failed");
@@ -100,21 +138,11 @@ describe("PlannerExecutor", () => {
   });
 
   it("reports error for missing tools", async () => {
-    const graph: TaskGraph = {
-      goal: "test missing tool",
-      tasks: [
-        {
-          id: "t1",
-          tool: "nonexistent",
-          description: "unknown tool",
-          dependsOn: [],
-          input: {},
-        },
-      ],
-    };
+    const graph = makeGraph("test missing tool", [
+      { id: "t1", tool: "nonexistent", description: "unknown tool" },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool()]);
-    const result = await executor.execute(graph);
+    const result = await makeExecutor().execute(graph);
 
     expect(result.success).toBe(false);
     expect(result.results[0].status).toBe("failed");
@@ -122,30 +150,23 @@ describe("PlannerExecutor", () => {
   });
 
   it("detects circular dependencies", async () => {
-    const graph: TaskGraph = {
-      goal: "circular",
-      tasks: [
-        { id: "t1", tool: "success-tool", description: "a", dependsOn: ["t2"], input: {} },
-        { id: "t2", tool: "success-tool", description: "b", dependsOn: ["t1"], input: {} },
-      ],
-    };
+    const graph = makeGraph("circular", [
+      { id: "t1", description: "a", dependsOn: ["t2"] },
+      { id: "t2", description: "b", dependsOn: ["t1"] },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool()]);
-    await expect(executor.execute(graph)).rejects.toThrow("Circular dependency");
+    await expect(makeExecutor().execute(graph)).rejects.toThrow("Circular dependency");
   });
 
   it("skips tasks in completedTaskIds", async () => {
     const started: string[] = [];
-    const graph: TaskGraph = {
-      goal: "test resume skip",
-      tasks: [
-        { id: "t1", tool: "success-tool", description: "first", dependsOn: [], input: {} },
-        { id: "t2", tool: "success-tool", description: "second", dependsOn: ["t1"], input: {} },
-        { id: "t3", tool: "success-tool", description: "third", dependsOn: ["t2"], input: {} },
-      ],
-    };
+    const graph = makeGraph("test resume skip", [
+      { id: "t1", description: "first" },
+      { id: "t2", description: "second", dependsOn: ["t1"] },
+      { id: "t3", description: "third", dependsOn: ["t2"] },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool()], {
+    const executor = makeExecutor("success", {
       taskStart(id) {
         started.push(id);
       },
@@ -165,16 +186,12 @@ describe("PlannerExecutor", () => {
   });
 
   it("handles resume when dependency was completed", async () => {
-    const graph: TaskGraph = {
-      goal: "test resume dependency",
-      tasks: [
-        { id: "t1", tool: "success-tool", description: "first", dependsOn: [], input: {} },
-        { id: "t2", tool: "success-tool", description: "second", dependsOn: ["t1"], input: {} },
-      ],
-    };
+    const graph = makeGraph("test resume dependency", [
+      { id: "t1", description: "first" },
+      { id: "t2", description: "second", dependsOn: ["t1"] },
+    ]);
 
-    const executor = new PlannerExecutor([new SuccessTool()]);
-    const result = await executor.execute(graph, {
+    const result = await makeExecutor().execute(graph, {
       completedTaskIds: new Set(["t1"]),
     });
 
@@ -188,29 +205,13 @@ describe("PlannerExecutor", () => {
 
   describe("$ref to failed/skipped task cascading", () => {
     it("skips task C when task A fails and task B (which C depends on) is skipped", async () => {
-      const graph: TaskGraph = {
-        goal: "test cascading skip",
-        tasks: [
-          { id: "t1", tool: "fail-tool", description: "will fail", dependsOn: [], input: {} },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "depends on t1",
-            dependsOn: ["t1"],
-            input: {},
-          },
-          {
-            id: "t3",
-            tool: "success-tool",
-            description: "depends on t2",
-            dependsOn: ["t2"],
-            input: {},
-          },
-        ],
-      };
+      const graph = makeGraph("test cascading skip", [
+        { id: "t1", tool: "fail-tool", description: "will fail" },
+        { id: "t2", description: "depends on t1", dependsOn: ["t1"] },
+        { id: "t3", description: "depends on t2", dependsOn: ["t2"] },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool(), new FailTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor("successAndFail").execute(graph);
 
       expect(result.success).toBe(false);
       expect(result.results[0].status).toBe("failed");
@@ -223,13 +224,9 @@ describe("PlannerExecutor", () => {
   describe("empty task graph", () => {
     it("returns success: true with no results for empty tasks array", async () => {
       // TaskGraphSchema has .min(1) but TaskGraph type allows empty arrays at runtime
-      const graph: TaskGraph = {
-        goal: "empty plan",
-        tasks: [],
-      };
+      const graph = makeGraph("empty plan", []);
 
-      const executor = new PlannerExecutor([new SuccessTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor().execute(graph);
 
       // Empty graph: no failures, every() on empty returns true => success: true
       expect(result.success).toBe(true);
@@ -242,35 +239,13 @@ describe("PlannerExecutor", () => {
       // Clear timestamps from prior tests
       timestamps.length = 0;
 
-      const graph: TaskGraph = {
-        goal: "parallel test",
-        tasks: [
-          {
-            id: "t1",
-            tool: "timing-tool",
-            description: "task 1",
-            dependsOn: [],
-            input: { taskId: "t1" },
-          },
-          {
-            id: "t2",
-            tool: "timing-tool",
-            description: "task 2",
-            dependsOn: [],
-            input: { taskId: "t2" },
-          },
-          {
-            id: "t3",
-            tool: "timing-tool",
-            description: "task 3",
-            dependsOn: [],
-            input: { taskId: "t3" },
-          },
-        ],
-      };
+      const graph = makeGraph("parallel test", [
+        { id: "t1", tool: "timing-tool", description: "task 1", input: { taskId: "t1" } },
+        { id: "t2", tool: "timing-tool", description: "task 2", input: { taskId: "t2" } },
+        { id: "t3", tool: "timing-tool", description: "task 3", input: { taskId: "t3" } },
+      ]);
 
-      const executor = new PlannerExecutor([new TimingTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor("timing").execute(graph);
 
       expect(result.success).toBe(true);
       expect(result.results).toHaveLength(3);
@@ -290,21 +265,11 @@ describe("PlannerExecutor", () => {
 
   describe("$ref resolution edge cases", () => {
     it("fails task when $ref references a task that does not exist", async () => {
-      const graph: TaskGraph = {
-        goal: "bad ref",
-        tasks: [
-          {
-            id: "t1",
-            tool: "success-tool",
-            description: "uses bad ref",
-            dependsOn: [],
-            input: { data: "$ref:nonexistent" },
-          },
-        ],
-      };
+      const graph = makeGraph("bad ref", [
+        { id: "t1", description: "uses bad ref", input: { data: "$ref:nonexistent" } },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor().execute(graph);
 
       expect(result.success).toBe(false);
       expect(result.results[0].status).toBe("failed");
@@ -313,30 +278,14 @@ describe("PlannerExecutor", () => {
 
     it("resolves $ref to undefined when referenced task has output: undefined", async () => {
       // A completed task with no output (output is undefined by default on TaskResult)
-      // Use a tool that returns data without specific fields — the SuccessTool
+      // Use a tool that returns data without specific fields -- the SuccessTool
       // returns { result: "ok" }, so we wire t2's input to reference t1's output
-      const graph: TaskGraph = {
-        goal: "ref to undefined output",
-        tasks: [
-          {
-            id: "t1",
-            tool: "success-tool",
-            description: "produces output",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "references t1",
-            dependsOn: ["t1"],
-            input: { data: "$ref:t1" },
-          },
-        ],
-      };
+      const graph = makeGraph("ref to undefined output", [
+        { id: "t1", description: "produces output" },
+        { id: "t2", description: "references t1", dependsOn: ["t1"], input: { data: "$ref:t1" } },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor().execute(graph);
 
       expect(result.success).toBe(true);
       expect(result.results[1].status).toBe("completed");
@@ -345,28 +294,17 @@ describe("PlannerExecutor", () => {
     });
 
     it("throws error when $ref references a failed task", async () => {
-      const graph: TaskGraph = {
-        goal: "ref to failed",
-        tasks: [
-          {
-            id: "t1",
-            tool: "fail-tool",
-            description: "will fail",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "references failed t1",
-            dependsOn: ["t1"],
-            input: { data: "$ref:t1" },
-          },
-        ],
-      };
+      const graph = makeGraph("ref to failed", [
+        { id: "t1", tool: "fail-tool", description: "will fail" },
+        {
+          id: "t2",
+          description: "references failed t1",
+          dependsOn: ["t1"],
+          input: { data: "$ref:t1" },
+        },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool(), new FailTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor("successAndFail").execute(graph);
 
       // t1 fails, t2 should be skipped because its dependency failed
       expect(result.success).toBe(false);
@@ -380,7 +318,7 @@ describe("PlannerExecutor", () => {
       class ControlCharTool extends BaseTool<Record<string, unknown>> {
         name = "control-char-tool";
         description = "Returns output with control characters";
-        inputSchema = SuccessInputSchema;
+        inputSchema = PassthroughSchema;
         async generate(): Promise<ToolOutput> {
           return {
             success: true,
@@ -389,25 +327,10 @@ describe("PlannerExecutor", () => {
         }
       }
 
-      const graph: TaskGraph = {
-        goal: "sanitize ref",
-        tasks: [
-          {
-            id: "t1",
-            tool: "control-char-tool",
-            description: "produces dirty output",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "references t1",
-            dependsOn: ["t1"],
-            input: { data: "$ref:t1" },
-          },
-        ],
-      };
+      const graph = makeGraph("sanitize ref", [
+        { id: "t1", tool: "control-char-tool", description: "produces dirty output" },
+        { id: "t2", description: "references t1", dependsOn: ["t1"], input: { data: "$ref:t1" } },
+      ]);
 
       const executor = new PlannerExecutor([new SuccessTool(), new ControlCharTool()]);
       const result = await executor.execute(graph);
@@ -423,31 +346,16 @@ describe("PlannerExecutor", () => {
       class NullOutputTool extends BaseTool<Record<string, unknown>> {
         name = "null-output-tool";
         description = "Returns null in output data";
-        inputSchema = SuccessInputSchema;
+        inputSchema = PassthroughSchema;
         async generate(): Promise<ToolOutput> {
           return { success: true, data: null };
         }
       }
 
-      const graph: TaskGraph = {
-        goal: "ref to null",
-        tasks: [
-          {
-            id: "t1",
-            tool: "null-output-tool",
-            description: "produces null output",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "references t1",
-            dependsOn: ["t1"],
-            input: { data: "$ref:t1" },
-          },
-        ],
-      };
+      const graph = makeGraph("ref to null", [
+        { id: "t1", tool: "null-output-tool", description: "produces null output" },
+        { id: "t2", description: "references t1", dependsOn: ["t1"], input: { data: "$ref:t1" } },
+      ]);
 
       const executor = new PlannerExecutor([new SuccessTool(), new NullOutputTool()]);
       const result = await executor.execute(graph);
@@ -461,48 +369,22 @@ describe("PlannerExecutor", () => {
 
   describe("unknown dependency", () => {
     it("throws error when dependsOn references a non-existent task", async () => {
-      const graph: TaskGraph = {
-        goal: "bad dependency",
-        tasks: [
-          {
-            id: "t1",
-            tool: "success-tool",
-            description: "depends on ghost",
-            dependsOn: ["nonexistent"],
-            input: {},
-          },
-        ],
-      };
+      const graph = makeGraph("bad dependency", [
+        { id: "t1", description: "depends on ghost", dependsOn: ["nonexistent"] },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool()]);
-      await expect(executor.execute(graph)).rejects.toThrow("Unknown dependency");
+      await expect(makeExecutor().execute(graph)).rejects.toThrow("Unknown dependency");
     });
   });
 
   describe("validation failure cascading", () => {
     it("fails task when validation fails and skips its dependants", async () => {
-      const graph: TaskGraph = {
-        goal: "validation cascade",
-        tasks: [
-          {
-            id: "t1",
-            tool: "strict-tool",
-            description: "will fail validation",
-            dependsOn: [],
-            input: { name: "" },
-          },
-          {
-            id: "t2",
-            tool: "success-tool",
-            description: "depends on t1",
-            dependsOn: ["t1"],
-            input: {},
-          },
-        ],
-      };
+      const graph = makeGraph("validation cascade", [
+        { id: "t1", tool: "strict-tool", description: "will fail validation", input: { name: "" } },
+        { id: "t2", description: "depends on t1", dependsOn: ["t1"] },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool(), new StrictTool()]);
-      const result = await executor.execute(graph);
+      const result = await makeExecutor("successAndStrict").execute(graph);
 
       expect(result.success).toBe(false);
       expect(result.results[0].taskId).toBe("t1");
@@ -520,40 +402,19 @@ describe("PlannerExecutor", () => {
         taskEnd: vi.fn(),
       };
 
-      const graph: TaskGraph = {
-        goal: "logger test",
-        tasks: [
-          {
-            id: "t1",
-            tool: "success-tool",
-            description: "first task",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t2",
-            tool: "fail-tool",
-            description: "second task",
-            dependsOn: [],
-            input: {},
-          },
-          {
-            id: "t3",
-            tool: "success-tool",
-            description: "depends on t2",
-            dependsOn: ["t2"],
-            input: {},
-          },
-        ],
-      };
+      const graph = makeGraph("logger test", [
+        { id: "t1", description: "first task" },
+        { id: "t2", tool: "fail-tool", description: "second task" },
+        { id: "t3", description: "depends on t2", dependsOn: ["t2"] },
+      ]);
 
-      const executor = new PlannerExecutor([new SuccessTool(), new FailTool()], logger);
+      const executor = makeExecutor("successAndFail", logger);
       await executor.execute(graph);
 
       // taskStart is called for t1 and t2 (t3 is skipped due to failed dep, so no taskStart)
       expect(logger.taskStart).toHaveBeenCalledWith("t1", "first task");
       expect(logger.taskStart).toHaveBeenCalledWith("t2", "second task");
-      // t3 is skipped — taskStart should NOT be called for it
+      // t3 is skipped -- taskStart should NOT be called for it
       expect(logger.taskStart).not.toHaveBeenCalledWith("t3", expect.anything());
 
       // taskEnd is called for all tasks

@@ -2258,25 +2258,25 @@ pre {
 
 .agent-card__icon--networking {
   background: rgba(168, 85, 247, 0.12);
-  color: #d8b4fe;
+  color: #e9d5ff;
   border: 1px solid rgba(168, 85, 247, 0.2);
 }
 
 .agent-card__icon--ci-cd {
   background: rgba(59, 130, 246, 0.12);
-  color: #93bbfd;
+  color: #bfdbfe;
   border: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .agent-card__icon--containers {
   background: rgba(6, 182, 212, 0.12);
-  color: #67e8f9;
+  color: #a5f3fc;
   border: 1px solid rgba(6, 182, 212, 0.2);
 }
 
 .agent-card__icon--database {
   background: rgba(249, 115, 22, 0.12);
-  color: #fdba74;
+  color: #fed7aa;
   border: 1px solid rgba(249, 115, 22, 0.2);
 }
 
@@ -2288,7 +2288,7 @@ pre {
 
 .agent-card__icon--orchestration {
   background: rgba(236, 72, 153, 0.12);
-  color: #f9a8d4;
+  color: #fbcfe8;
   border: 1px solid rgba(236, 72, 153, 0.2);
 }
 
@@ -2544,7 +2544,7 @@ pre {
 
 .category-card__icon--dependencies {
   background: rgba(249, 115, 22, 0.12);
-  color: #fdba74;
+  color: #fed7aa;
 }
 
 .category-card__icon--iac {
@@ -2554,7 +2554,7 @@ pre {
 
 .category-card__icon--secrets {
   background: rgba(168, 85, 247, 0.12);
-  color: #d8b4fe;
+  color: #e9d5ff;
 }
 
 .category-card__count {

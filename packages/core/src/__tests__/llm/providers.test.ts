@@ -34,6 +34,56 @@ vi.mock("axios", () => ({
   },
 }));
 
+// ---- Mock response factories ----
+
+/** Build an OpenAI-shaped mock response */
+function openAIResponse(
+  content: string | null,
+  extra?: {
+    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+    finish_reason?: string;
+  },
+) {
+  return {
+    choices: [
+      { message: { content }, ...(extra?.finish_reason && { finish_reason: extra.finish_reason }) },
+    ],
+    ...(extra?.usage && { usage: extra.usage }),
+  };
+}
+
+/** Build an Anthropic-shaped mock response */
+function anthropicResponse(text: string) {
+  return { content: [{ type: "text", text }] };
+}
+
+/** Build an Ollama /api/generate-shaped mock response */
+function ollamaGenerateResponse(
+  response: string,
+  extra?: { prompt_eval_count?: number; eval_count?: number },
+) {
+  return { data: { response, ...extra } };
+}
+
+/** Build an Ollama /api/chat-shaped mock response */
+function ollamaChatResponse(
+  content: string,
+  extra?: { prompt_eval_count?: number; eval_count?: number },
+) {
+  return { data: { message: { content }, ...extra } };
+}
+
+/** Helper: set up Ollama generate mock, call generate, return the axios call args */
+async function ollamaGenerateCall(
+  provider: OllamaProvider,
+  request: Parameters<OllamaProvider["generate"]>[0],
+  mockResponse = ollamaGenerateResponse("ok"),
+) {
+  mockAxiosPost.mockResolvedValue(mockResponse);
+  await provider.generate(request);
+  return mockAxiosPost.mock.calls[0];
+}
+
 // ---- Tests ----
 
 describe("OpenAIProvider", () => {
@@ -44,9 +94,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("generates plain text response", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "Hello!" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("Hello!"));
 
     const provider = new OpenAIProvider("key");
     const res = await provider.generate({ prompt: "Hi" });
@@ -57,9 +105,7 @@ describe("OpenAIProvider", () => {
 
   it("generates structured JSON response with schema", async () => {
     const json = JSON.stringify({ answer: "42" });
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: json } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse(json));
 
     const provider = new OpenAIProvider("key");
     const res = await provider.generate({ prompt: "question", schema: TestSchema });
@@ -68,9 +114,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("appends JSON instruction to system prompt when schema is provided", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: '{"answer":"x"}' } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse('{"answer":"x"}'));
 
     const provider = new OpenAIProvider("key");
     await provider.generate({
@@ -86,9 +130,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("handles null content gracefully", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: null } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse(null));
 
     const provider = new OpenAIProvider("key");
     const res = await provider.generate({ prompt: "Hi" });
@@ -97,9 +139,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("passes temperature when provided", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "ok" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("ok"));
 
     const provider = new OpenAIProvider("key");
     await provider.generate({ prompt: "Hi", temperature: 0.7 });
@@ -109,9 +149,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("omits temperature when not provided", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "ok" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("ok"));
 
     const provider = new OpenAIProvider("key");
     await provider.generate({ prompt: "Hi" });
@@ -124,51 +162,42 @@ describe("OpenAIProvider", () => {
   // Error path tests
   // ---------------------------------------------------------------
 
-  it("throws clear error on HTTP 401 Unauthorized", async () => {
-    mockOpenAICreate.mockRejectedValue(
-      new Error(
-        '401 {"error":{"message":"Incorrect API key provided: sk-proj-abc123...","type":"invalid_request_error","code":"invalid_api_key"}}',
-      ),
-    );
-
-    const provider = new OpenAIProvider("bad-key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Incorrect API key/);
-  });
-
-  it("throws appropriate error on HTTP 429 rate limiting", async () => {
-    mockOpenAICreate.mockRejectedValue(
-      new Error(
-        '429 {"error":{"message":"Rate limit reached for gpt-4o-mini. Please retry after 20s.","type":"tokens","code":"rate_limit_exceeded"}}',
-      ),
-    );
-
-    const provider = new OpenAIProvider("key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Rate limit reached/);
-  });
-
-  it("throws appropriate error on HTTP 503 service unavailability", async () => {
-    mockOpenAICreate.mockRejectedValue(
-      new Error(
-        '503 {"error":{"message":"The server is temporarily unable to handle the request.","type":"server_error"}}',
-      ),
-    );
-
-    const provider = new OpenAIProvider("key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/temporarily unable/);
-  });
-
-  it("throws clear error on network ECONNREFUSED", async () => {
-    const networkErr = new Error("connect ECONNREFUSED 127.0.0.1:443");
-    mockOpenAICreate.mockRejectedValue(networkErr);
+  it.each([
+    [
+      "HTTP 401 Unauthorized",
+      '401 {"error":{"message":"Incorrect API key provided: sk-proj-abc123...","type":"invalid_request_error","code":"invalid_api_key"}}',
+      /Incorrect API key/,
+    ],
+    [
+      "HTTP 429 rate limiting",
+      '429 {"error":{"message":"Rate limit reached for gpt-4o-mini. Please retry after 20s.","type":"tokens","code":"rate_limit_exceeded"}}',
+      /Rate limit reached/,
+    ],
+    [
+      "HTTP 503 service unavailability",
+      '503 {"error":{"message":"The server is temporarily unable to handle the request.","type":"server_error"}}',
+      /temporarily unable/,
+    ],
+    ["network ECONNREFUSED", "connect ECONNREFUSED 127.0.0.1:443", /ECONNREFUSED/],
+    [
+      "nested SDK JSON error",
+      '400 {"error":{"message":"Invalid prompt: too long","type":"invalid_request_error"}}',
+      /Invalid prompt: too long/,
+    ],
+    [
+      "raw error message (no JSON)",
+      "Something went wrong without JSON",
+      /Something went wrong without JSON/,
+    ],
+  ])("throws clear error on %s", async (_label, errorMsg, expectedPattern) => {
+    mockOpenAICreate.mockRejectedValue(new Error(errorMsg));
 
     const provider = new OpenAIProvider("key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/ECONNREFUSED/);
+    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(expectedPattern);
   });
 
   it("throws error on malformed LLM response (invalid JSON) with schema", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "This is not valid JSON {{{" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("This is not valid JSON {{{"));
 
     const provider = new OpenAIProvider("key");
     await expect(provider.generate({ prompt: "Hi", schema: TestSchema })).rejects.toThrow(
@@ -184,9 +213,9 @@ describe("OpenAIProvider", () => {
   });
 
   it("throws error when structured response is truncated (finish_reason=length)", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: '{"answer":"partial' }, finish_reason: "length" }],
-    });
+    mockOpenAICreate.mockResolvedValue(
+      openAIResponse('{"answer":"partial', { finish_reason: "length" }),
+    );
 
     const provider = new OpenAIProvider("key");
     await expect(provider.generate({ prompt: "Hi", schema: TestSchema })).rejects.toThrow(
@@ -212,26 +241,6 @@ describe("OpenAIProvider", () => {
     }
   });
 
-  it("extracts nested error message from SDK JSON errors", async () => {
-    mockOpenAICreate.mockRejectedValue(
-      new Error(
-        '400 {"error":{"message":"Invalid prompt: too long","type":"invalid_request_error"}}',
-      ),
-    );
-
-    const provider = new OpenAIProvider("key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(/Invalid prompt: too long/);
-  });
-
-  it("falls back to raw error message when JSON extraction fails", async () => {
-    mockOpenAICreate.mockRejectedValue(new Error("Something went wrong without JSON"));
-
-    const provider = new OpenAIProvider("key");
-    await expect(provider.generate({ prompt: "Hi" })).rejects.toThrow(
-      /Something went wrong without JSON/,
-    );
-  });
-
   it("handles non-Error thrown values", async () => {
     mockOpenAICreate.mockRejectedValue("plain string error");
 
@@ -240,14 +249,11 @@ describe("OpenAIProvider", () => {
   });
 
   it("includes token usage in successful response", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "Hello!" } }],
-      usage: {
-        prompt_tokens: 10,
-        completion_tokens: 5,
-        total_tokens: 15,
-      },
-    });
+    mockOpenAICreate.mockResolvedValue(
+      openAIResponse("Hello!", {
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      }),
+    );
 
     const provider = new OpenAIProvider("key");
     const res = await provider.generate({ prompt: "Hi" });
@@ -260,9 +266,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("forwards messages array when provided", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "response" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("response"));
 
     const provider = new OpenAIProvider("key");
     await provider.generate({
@@ -281,9 +285,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("filters out system role from messages array", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "response" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("response"));
 
     const provider = new OpenAIProvider("key");
     await provider.generate({
@@ -300,9 +302,7 @@ describe("OpenAIProvider", () => {
   });
 
   it("returns undefined usage when not present", async () => {
-    mockOpenAICreate.mockResolvedValue({
-      choices: [{ message: { content: "ok" } }],
-    });
+    mockOpenAICreate.mockResolvedValue(openAIResponse("ok"));
 
     const provider = new OpenAIProvider("key");
     const res = await provider.generate({ prompt: "Hi" });
@@ -318,9 +318,7 @@ describe("AnthropicProvider", () => {
   });
 
   it("generates plain text response", async () => {
-    mockAnthropicCreate.mockResolvedValue({
-      content: [{ type: "text", text: "Hello!" }],
-    });
+    mockAnthropicCreate.mockResolvedValue(anthropicResponse("Hello!"));
 
     const provider = new AnthropicProvider("key");
     const res = await provider.generate({ prompt: "Hi" });
@@ -330,9 +328,7 @@ describe("AnthropicProvider", () => {
   });
 
   it("generates structured JSON response with schema", async () => {
-    mockAnthropicCreate.mockResolvedValue({
-      content: [{ type: "text", text: '"answer":"42"}' }],
-    });
+    mockAnthropicCreate.mockResolvedValue(anthropicResponse('"answer":"42"}'));
 
     const provider = new AnthropicProvider("key");
     const res = await provider.generate({ prompt: "q", schema: TestSchema });
@@ -341,9 +337,7 @@ describe("AnthropicProvider", () => {
   });
 
   it("adds assistant prefill when schema is provided", async () => {
-    mockAnthropicCreate.mockResolvedValue({
-      content: [{ type: "text", text: '"answer":"x"}' }],
-    });
+    mockAnthropicCreate.mockResolvedValue(anthropicResponse('"answer":"x"}'));
 
     const provider = new AnthropicProvider("key");
     await provider.generate({ prompt: "q", schema: TestSchema });
@@ -353,9 +347,7 @@ describe("AnthropicProvider", () => {
   });
 
   it("passes temperature when provided", async () => {
-    mockAnthropicCreate.mockResolvedValue({
-      content: [{ type: "text", text: "ok" }],
-    });
+    mockAnthropicCreate.mockResolvedValue(anthropicResponse("ok"));
 
     const provider = new AnthropicProvider("key");
     await provider.generate({ prompt: "Hi", temperature: 0 });
@@ -365,9 +357,7 @@ describe("AnthropicProvider", () => {
   });
 
   it("omits temperature when not provided", async () => {
-    mockAnthropicCreate.mockResolvedValue({
-      content: [{ type: "text", text: "ok" }],
-    });
+    mockAnthropicCreate.mockResolvedValue(anthropicResponse("ok"));
 
     const provider = new AnthropicProvider("key");
     await provider.generate({ prompt: "Hi" });
@@ -385,7 +375,7 @@ describe("OllamaProvider", () => {
   });
 
   it("generates plain text response", async () => {
-    mockAxiosPost.mockResolvedValue({ data: { response: "Hello!" } });
+    mockAxiosPost.mockResolvedValue(ollamaGenerateResponse("Hello!"));
 
     const provider = new OllamaProvider();
     const res = await provider.generate({ prompt: "Hi" });
@@ -395,9 +385,7 @@ describe("OllamaProvider", () => {
   });
 
   it("generates structured JSON response with schema", async () => {
-    mockAxiosPost.mockResolvedValue({
-      data: { response: '{"answer":"42"}' },
-    });
+    mockAxiosPost.mockResolvedValue(ollamaGenerateResponse('{"answer":"42"}'));
 
     const provider = new OllamaProvider();
     const res = await provider.generate({ prompt: "q", schema: TestSchema });
@@ -406,9 +394,7 @@ describe("OllamaProvider", () => {
   });
 
   it("sends JSON Schema object (not string) when schema is provided", async () => {
-    mockAxiosPost.mockResolvedValue({
-      data: { response: '{"answer":"x"}' },
-    });
+    mockAxiosPost.mockResolvedValue(ollamaGenerateResponse('{"answer":"x"}'));
 
     const provider = new OllamaProvider("http://localhost:11434");
     await provider.generate({ prompt: "q", schema: TestSchema });
@@ -422,7 +408,7 @@ describe("OllamaProvider", () => {
   });
 
   it("uses custom base URL", async () => {
-    mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+    mockAxiosPost.mockResolvedValue(ollamaGenerateResponse("ok"));
 
     const provider = new OllamaProvider("http://custom:9999");
     await provider.generate({ prompt: "Hi" });
@@ -431,22 +417,12 @@ describe("OllamaProvider", () => {
   });
 
   it("passes temperature via options when provided", async () => {
-    mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-    const provider = new OllamaProvider();
-    await provider.generate({ prompt: "Hi", temperature: 0.5 });
-
-    const call = mockAxiosPost.mock.calls[0];
+    const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi", temperature: 0.5 });
     expect(call[1].options).toEqual({ temperature: 0.5 });
   });
 
   it("omits options when temperature not provided", async () => {
-    mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-    const provider = new OllamaProvider();
-    await provider.generate({ prompt: "Hi" });
-
-    const call = mockAxiosPost.mock.calls[0];
+    const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
     expect(call[1].options).toBeUndefined();
   });
 
@@ -456,9 +432,9 @@ describe("OllamaProvider", () => {
 
   describe("token usage extraction", () => {
     it("extracts prompt_eval_count and eval_count from /api/generate", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { response: "Hello!", prompt_eval_count: 15, eval_count: 8 },
-      });
+      mockAxiosPost.mockResolvedValue(
+        ollamaGenerateResponse("Hello!", { prompt_eval_count: 15, eval_count: 8 }),
+      );
 
       const provider = new OllamaProvider();
       const res = await provider.generate({ prompt: "Hi" });
@@ -467,13 +443,9 @@ describe("OllamaProvider", () => {
     });
 
     it("extracts prompt_eval_count and eval_count from /api/chat", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: {
-          message: { content: "Hello!" },
-          prompt_eval_count: 20,
-          eval_count: 12,
-        },
-      });
+      mockAxiosPost.mockResolvedValue(
+        ollamaChatResponse("Hello!", { prompt_eval_count: 20, eval_count: 12 }),
+      );
 
       const provider = new OllamaProvider();
       const res = await provider.generate({
@@ -485,7 +457,7 @@ describe("OllamaProvider", () => {
     });
 
     it("returns undefined usage when counts missing", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "Hello!" } });
+      mockAxiosPost.mockResolvedValue(ollamaGenerateResponse("Hello!"));
 
       const provider = new OllamaProvider();
       const res = await provider.generate({ prompt: "Hi" });
@@ -494,9 +466,7 @@ describe("OllamaProvider", () => {
     });
 
     it("returns undefined usage when only one count present", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { response: "Hello!", prompt_eval_count: 15 },
-      });
+      mockAxiosPost.mockResolvedValue(ollamaGenerateResponse("Hello!", { prompt_eval_count: 15 }));
 
       const provider = new OllamaProvider();
       const res = await provider.generate({ prompt: "Hi" });
@@ -511,19 +481,12 @@ describe("OllamaProvider", () => {
 
   describe("request timeout", () => {
     it("passes timeout config to axios.post for generate", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider();
-      await provider.generate({ prompt: "Hi" });
-
-      const axiosConfig = mockAxiosPost.mock.calls[0][2];
-      expect(axiosConfig).toEqual({ timeout: 120_000 });
+      const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
+      expect(call[2]).toEqual({ timeout: 120_000 });
     });
 
     it("passes timeout config to axios.post for chat", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { message: { content: "ok" } },
-      });
+      mockAxiosPost.mockResolvedValue(ollamaChatResponse("ok"));
 
       const provider = new OllamaProvider();
       await provider.generate({
@@ -565,9 +528,7 @@ describe("OllamaProvider", () => {
 
   describe("JSON Schema format", () => {
     it("sends JSON Schema in chat mode too", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { message: { content: '{"answer":"x"}' } },
-      });
+      mockAxiosPost.mockResolvedValue(ollamaChatResponse('{"answer":"x"}'));
 
       const provider = new OllamaProvider();
       await provider.generate({
@@ -582,12 +543,7 @@ describe("OllamaProvider", () => {
     });
 
     it("does not send format when no schema", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider();
-      await provider.generate({ prompt: "Hi" });
-
-      const call = mockAxiosPost.mock.calls[0];
+      const call = await ollamaGenerateCall(new OllamaProvider(), { prompt: "Hi" });
       expect(call[1].format).toBeUndefined();
     });
   });
@@ -631,49 +587,31 @@ describe("OllamaProvider", () => {
   // ---------------------------------------------------------------
 
   describe("keep_alive", () => {
-    it("sends keep_alive in generate request", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+    it.each([
+      ["generate request", { prompt: "Hi" }, undefined],
+      [
+        "chat request",
+        { prompt: "Hi", messages: [{ role: "user" as const, content: "Hi" }] },
+        undefined,
+      ],
+      ["default constructor", { prompt: "Hi" }, undefined],
+    ])("sends keep_alive='5m' in %s", async (_label, request) => {
+      const isChat = !!(request as { messages?: unknown[] }).messages;
+      mockAxiosPost.mockResolvedValue(
+        isChat ? ollamaChatResponse("ok") : ollamaGenerateResponse("ok"),
+      );
 
       const provider = new OllamaProvider();
-      await provider.generate({ prompt: "Hi" });
-
-      const call = mockAxiosPost.mock.calls[0];
-      expect(call[1].keep_alive).toBe("5m");
-    });
-
-    it("sends keep_alive in chat request", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { message: { content: "ok" } },
-      });
-
-      const provider = new OllamaProvider();
-      await provider.generate({
-        prompt: "Hi",
-        messages: [{ role: "user", content: "Hi" }],
-      });
-
-      const call = mockAxiosPost.mock.calls[0];
-      expect(call[1].keep_alive).toBe("5m");
-    });
-
-    it('uses default "5m" when not specified', () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider();
-      // default constructor — keepAlive should be "5m"
-      provider.generate({ prompt: "Hi" });
+      await provider.generate(request);
 
       const call = mockAxiosPost.mock.calls[0];
       expect(call[1].keep_alive).toBe("5m");
     });
 
     it("uses custom keep_alive when specified", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider(undefined, undefined, "30m");
-      await provider.generate({ prompt: "Hi" });
-
-      const call = mockAxiosPost.mock.calls[0];
+      const call = await ollamaGenerateCall(new OllamaProvider(undefined, undefined, "30m"), {
+        prompt: "Hi",
+      });
       expect(call[1].keep_alive).toBe("30m");
     });
   });
@@ -683,41 +621,28 @@ describe("OllamaProvider", () => {
   // ---------------------------------------------------------------
 
   describe("TLS configuration", () => {
-    it("does not include httpsAgent by default", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
+    const TLS_OLLAMA_URL = "https://ollama.internal:8443";
 
-      const provider = new OllamaProvider();
-      await provider.generate({ prompt: "Hi" });
-
-      const axiosConfig = mockAxiosPost.mock.calls[0][2];
-      expect(axiosConfig.httpsAgent).toBeUndefined();
+    it.each([
+      ["default constructor", new OllamaProvider()],
+      ["tlsRejectUnauthorized=true", new OllamaProvider(TLS_OLLAMA_URL, "llama3", "5m", true)],
+    ])("does not include httpsAgent with %s", async (_label, provider) => {
+      const call = await ollamaGenerateCall(provider, { prompt: "Hi" });
+      expect(call[2].httpsAgent).toBeUndefined();
     });
 
-    it("does not include httpsAgent when tlsRejectUnauthorized is true", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", true);
-      await provider.generate({ prompt: "Hi" });
-
-      const axiosConfig = mockAxiosPost.mock.calls[0][2];
-      expect(axiosConfig.httpsAgent).toBeUndefined();
-    });
+    const tlsDisabledProvider = () => new OllamaProvider(TLS_OLLAMA_URL, "llama3", "5m", false);
 
     it("includes httpsAgent with rejectUnauthorized=false when TLS verification disabled", async () => {
-      mockAxiosPost.mockResolvedValue({ data: { response: "ok" } });
-
-      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
-      await provider.generate({ prompt: "Hi" });
-
-      const axiosConfig = mockAxiosPost.mock.calls[0][2];
-      expect(axiosConfig.httpsAgent).toBeDefined();
-      expect(axiosConfig.httpsAgent.options.rejectUnauthorized).toBe(false);
+      const call = await ollamaGenerateCall(tlsDisabledProvider(), { prompt: "Hi" });
+      expect(call[2].httpsAgent).toBeDefined();
+      expect(call[2].httpsAgent.options.rejectUnauthorized).toBe(false);
     });
 
     it("passes httpsAgent to listModels when TLS verification disabled", async () => {
       mockAxiosGet.mockResolvedValue({ data: { models: [] } });
 
-      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
+      const provider = tlsDisabledProvider();
       await provider.listModels();
 
       const axiosConfig = mockAxiosGet.mock.calls[0][1];
@@ -726,11 +651,9 @@ describe("OllamaProvider", () => {
     });
 
     it("passes httpsAgent to chat requests when TLS verification disabled", async () => {
-      mockAxiosPost.mockResolvedValue({
-        data: { message: { content: "ok" } },
-      });
+      mockAxiosPost.mockResolvedValue(ollamaChatResponse("ok"));
 
-      const provider = new OllamaProvider("https://ollama.internal:8443", "llama3", "5m", false);
+      const provider = tlsDisabledProvider();
       await provider.generate({
         prompt: "Hi",
         messages: [{ role: "user", content: "Hi" }],

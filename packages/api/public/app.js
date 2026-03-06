@@ -1899,4 +1899,4 @@ document.addEventListener("change", function (e) {
   }
 });
 
-init().catch(console.error);
+init().catch(console.error); // NOSONAR — browser script, no top-level await

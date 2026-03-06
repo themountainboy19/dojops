@@ -145,6 +145,62 @@ function writeRedisTool(toolsDir: string): string {
   return dir;
 }
 
+/** Discover a single tool from the project tools directory */
+function setupAndDiscoverTool(
+  projectDir: string,
+  writeFn: (toolsDir: string) => string,
+  toolsDirOverride?: string,
+): ReturnType<typeof discoverTools>[0] {
+  const toolsDir = toolsDirOverride ?? path.join(projectDir, ".dojops", "tools");
+  writeFn(toolsDir);
+  return discoverTools(projectDir)[0];
+}
+
+/** Create a CustomTool from a discovered entry (standard 5-arg form) */
+function createCustomTool(
+  entry: ReturnType<typeof discoverTools>[0],
+  provider: LLMProvider,
+): InstanceType<typeof CustomTool> {
+  return new CustomTool(
+    entry.manifest,
+    provider,
+    entry.toolDir,
+    entry.source,
+    entry.inputSchemaRaw,
+  );
+}
+
+/** Create a CustomTool anchored to its toolDir for file execution (7-arg form) */
+function createAnchoredCustomTool(
+  entry: ReturnType<typeof discoverTools>[0],
+  provider: LLMProvider,
+): InstanceType<typeof CustomTool> {
+  return new CustomTool(
+    entry.manifest,
+    provider,
+    entry.toolDir,
+    entry.source,
+    entry.inputSchemaRaw,
+    undefined,
+    entry.toolDir,
+  );
+}
+
+/** Convert all discovered entries to CustomTool instances */
+function entriesToCustomTools(
+  entries: ReturnType<typeof discoverTools>,
+  provider: LLMProvider,
+): InstanceType<typeof CustomTool>[] {
+  return entries.map((e) => createCustomTool(e, provider));
+}
+
+/** Write a policy.yaml in the project .dojops directory */
+function writePolicy(projectDir: string, policyContent: Record<string, unknown>): void {
+  const dojopsDir = path.join(projectDir, ".dojops");
+  fs.mkdirSync(dojopsDir, { recursive: true });
+  fs.writeFileSync(path.join(dojopsDir, "policy.yaml"), yaml.dump(policyContent), "utf-8");
+}
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("External Tool Integration: Full Lifecycle", () => {
@@ -168,68 +224,87 @@ describe("External Tool Integration: Full Lifecycle", () => {
   // ── 1. Manifest Validation ──
 
   describe("Step 1: Manifest Validation", () => {
-    it("Traefik tool manifest is valid", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
+    it.each([
+      {
+        label: "Traefik",
+        writeFn: writeTraefikTool,
+        toolName: "traefik-config",
+        expectedVersion: "1.0.0",
+        expectedSerializer: "yaml",
+        extraChecks: (manifest: ReturnType<typeof validateManifest>["manifest"]) => {
+          expect(manifest!.tags).toContain("traefik");
+          expect(manifest!.generator.updateMode).toBe(true);
+        },
+      },
+      {
+        label: "Redis",
+        writeFn: writeRedisTool,
+        toolName: "redis-config",
+        expectedVersion: "0.5.0",
+        expectedSerializer: "raw",
+        extraChecks: () => {},
+      },
+    ])(
+      "$label tool manifest is valid",
+      ({ writeFn, toolName, expectedVersion, expectedSerializer, extraChecks }) => {
+        const toolsDir = path.join(projectDir, ".dojops", "tools");
+        writeFn(toolsDir);
 
-      const manifestPath = path.join(toolsDir, "traefik-config", "tool.yaml");
-      const raw = yaml.load(fs.readFileSync(manifestPath, "utf-8"));
-      const result = validateManifest(raw);
+        const manifestPath = path.join(toolsDir, toolName, "tool.yaml");
+        const raw = yaml.load(fs.readFileSync(manifestPath, "utf-8"));
+        const result = validateManifest(raw);
 
-      expect(result.valid).toBe(true);
-      expect(result.manifest!.name).toBe("traefik-config");
-      expect(result.manifest!.version).toBe("1.0.0");
-      expect(result.manifest!.files[0].serializer).toBe("yaml");
-      expect(result.manifest!.tags).toContain("traefik");
-      expect(result.manifest!.generator.updateMode).toBe(true);
-    });
-
-    it("Redis tool manifest is valid", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeRedisTool(toolsDir);
-
-      const manifestPath = path.join(toolsDir, "redis-config", "tool.yaml");
-      const raw = yaml.load(fs.readFileSync(manifestPath, "utf-8"));
-      const result = validateManifest(raw);
-
-      expect(result.valid).toBe(true);
-      expect(result.manifest!.name).toBe("redis-config");
-      expect(result.manifest!.files[0].serializer).toBe("raw");
-    });
+        expect(result.valid).toBe(true);
+        expect(result.manifest!.name).toBe(toolName);
+        expect(result.manifest!.version).toBe(expectedVersion);
+        expect(result.manifest!.files[0].serializer).toBe(expectedSerializer);
+        extraChecks(result.manifest);
+      },
+    );
   });
 
   // ── 2. Tool Discovery ──
 
   describe("Step 2: Tool Discovery", () => {
-    it("discovers Traefik tool from project .dojops/tools/", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
+    it.each([
+      {
+        label: "Traefik tool from project .dojops/tools/",
+        writeFn: writeTraefikTool,
+        getToolsDir: (dirs: { projectDir: string }) =>
+          path.join(dirs.projectDir, ".dojops", "tools"),
+        expectedName: "traefik-config",
+        expectedLocation: "project",
+        extraChecks: (tool: ReturnType<typeof discoverTools>[0]) => {
+          expect(tool.source.type).toBe("custom");
+          expect(tool.source.toolVersion).toBe("1.0.0");
+          expect(tool.source.toolHash).toMatch(/^[a-f0-9]{64}$/);
+        },
+      },
+      {
+        label: "Redis tool from global ~/.dojops/tools/",
+        writeFn: writeRedisTool,
+        getToolsDir: (dirs: { tmpDir: string }) => path.join(dirs.tmpDir, ".dojops", "tools"),
+        expectedName: "redis-config",
+        expectedLocation: "global",
+        extraChecks: () => {},
+      },
+    ])(
+      "discovers $label",
+      ({ writeFn, getToolsDir, expectedName, expectedLocation, extraChecks }) => {
+        const toolsDir = getToolsDir({ projectDir, tmpDir });
+        writeFn(toolsDir);
 
-      const tools = discoverTools(projectDir);
-      expect(tools).toHaveLength(1);
-      expect(tools[0].manifest.name).toBe("traefik-config");
-      expect(tools[0].source.type).toBe("custom");
-      expect(tools[0].source.location).toBe("project");
-      expect(tools[0].source.toolVersion).toBe("1.0.0");
-      expect(tools[0].source.toolHash).toMatch(/^[a-f0-9]{64}$/);
-    });
-
-    it("discovers Redis tool from global ~/.dojops/tools/", () => {
-      const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-      writeRedisTool(globalToolsDir);
-
-      const tools = discoverTools(projectDir);
-      expect(tools).toHaveLength(1);
-      expect(tools[0].manifest.name).toBe("redis-config");
-      expect(tools[0].source.location).toBe("global");
-    });
+        const tools = discoverTools(projectDir);
+        expect(tools).toHaveLength(1);
+        expect(tools[0].manifest.name).toBe(expectedName);
+        expect(tools[0].source.location).toBe(expectedLocation);
+        extraChecks(tools[0]);
+      },
+    );
 
     it("discovers both tools (project + global), project overrides global", () => {
-      const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-      writeRedisTool(globalToolsDir);
-
-      const projectToolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(projectToolsDir);
+      writeRedisTool(path.join(tmpDir, ".dojops", "tools"));
+      writeTraefikTool(path.join(projectDir, ".dojops", "tools"));
 
       const tools = discoverTools(projectDir);
       expect(tools).toHaveLength(2);
@@ -238,8 +313,7 @@ describe("External Tool Integration: Full Lifecycle", () => {
     });
 
     it("project tool overrides global tool with same name", () => {
-      const globalToolsDir = path.join(tmpDir, ".dojops", "tools");
-      writeTraefikTool(globalToolsDir);
+      writeTraefikTool(path.join(tmpDir, ".dojops", "tools"));
 
       // Create project version with bumped version
       const projectToolsDir = path.join(projectDir, ".dojops", "tools");
@@ -272,63 +346,48 @@ describe("External Tool Integration: Full Lifecycle", () => {
   // ── 3. JSON Schema → Zod Validation ──
 
   describe("Step 3: Input Schema Validation", () => {
-    it("validates Traefik input correctly", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
-      const provider = createMockProvider();
-
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-      );
-
-      // Valid input
-      expect(
-        tool.validate({
+    it.each([
+      {
+        label: "valid input",
+        input: {
           serviceName: "web-api",
           port: 3000,
           description: "Route traffic to web API",
           outputPath: "/tmp/out",
-        }).valid,
-      ).toBe(true);
-
-      // Valid with optional field
-      expect(
-        tool.validate({
+        },
+        expectedValid: true,
+      },
+      {
+        label: "valid with optional field",
+        input: {
           serviceName: "web-api",
           port: 3000,
           description: "test",
           outputPath: "/tmp",
           enableDashboard: true,
-        }).valid,
-      ).toBe(true);
+        },
+        expectedValid: true,
+      },
+      {
+        label: "missing required field",
+        input: { serviceName: "web-api", port: 3000 },
+        expectedValid: false,
+      },
+      {
+        label: "serviceName minLength violation",
+        input: { serviceName: "", port: 3000, description: "test", outputPath: "/tmp" },
+        expectedValid: false,
+      },
+      {
+        label: "port out of range",
+        input: { serviceName: "web", port: 99999, description: "test", outputPath: "/tmp" },
+        expectedValid: false,
+      },
+    ])("validates Traefik input: $label", ({ input, expectedValid }) => {
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
+      const tool = createCustomTool(entry, createMockProvider());
 
-      // Missing required field
-      expect(tool.validate({ serviceName: "web-api", port: 3000 }).valid).toBe(false);
-
-      // serviceName minLength violation
-      expect(
-        tool.validate({
-          serviceName: "",
-          port: 3000,
-          description: "test",
-          outputPath: "/tmp",
-        }).valid,
-      ).toBe(false);
-
-      // Port out of range
-      expect(
-        tool.validate({
-          serviceName: "web",
-          port: 99999,
-          description: "test",
-          outputPath: "/tmp",
-        }).valid,
-      ).toBe(false);
+      expect(tool.validate(input).valid).toBe(expectedValid);
     });
   });
 
@@ -364,17 +423,8 @@ describe("External Tool Integration: Full Lifecycle", () => {
         parsed: traefikConfig,
       });
 
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
-
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-      );
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
+      const tool = createCustomTool(entry, provider);
 
       const result = await tool.generate({
         serviceName: "web-api",
@@ -410,17 +460,8 @@ save 300 10
         parsed: undefined, // raw string, no structured output
       });
 
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeRedisTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
-
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-      );
+      const entry = setupAndDiscoverTool(projectDir, writeRedisTool);
+      const tool = createCustomTool(entry, provider);
 
       const result = await tool.generate({
         maxMemory: "256mb",
@@ -447,22 +488,10 @@ save 300 10
       };
 
       const provider = createMockProvider({ parsed: traefikConfig });
-
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
+      const tool = createAnchoredCustomTool(entry, provider);
 
       const outputDir = "output";
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-        undefined,
-        entry.toolDir,
-      );
-
       const result = await tool.execute({
         serviceName: "api",
         port: 8080,
@@ -489,26 +518,11 @@ save 300 10
 
     it("Redis tool writes raw config to disk", async () => {
       const redisConf = "bind 0.0.0.0\nport 6380\nmaxmemory 128mb\n";
-      const provider = createMockProvider({
-        content: redisConf,
-        parsed: undefined,
-      });
-
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeRedisTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
+      const provider = createMockProvider({ content: redisConf, parsed: undefined });
+      const entry = setupAndDiscoverTool(projectDir, writeRedisTool);
+      const tool = createAnchoredCustomTool(entry, provider);
 
       const outputDir = "redis-output";
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-        undefined,
-        entry.toolDir,
-      );
-
       const result = await tool.execute({
         maxMemory: "128mb",
         port: 6380,
@@ -527,10 +541,7 @@ save 300 10
       const provider = createMockProvider({
         parsed: { entryPoints: { web: { address: ":443" } } },
       });
-
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
 
       const outputDir = "output";
       // Create existing file under toolDir since resolveFilePath anchors to it
@@ -539,15 +550,7 @@ save 300 10
       const filePath = path.join(absOutputDir, "traefik.yaml");
       fs.writeFileSync(filePath, "original: content\n", "utf-8");
 
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-        undefined,
-        entry.toolDir,
-      );
+      const tool = createAnchoredCustomTool(entry, provider);
 
       const result = await tool.execute({
         serviceName: "api",
@@ -575,17 +578,18 @@ save 300 10
   // ── 6. ToolRegistry Integration ──
 
   describe("Step 6: ToolRegistry Integration", () => {
-    it("ToolRegistry combines built-in + custom tools", () => {
+    /** Write both tools and return discovered entries + mock provider */
+    function setupBothTools() {
       const toolsDir = path.join(projectDir, ".dojops", "tools");
       writeTraefikTool(toolsDir);
       writeRedisTool(toolsDir);
-
       const entries = discoverTools(projectDir);
       const provider = createMockProvider();
+      return { entries, provider, customTools: entriesToCustomTools(entries, provider) };
+    }
 
-      const customTools = entries.map(
-        (e) => new CustomTool(e.manifest, provider, e.toolDir, e.source, e.inputSchemaRaw),
-      );
+    it("ToolRegistry combines built-in + custom tools", () => {
+      const { customTools } = setupBothTools();
 
       // Mock some built-in tools
       const mockBuiltIns = [
@@ -612,16 +616,10 @@ save 300 10
     });
 
     it("getToolMetadata returns correct metadata for custom tools", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-
-      const entries = discoverTools(projectDir);
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
       const provider = createMockProvider();
-      const customTools = entries.map(
-        (e) => new CustomTool(e.manifest, provider, e.toolDir, e.source, e.inputSchemaRaw),
-      );
 
-      const registry = new ToolRegistry([], customTools);
+      const registry = new ToolRegistry([], [createCustomTool(entry, provider)]);
       const meta = registry.getToolMetadata("traefik-config");
 
       expect(meta).toBeDefined();
@@ -633,27 +631,13 @@ save 300 10
     });
 
     it("systemPromptHash is stable and unique per tool", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      writeRedisTool(toolsDir);
-
-      const entries = discoverTools(projectDir);
-      const provider = createMockProvider();
-      const tools = entries.map(
-        (e) => new CustomTool(e.manifest, provider, e.toolDir, e.source, e.inputSchemaRaw),
-      );
+      const { entries, provider, customTools: tools } = setupBothTools();
 
       // Different tools have different hashes
       expect(tools[0].systemPromptHash).not.toBe(tools[1].systemPromptHash);
 
       // Same tool has stable hash
-      const tool2 = new CustomTool(
-        entries[0].manifest,
-        provider,
-        entries[0].toolDir,
-        entries[0].source,
-        entries[0].inputSchemaRaw,
-      );
+      const tool2 = createCustomTool(entries[0], provider);
       expect(tools[0].systemPromptHash).toBe(tool2.systemPromptHash);
     });
   });
@@ -661,49 +645,35 @@ save 300 10
   // ── 7. Policy Filtering ──
 
   describe("Step 7: Policy Filtering", () => {
-    it("blockedTools prevents specific tools", () => {
-      const dojopsDir = path.join(projectDir, ".dojops");
-      fs.mkdirSync(dojopsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dojopsDir, "policy.yaml"),
-        yaml.dump({ blockedTools: ["redis-config"] }),
-        "utf-8",
-      );
-
+    it.each([
+      {
+        label: "blockedTools prevents specific tools",
+        policyContent: { blockedTools: ["redis-config"] },
+        expectations: [
+          { tool: "traefik-config", allowed: true },
+          { tool: "redis-config", allowed: false },
+        ],
+      },
+      {
+        label: "allowedTools restricts to only listed tools",
+        policyContent: { allowedTools: ["traefik-config"] },
+        expectations: [
+          { tool: "traefik-config", allowed: true },
+          { tool: "redis-config", allowed: false },
+          { tool: "any-other-tool", allowed: false },
+        ],
+      },
+      {
+        label: "blockedTools takes precedence over allowedTools",
+        policyContent: { allowedTools: ["traefik-config"], blockedTools: ["traefik-config"] },
+        expectations: [{ tool: "traefik-config", allowed: false }],
+      },
+    ])("$label", ({ policyContent, expectations }) => {
+      writePolicy(projectDir, policyContent);
       const policy = loadToolPolicy(projectDir);
-      expect(isToolAllowed("traefik-config", policy)).toBe(true);
-      expect(isToolAllowed("redis-config", policy)).toBe(false);
-    });
-
-    it("allowedTools restricts to only listed tools", () => {
-      const dojopsDir = path.join(projectDir, ".dojops");
-      fs.mkdirSync(dojopsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dojopsDir, "policy.yaml"),
-        yaml.dump({ allowedTools: ["traefik-config"] }),
-        "utf-8",
-      );
-
-      const policy = loadToolPolicy(projectDir);
-      expect(isToolAllowed("traefik-config", policy)).toBe(true);
-      expect(isToolAllowed("redis-config", policy)).toBe(false);
-      expect(isToolAllowed("any-other-tool", policy)).toBe(false);
-    });
-
-    it("blockedTools takes precedence over allowedTools", () => {
-      const dojopsDir = path.join(projectDir, ".dojops");
-      fs.mkdirSync(dojopsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dojopsDir, "policy.yaml"),
-        yaml.dump({
-          allowedTools: ["traefik-config"],
-          blockedTools: ["traefik-config"],
-        }),
-        "utf-8",
-      );
-
-      const policy = loadToolPolicy(projectDir);
-      expect(isToolAllowed("traefik-config", policy)).toBe(false);
+      for (const { tool, allowed } of expectations) {
+        expect(isToolAllowed(tool, policy)).toBe(allowed);
+      }
     });
   });
 
@@ -751,34 +721,25 @@ save 300 10
       expect(tools[0].manifest.name).toBe("legacy-tool");
     });
 
-    it("legacy policy fields (allowedPlugins/blockedPlugins) still work", () => {
-      const dojopsDir = path.join(projectDir, ".dojops");
-      fs.mkdirSync(dojopsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dojopsDir, "policy.yaml"),
-        yaml.dump({ allowedPlugins: ["traefik-config"], blockedPlugins: ["redis-config"] }),
-        "utf-8",
-      );
-
-      const policy = loadToolPolicy(projectDir);
-      expect(policy.allowedTools).toEqual(["traefik-config"]);
-      expect(policy.blockedTools).toEqual(["redis-config"]);
-    });
-
-    it("new policy fields take precedence over legacy", () => {
-      const dojopsDir = path.join(projectDir, ".dojops");
-      fs.mkdirSync(dojopsDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(dojopsDir, "policy.yaml"),
-        yaml.dump({
-          allowedTools: ["new-tool"],
-          allowedPlugins: ["old-tool"],
-        }),
-        "utf-8",
-      );
-
-      const policy = loadToolPolicy(projectDir);
-      expect(policy.allowedTools).toEqual(["new-tool"]);
+    it.each([
+      {
+        label: "legacy policy fields (allowedPlugins/blockedPlugins) still work",
+        policyContent: { allowedPlugins: ["traefik-config"], blockedPlugins: ["redis-config"] },
+        check: (policy: ReturnType<typeof loadToolPolicy>) => {
+          expect(policy.allowedTools).toEqual(["traefik-config"]);
+          expect(policy.blockedTools).toEqual(["redis-config"]);
+        },
+      },
+      {
+        label: "new policy fields take precedence over legacy",
+        policyContent: { allowedTools: ["new-tool"], allowedPlugins: ["old-tool"] },
+        check: (policy: ReturnType<typeof loadToolPolicy>) => {
+          expect(policy.allowedTools).toEqual(["new-tool"]);
+        },
+      },
+    ])("$label", ({ policyContent, check }) => {
+      writePolicy(projectDir, policyContent);
+      check(loadToolPolicy(projectDir));
     });
   });
 
@@ -789,8 +750,7 @@ save 300 10
       const toolsDir = path.join(projectDir, ".dojops", "tools");
       writeTraefikTool(toolsDir);
 
-      const before = discoverTools(projectDir);
-      const hashBefore = before[0].source.toolHash;
+      const hashBefore = discoverTools(projectDir)[0].source.toolHash;
 
       // Modify the system prompt
       const manifestPath = path.join(toolsDir, "traefik-config", "tool.yaml");
@@ -798,15 +758,13 @@ save 300 10
       (content.generator as Record<string, unknown>).systemPrompt = "Modified system prompt.";
       fs.writeFileSync(manifestPath, yaml.dump(content), "utf-8");
 
-      const after = discoverTools(projectDir);
-      const hashAfter = after[0].source.toolHash;
+      const hashAfter = discoverTools(projectDir)[0].source.toolHash;
 
       expect(hashBefore).not.toBe(hashAfter);
     });
 
     it("hash is stable when nothing changes", () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
+      writeTraefikTool(path.join(projectDir, ".dojops", "tools"));
 
       const first = discoverTools(projectDir);
       const second = discoverTools(projectDir);
@@ -819,18 +777,8 @@ save 300 10
 
   describe("Step 10: Verification", () => {
     it("verify passes for tools without verification command", async () => {
-      const toolsDir = path.join(projectDir, ".dojops", "tools");
-      writeTraefikTool(toolsDir);
-      const entry = discoverTools(projectDir)[0];
-      const provider = createMockProvider();
-
-      const tool = new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-      );
+      const entry = setupAndDiscoverTool(projectDir, writeTraefikTool);
+      const tool = createCustomTool(entry, createMockProvider());
 
       const result = await tool.verify({});
       expect(result.passed).toBe(true);

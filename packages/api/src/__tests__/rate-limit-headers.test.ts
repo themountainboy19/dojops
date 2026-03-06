@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Request, Response } from "express";
 import request from "supertest";
-import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
-import { createRateLimiter, createApp, AppDependencies } from "../app";
-import { HistoryStore } from "../store";
+import { createRateLimiter, createApp } from "../app";
+import { createTestDeps } from "./test-helpers";
 
 function mockReq(overrides?: Partial<Request>): Request {
   return {
@@ -33,38 +31,6 @@ function mockRes(): Response & { _headers: Record<string, string>; _status: numb
     },
   };
   return res as unknown as Response & { _headers: Record<string, string>; _status: number };
-}
-
-function createMockProvider(): LLMProvider {
-  return {
-    name: "mock",
-    generate: vi.fn().mockResolvedValue({
-      content: "Mock response",
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-    } satisfies LLMResponse),
-  };
-}
-
-function createMockTool(): DevOpsTool {
-  return {
-    name: "mock-tool",
-    description: "A mock tool",
-    inputSchema: { safeParse: () => ({ success: true, data: {} }) } as never,
-    validate: () => ({ valid: true }),
-    generate: vi.fn().mockResolvedValue({ success: true, data: { yaml: "test: true" } }),
-  };
-}
-
-function createTestDeps(): AppDependencies {
-  const provider = createMockProvider();
-  return {
-    provider,
-    tools: [createMockTool()],
-    router: new AgentRouter(provider),
-    debugger: new CIDebugger(provider),
-    diffAnalyzer: new InfraDiffAnalyzer(provider),
-    store: new HistoryStore(),
-  };
 }
 
 describe("createRateLimiter RFC headers (H-4)", () => {

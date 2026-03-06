@@ -138,6 +138,21 @@ function parseIgnoreLine(
   return currentEntry;
 }
 
+function initSection(detected: SectionType, policy: ScanPolicy): void {
+  if (detected === "thresholds") policy.thresholds = {};
+  if (detected === "ignore") policy.ignore = [];
+}
+
+function finalizeIgnoreEntry(
+  entry: Partial<ScanPolicyIgnoreEntry> | null,
+  section: SectionType,
+  policy: ScanPolicy,
+): void {
+  if (entry?.id && section === "ignore") {
+    policy.ignore!.push({ id: entry.id, reason: entry.reason ?? "" });
+  }
+}
+
 function parseScanPolicyYaml(content: string): ScanPolicy {
   const policy: ScanPolicy = {};
   let section: SectionType = "none";
@@ -149,8 +164,7 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
 
     const detected = detectSection(stripped);
     if (detected !== null) {
-      if (detected === "thresholds") policy.thresholds = {};
-      if (detected === "ignore") policy.ignore = [];
+      initSection(detected, policy);
       section = detected;
       continue;
     }
@@ -162,9 +176,6 @@ function parseScanPolicyYaml(content: string): ScanPolicy {
     }
   }
 
-  if (currentIgnoreEntry?.id && section === "ignore") {
-    policy.ignore!.push({ id: currentIgnoreEntry.id, reason: currentIgnoreEntry.reason ?? "" });
-  }
-
+  finalizeIgnoreEntry(currentIgnoreEntry, section, policy);
   return policy;
 }
