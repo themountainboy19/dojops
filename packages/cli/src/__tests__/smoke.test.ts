@@ -18,7 +18,7 @@ function run(
   };
 
   try {
-    const stdout = execSync(`node ${CLI_BIN} ${args}`, execOpts);
+    const stdout = execSync(`node ${CLI_BIN} ${args}`, execOpts); // NOSONAR - test helper with controlled input
     return { stdout, exitCode: 0 };
   } catch (e: unknown) {
     const err = e as { stdout?: string; status?: number };

@@ -28,77 +28,78 @@ export interface ProviderOptions {
   ollamaTlsRejectUnauthorized?: boolean;
 }
 
+/** Resolve API key, returning it or null when missing and allowMissing is true. Throws on missing + !allowMissing. */
+function resolveApiKey(
+  providerName: string,
+  envVar: string,
+  apiKey: string | undefined,
+  allowMissing: boolean,
+): string | null {
+  const key = apiKey ?? process.env[envVar];
+  if (key) return key;
+  if (allowMissing) {
+    console.warn(`[dojops] ${providerName} API key not configured — using NoopProvider`);
+    return null;
+  }
+  throw new Error(
+    `${providerName} API key is required. Set ${envVar} or run: dojops login --token <KEY> --provider ${providerName.toLowerCase()}`,
+  );
+}
+
+/** Provider factory dispatch map — keyed constructors for each supported provider. */
+function buildKeyedProvider(
+  providerName: string,
+  model: string | undefined,
+  options: ProviderOptions | undefined,
+  allowMissing: boolean,
+): LLMProvider {
+  if (providerName === "ollama") {
+    const baseUrl = options?.ollamaHost ?? process.env.OLLAMA_HOST ?? undefined;
+    return withRetry(
+      new OllamaProvider(baseUrl, model, undefined, options?.ollamaTlsRejectUnauthorized),
+    );
+  }
+
+  if (providerName === "github-copilot") {
+    return withRetry(new GitHubCopilotProvider(model));
+  }
+
+  const providerConfigs: Record<
+    string,
+    { envVar: string; ctor: new (key: string, model?: string) => LLMProvider }
+  > = {
+    anthropic: { envVar: "ANTHROPIC_API_KEY", ctor: AnthropicProvider },
+    deepseek: { envVar: "DEEPSEEK_API_KEY", ctor: DeepSeekProvider },
+    gemini: { envVar: "GEMINI_API_KEY", ctor: GeminiProvider },
+  };
+
+  const config = providerConfigs[providerName];
+  const envVar = config?.envVar ?? "OPENAI_API_KEY";
+  const Ctor = config?.ctor ?? OpenAIProvider;
+  const displayNames: Record<string, string> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    deepseek: "DeepSeek",
+    gemini: "Gemini",
+  };
+  const displayName =
+    displayNames[providerName] ?? providerName.charAt(0).toUpperCase() + providerName.slice(1);
+
+  const key = resolveApiKey(displayName, envVar, options?.apiKey, allowMissing);
+  if (!key) {
+    return new NoopProvider(
+      `${displayName} API key not configured. Set ${envVar} or run: dojops auth login --provider ${providerName.toLowerCase()}`,
+    );
+  }
+  return withRetry(new Ctor(key, model));
+}
+
 export function createProvider(options?: ProviderOptions): LLMProvider {
   const providerName = options?.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
   const model = options?.model ?? process.env.DOJOPS_MODEL;
-
   const allowMissing = options?.allowMissing ?? false;
 
-  if (providerName === "ollama") {
-    const baseUrl = options?.ollamaHost ?? process.env.OLLAMA_HOST ?? undefined;
-    const rejectUnauthorized = options?.ollamaTlsRejectUnauthorized;
-    return withRetry(new OllamaProvider(baseUrl, model, undefined, rejectUnauthorized));
-  } else if (providerName === "anthropic") {
-    const key = options?.apiKey ?? process.env.ANTHROPIC_API_KEY;
-    if (!key) {
-      if (allowMissing) {
-        console.warn("[dojops] Anthropic API key not configured — using NoopProvider");
-        return new NoopProvider(
-          `Anthropic API key not configured. Set ANTHROPIC_API_KEY or run: dojops auth login --provider anthropic`,
-        );
-      }
-      throw new Error(
-        "Anthropic API key is required. Set ANTHROPIC_API_KEY or run: dojops login --token <KEY> --provider anthropic",
-      );
-    }
-    return withRetry(new AnthropicProvider(key, model));
-  } else if (providerName === "deepseek") {
-    const key = options?.apiKey ?? process.env.DEEPSEEK_API_KEY;
-    if (!key) {
-      if (allowMissing) {
-        console.warn("[dojops] DeepSeek API key not configured — using NoopProvider");
-        return new NoopProvider(
-          `DeepSeek API key not configured. Set DEEPSEEK_API_KEY or run: dojops auth login --provider deepseek`,
-        );
-      }
-      throw new Error(
-        "DeepSeek API key is required. Set DEEPSEEK_API_KEY or run: dojops login --token <KEY> --provider deepseek",
-      );
-    }
-    return withRetry(new DeepSeekProvider(key, model));
-  } else if (providerName === "gemini") {
-    const key = options?.apiKey ?? process.env.GEMINI_API_KEY;
-    if (!key) {
-      if (allowMissing) {
-        console.warn("[dojops] Gemini API key not configured — using NoopProvider");
-        return new NoopProvider(
-          `Gemini API key not configured. Set GEMINI_API_KEY or run: dojops auth login --provider gemini`,
-        );
-      }
-      throw new Error(
-        "Gemini API key is required. Set GEMINI_API_KEY or run: dojops login --token <KEY> --provider gemini",
-      );
-    }
-    return withRetry(new GeminiProvider(key, model));
-  } else if (providerName === "github-copilot") {
-    // No API key needed — auth managed via OAuth Device Flow
-    // getValidCopilotToken() handles JWT refresh internally
-    return withRetry(new GitHubCopilotProvider(model));
-  } else {
-    const key = options?.apiKey ?? process.env.OPENAI_API_KEY;
-    if (!key) {
-      if (allowMissing) {
-        console.warn("[dojops] OpenAI API key not configured — using NoopProvider");
-        return new NoopProvider(
-          `OpenAI API key not configured. Set OPENAI_API_KEY or run: dojops auth login --provider openai`,
-        );
-      }
-      throw new Error(
-        "OpenAI API key is required. Set OPENAI_API_KEY or run: dojops login --token <KEY> --provider openai",
-      );
-    }
-    return withRetry(new OpenAIProvider(key, model));
-  }
+  return buildKeyedProvider(providerName, model, options, allowMissing);
 }
 
 /** Duck-typed DocProvider for v2 .dops modules (avoids hard import on @dojops/context) */

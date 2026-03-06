@@ -133,7 +133,7 @@ export function resolveFilePath(templatePath: string, input: Record<string, unkn
   }
 
   // Check for unresolved variables
-  const unresolved = /\{[^}]+\}/.exec(resolved);
+  const unresolved = /\{[^}]+\}/.exec(resolved); // NOSONAR
   if (unresolved) {
     throw new Error(`Unresolved variable in file path: ${unresolved[0]}`);
   }
@@ -207,6 +207,37 @@ function matchGlob(filename: string, pattern: string): boolean {
   return filename === pattern;
 }
 
+/** Expand {var} placeholders in a scope pattern and normalize to forward slashes. */
+function expandScopePattern(pattern: string, input: Record<string, unknown>): string {
+  let expanded = pattern;
+  for (const [key, value] of Object.entries(input)) {
+    if (typeof value === "string") {
+      expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
+    }
+  }
+  return path.normalize(expanded).replaceAll("\\", "/");
+}
+
+/** Test if a normalized path matches a single expanded scope pattern. */
+function matchesSinglePattern(normalizedResolved: string, normalizedExpanded: string): boolean {
+  if (normalizedResolved === normalizedExpanded) return true;
+
+  if (normalizedExpanded.endsWith("/**")) {
+    const prefix = normalizedExpanded.slice(0, -3);
+    return normalizedResolved.startsWith(prefix + "/") || normalizedResolved === prefix;
+  }
+
+  if (normalizedExpanded.includes("*")) {
+    const regexStr =
+      "^" +
+      normalizedExpanded.replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll("*", "[^/]*") +
+      "$"; // NOSONAR - escape-for-regex pattern
+    return new RegExp(regexStr).test(normalizedResolved);
+  }
+
+  return false;
+}
+
 /**
  * Check if a resolved file path matches at least one scope.write pattern.
  * Scope patterns use the same `{var}` syntax as file paths — variables
@@ -219,36 +250,7 @@ export function matchesScopePattern(
   input: Record<string, unknown>,
 ): boolean {
   const normalizedResolved = path.normalize(resolvedPath).replaceAll("\\", "/");
-  for (const pattern of scopePatterns) {
-    // Expand {var} placeholders in the scope pattern
-    let expanded = pattern;
-    for (const [key, value] of Object.entries(input)) {
-      if (typeof value === "string") {
-        expanded = expanded.replace(new RegExp(`\\{${key}\\}`, "g"), value); // NOSONAR - dynamic regex
-      }
-    }
-    const normalizedExpanded = path.normalize(expanded).replaceAll("\\", "/");
-
-    // Exact match
-    if (normalizedResolved === normalizedExpanded) return true;
-
-    // ** recursive directory match (e.g. "k8s/**")
-    if (normalizedExpanded.endsWith("/**")) {
-      const prefix = normalizedExpanded.slice(0, -3);
-      if (normalizedResolved.startsWith(prefix + "/") || normalizedResolved === prefix) return true;
-      continue;
-    }
-
-    // * wildcard within pattern (e.g. "Dockerfile.*", "*.tf")
-    if (normalizedExpanded.includes("*")) {
-      const regexStr =
-        "^" +
-        normalizedExpanded
-          .replaceAll(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
-          .replaceAll("*", "[^/]*") +
-        "$"; // NOSONAR - escape-for-regex pattern
-      if (new RegExp(regexStr).test(normalizedResolved)) return true;
-    }
-  }
-  return false;
+  return scopePatterns.some((pattern) =>
+    matchesSinglePattern(normalizedResolved, expandScopePattern(pattern, input)),
+  );
 }

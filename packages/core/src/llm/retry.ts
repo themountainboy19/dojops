@@ -53,22 +53,17 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
     async generate(request: LLMRequest): Promise<LLMResponse> {
       let lastError: unknown;
       let schemaAttempt = 0;
+      let currentRequest = request;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          return await provider.generate(request);
+          return await provider.generate(currentRequest);
         } catch (err) {
           lastError = err;
 
-          // Schema validation retry: re-send with stricter instructions
-          // Schema retries do NOT count against the network retry budget.
-          // The schemaAttempt counter prevents infinite loops (capped at schemaRetries).
-          if (request.schema && isSchemaValidationError(err) && schemaAttempt < schemaRetries) {
+          if (handleSchemaRetry(currentRequest, err)) {
             schemaAttempt++;
-            const validationErr = err as JsonValidationError;
-            const stricterSystem =
-              `${request.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
-            request = { ...request, system: stricterSystem };
+            currentRequest = buildStricterRequest(currentRequest, err as JsonValidationError);
             attempt--; // Don't count schema retry against network budget
             await sleep(500);
             continue;
@@ -80,17 +75,32 @@ export function withRetry(provider: LLMProvider, options?: RetryOptions): LLMPro
             await sleep(delay);
             continue;
           }
-          // Redact any API keys from error messages before propagating
-          if (err instanceof Error) {
-            const redacted = redactSecrets(err.message);
-            if (redacted !== err.message) {
-              throw new Error(redacted, { cause: err });
-            }
-          }
-          throw err;
+
+          throwRedactedError(err);
         }
       }
       throw lastError;
+
+      function handleSchemaRetry(req: LLMRequest, err: unknown): boolean {
+        return !!req.schema && isSchemaValidationError(err) && schemaAttempt < schemaRetries;
+      }
+
+      function buildStricterRequest(
+        req: LLMRequest,
+        validationErr: JsonValidationError,
+      ): LLMRequest {
+        const stricterSystem =
+          `${req.system ?? ""}\n\nIMPORTANT: Your previous response failed JSON schema validation: ${validationErr.message}. You MUST respond with valid JSON that matches the required schema exactly. No markdown fences, no extra text outside JSON.`.trim();
+        return { ...req, system: stricterSystem };
+      }
+
+      function throwRedactedError(err: unknown): never {
+        if (err instanceof Error) {
+          const redacted = redactSecrets(err.message);
+          if (redacted !== err.message) throw new Error(redacted, { cause: err });
+        }
+        throw err;
+      }
     },
 
     listModels: provider.listModels ? () => provider.listModels!() : undefined,

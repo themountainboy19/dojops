@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { withRetry } from "../../llm/retry";
+import { withRetry, type RetryOptions } from "../../llm/retry";
 import { LLMProvider, LLMRequest, LLMResponse } from "../../llm/provider";
 import { JsonValidationError } from "../../llm/json-validator";
 
@@ -39,6 +39,59 @@ async function flush(): Promise<void> {
   await vi.runAllTimersAsync();
 }
 
+/** Default retry options for transient-error tests. */
+const TRANSIENT_RETRY_OPTS: RetryOptions = {
+  maxRetries: 3,
+  initialDelayMs: 1000,
+  maxDelayMs: 10000,
+};
+
+/**
+ * Create a retried provider from scripted outcomes.
+ * Returns the spy and the retried provider for assertions.
+ */
+function setupRetry(
+  outcomes: Array<{ resolve: LLMResponse } | { reject: Error | string }>,
+  opts?: RetryOptions,
+): { generateSpy: ReturnType<typeof vi.fn>; retried: LLMProvider } {
+  const generate = scriptedGenerate(outcomes);
+  const generateSpy = vi.fn(generate);
+  const provider = mockProvider(generateSpy);
+  const retried = withRetry(provider, opts);
+  return { generateSpy, retried };
+}
+
+/**
+ * Test that a transient error is retried and succeeds on the 2nd attempt.
+ * Covers the common pattern: fail once with errorMsg, then succeed.
+ */
+async function expectTransientRetrySuccess(errorMsg: string): Promise<void> {
+  const { generateSpy, retried } = setupRetry(
+    [{ reject: new Error(errorMsg) }, { resolve: OK_RESPONSE }],
+    TRANSIENT_RETRY_OPTS,
+  );
+
+  const promise = retried.generate({ prompt: "hello" });
+  await flush();
+
+  const result = await promise;
+  expect(result).toEqual(OK_RESPONSE);
+  expect(generateSpy).toHaveBeenCalledTimes(2);
+}
+
+/**
+ * Test that a non-retryable error is NOT retried.
+ */
+async function expectNoRetry(errorMsg: string): Promise<void> {
+  const { generateSpy, retried } = setupRetry([{ reject: new Error(errorMsg) }], {
+    maxRetries: 3,
+    initialDelayMs: 1000,
+  });
+
+  await expect(retried.generate({ prompt: "hello" })).rejects.toThrow(errorMsg);
+  expect(generateSpy).toHaveBeenCalledTimes(1);
+}
+
 describe("withRetry()", () => {
   // Suppress PromiseRejectionHandledWarning that occurs when fake timers
   // resolve sleep() and the next generate() throws before the retry loop's
@@ -65,10 +118,10 @@ describe("withRetry()", () => {
   // 1. Succeeds on first try (no retry needed)
   // ---------------------------------------------------------------
   it("succeeds on first try without retrying", async () => {
-    const generate = scriptedGenerate([{ resolve: OK_RESPONSE }]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
+    const { generateSpy, retried } = setupRetry([{ resolve: OK_RESPONSE }], {
+      maxRetries: 3,
+      initialDelayMs: 1000,
+    });
 
     const result = await retried.generate({ prompt: "hello" });
 
@@ -80,34 +133,21 @@ describe("withRetry()", () => {
   // 2. Retries on transient error and succeeds on 2nd attempt
   // ---------------------------------------------------------------
   it("retries on transient error and succeeds on 2nd attempt", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("503 Service Unavailable") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("503 Service Unavailable");
   });
 
   // ---------------------------------------------------------------
   // 2b. Retries on transient error and succeeds on 3rd attempt
   // ---------------------------------------------------------------
   it("retries on transient error and succeeds on 3rd attempt", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("500 Internal Server Error") },
-      { reject: new Error("502 Bad Gateway") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
+    const { generateSpy, retried } = setupRetry(
+      [
+        { reject: new Error("500 Internal Server Error") },
+        { reject: new Error("502 Bad Gateway") },
+        { resolve: OK_RESPONSE },
+      ],
+      TRANSIENT_RETRY_OPTS,
+    );
 
     const promise = retried.generate({ prompt: "hello" });
     await flush();
@@ -121,14 +161,14 @@ describe("withRetry()", () => {
   // 3. Gives up after max retries and throws the last error
   // ---------------------------------------------------------------
   it("gives up after max retries and throws the last error", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("service unavailable: first") },
-      { reject: new Error("service unavailable: second") },
-      { reject: new Error("service unavailable: final") },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 10000 });
+    const { generateSpy, retried } = setupRetry(
+      [
+        { reject: new Error("service unavailable: first") },
+        { reject: new Error("service unavailable: second") },
+        { reject: new Error("service unavailable: final") },
+      ],
+      { maxRetries: 2, initialDelayMs: 1000, maxDelayMs: 10000 },
+    );
 
     const promise = retried.generate({ prompt: "hello" });
     await flush();
@@ -142,159 +182,63 @@ describe("withRetry()", () => {
   // 4. Does NOT retry non-retryable errors (401 Unauthorized)
   // ---------------------------------------------------------------
   it("does not retry 401 Unauthorized errors", async () => {
-    const generate = scriptedGenerate([{ reject: new Error("401 Unauthorized: Invalid API key") }]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
-
-    await expect(retried.generate({ prompt: "hello" })).rejects.toThrow("401 Unauthorized");
-    expect(generateSpy).toHaveBeenCalledTimes(1);
+    await expectNoRetry("401 Unauthorized: Invalid API key");
   });
 
   // ---------------------------------------------------------------
   // 4b. Does NOT retry non-retryable errors (400 Bad Request)
   // ---------------------------------------------------------------
   it("does not retry 400 Bad Request errors", async () => {
-    const generate = scriptedGenerate([{ reject: new Error("400 Bad Request: Invalid prompt") }]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
-
-    await expect(retried.generate({ prompt: "hello" })).rejects.toThrow("400 Bad Request");
-    expect(generateSpy).toHaveBeenCalledTimes(1);
+    await expectNoRetry("400 Bad Request: Invalid prompt");
   });
 
   // ---------------------------------------------------------------
   // 4c. Does NOT retry 403 Forbidden errors
   // ---------------------------------------------------------------
   it("does not retry 403 Forbidden errors", async () => {
-    const generate = scriptedGenerate([{ reject: new Error("403 Forbidden: Access denied") }]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
-
-    await expect(retried.generate({ prompt: "hello" })).rejects.toThrow("403 Forbidden");
-    expect(generateSpy).toHaveBeenCalledTimes(1);
+    await expectNoRetry("403 Forbidden: Access denied");
   });
 
   // ---------------------------------------------------------------
   // 5. Retries on 429 (rate limit)
   // ---------------------------------------------------------------
   it("retries on 429 rate limit errors", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("429 Too Many Requests") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("429 Too Many Requests");
   });
 
   // ---------------------------------------------------------------
   // 5b. Retries on "rate limit" message variant
   // ---------------------------------------------------------------
   it("retries on 'rate limit' text in error message", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("Rate limit exceeded, please retry later") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("Rate limit exceeded, please retry later");
   });
 
   // ---------------------------------------------------------------
   // 5c. Retries on "rate_limit" underscore variant
   // ---------------------------------------------------------------
   it("retries on 'rate_limit' underscore variant in error message", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("rate_limit_exceeded") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("rate_limit_exceeded");
   });
 
   // ---------------------------------------------------------------
   // 5d. Retries on 503 (service unavailable)
   // ---------------------------------------------------------------
   it("retries on 503 service unavailable errors", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("Service Unavailable") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("Service Unavailable");
   });
 
   // ---------------------------------------------------------------
   // 5e. Retries on "overloaded" error
   // ---------------------------------------------------------------
   it("retries on 'overloaded' errors", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("The API is overloaded, please try again") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("The API is overloaded, please try again");
   });
 
   // ---------------------------------------------------------------
   // 5f. Retries on ECONNRESET and socket hang up
   // ---------------------------------------------------------------
   it("retries on ECONNRESET errors", async () => {
-    const generate = scriptedGenerate([
-      { reject: new Error("socket hang up (ECONNRESET)") },
-      { resolve: OK_RESPONSE },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("socket hang up (ECONNRESET)");
   });
 
   // ---------------------------------------------------------------
@@ -303,19 +247,15 @@ describe("withRetry()", () => {
   it("applies exponential backoff with increasing delays", async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 
-    const generate = scriptedGenerate([
-      { reject: new Error("service unavailable: attempt 1") },
-      { reject: new Error("service unavailable: attempt 2") },
-      { reject: new Error("service unavailable: attempt 3") },
-      { reject: new Error("service unavailable: attempt 4") },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, {
-      maxRetries: 3,
-      initialDelayMs: 1000,
-      maxDelayMs: 30000,
-    });
+    const { retried } = setupRetry(
+      [
+        { reject: new Error("service unavailable: attempt 1") },
+        { reject: new Error("service unavailable: attempt 2") },
+        { reject: new Error("service unavailable: attempt 3") },
+        { reject: new Error("service unavailable: attempt 4") },
+      ],
+      { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 30000 },
+    );
 
     const promise = retried.generate({ prompt: "hello" });
     await flush();
@@ -343,21 +283,17 @@ describe("withRetry()", () => {
   it("caps delay at maxDelayMs", async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
 
-    const generate = scriptedGenerate([
-      { reject: new Error("bad gateway: a1") },
-      { reject: new Error("bad gateway: a2") },
-      { reject: new Error("bad gateway: a3") },
-      { reject: new Error("bad gateway: a4") },
-      { reject: new Error("bad gateway: a5") },
-      { reject: new Error("bad gateway: final") },
-    ]);
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, {
-      maxRetries: 5,
-      initialDelayMs: 5000,
-      maxDelayMs: 8000,
-    });
+    const { retried } = setupRetry(
+      [
+        { reject: new Error("bad gateway: a1") },
+        { reject: new Error("bad gateway: a2") },
+        { reject: new Error("bad gateway: a3") },
+        { reject: new Error("bad gateway: a4") },
+        { reject: new Error("bad gateway: a5") },
+        { reject: new Error("bad gateway: final") },
+      ],
+      { maxRetries: 5, initialDelayMs: 5000, maxDelayMs: 8000 },
+    );
 
     const promise = retried.generate({ prompt: "hello" });
     await flush();
@@ -510,9 +446,7 @@ describe("withRetry()", () => {
   // Default options work correctly
   // ---------------------------------------------------------------
   it("uses default options when none provided", async () => {
-    const generate = scriptedGenerate([{ resolve: OK_RESPONSE }]);
-    const provider = mockProvider(generate);
-    const retried = withRetry(provider);
+    const { retried } = setupRetry([{ resolve: OK_RESPONSE }]);
 
     const result = await retried.generate({ prompt: "hello" });
     expect(result).toEqual(OK_RESPONSE);
@@ -522,41 +456,13 @@ describe("withRetry()", () => {
   // Handles non-Error thrown values for retryability check
   // ---------------------------------------------------------------
   it("does not retry non-Error thrown values that are not retryable", async () => {
-    let called = false;
-    const generate = async (): Promise<LLMResponse> => {
-      if (!called) {
-        called = true;
-        throw new Error("plain string error");
-      }
-      return OK_RESPONSE;
-    };
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000 });
-
-    await expect(retried.generate({ prompt: "hello" })).rejects.toThrow("plain string error");
-    expect(generateSpy).toHaveBeenCalledTimes(1);
+    await expectNoRetry("plain string error");
   });
 
   // ---------------------------------------------------------------
   // Retries non-Error strings that contain retryable patterns
   // ---------------------------------------------------------------
   it("retries non-Error string values containing retryable patterns", async () => {
-    let callCount = 0;
-    const generate = async (): Promise<LLMResponse> => {
-      callCount++;
-      if (callCount === 1) throw new Error("503 service unavailable");
-      return OK_RESPONSE;
-    };
-    const generateSpy = vi.fn(generate);
-    const provider = mockProvider(generateSpy);
-    const retried = withRetry(provider, { maxRetries: 3, initialDelayMs: 1000, maxDelayMs: 10000 });
-
-    const promise = retried.generate({ prompt: "hello" });
-    await flush();
-
-    const result = await promise;
-    expect(result).toEqual(OK_RESPONSE);
-    expect(generateSpy).toHaveBeenCalledTimes(2);
+    await expectTransientRetrySuccess("503 service unavailable");
   });
 });

@@ -267,7 +267,7 @@ export async function installSystemTool(
     // Copy to bin directory
     const destPath = path.join(TOOLCHAIN_BIN_DIR, tool.binaryName);
     fs.copyFileSync(binarySource, destPath);
-    fs.chmodSync(destPath, 0o755);
+    fs.chmodSync(destPath, 0o755); // NOSONAR - 0o755 is standard for executable binaries (owner rwx, group/other rx)
 
     // Update registry
     const stat = fs.statSync(destPath);

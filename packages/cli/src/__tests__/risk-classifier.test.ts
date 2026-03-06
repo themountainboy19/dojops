@@ -1,74 +1,55 @@
 import { describe, it, expect } from "vitest";
 import { classifyPlanRisk } from "../risk-classifier";
 
+/** Classify a single task and assert the expected risk level. */
+function expectRisk(tool: string, description: string, expected: "LOW" | "MEDIUM" | "HIGH"): void {
+  const risk = classifyPlanRisk([{ tool, description }]);
+  expect(risk).toBe(expected);
+}
+
 describe("classifyPlanRisk", () => {
   it("returns LOW for GitHub Actions CI job", () => {
-    const risk = classifyPlanRisk([
-      { tool: "github-actions", description: "Create CI pipeline for Node.js app" },
-    ]);
-    expect(risk).toBe("LOW");
+    expectRisk("github-actions", "Create CI pipeline for Node.js app", "LOW");
   });
 
   it("returns LOW for Makefile generation", () => {
-    const risk = classifyPlanRisk([
-      { tool: "makefile", description: "Create Makefile for build automation" },
-    ]);
-    expect(risk).toBe("LOW");
+    expectRisk("makefile", "Create Makefile for build automation", "LOW");
   });
 
   it("returns LOW for Prometheus config", () => {
-    const risk = classifyPlanRisk([{ tool: "prometheus", description: "Create alerting rules" }]);
-    expect(risk).toBe("LOW");
+    expectRisk("prometheus", "Create alerting rules", "LOW");
   });
 
   it("returns MEDIUM for Dockerfile modification", () => {
-    const risk = classifyPlanRisk([
-      { tool: "dockerfile", description: "Create multi-stage Dockerfile" },
-    ]);
-    expect(risk).toBe("MEDIUM");
+    expectRisk("dockerfile", "Create multi-stage Dockerfile", "MEDIUM");
   });
 
   it("returns MEDIUM for Terraform without high-risk keywords", () => {
-    const risk = classifyPlanRisk([{ tool: "terraform", description: "Create S3 bucket" }]);
-    expect(risk).toBe("MEDIUM");
+    expectRisk("terraform", "Create S3 bucket", "MEDIUM");
   });
 
   it("returns MEDIUM for Kubernetes deployment", () => {
-    const risk = classifyPlanRisk([{ tool: "kubernetes", description: "Deploy application" }]);
-    expect(risk).toBe("MEDIUM");
+    expectRisk("kubernetes", "Deploy application", "MEDIUM");
   });
 
   it("returns HIGH for IAM policy task", () => {
-    const risk = classifyPlanRisk([
-      { tool: "terraform", description: "Create IAM policy for S3 access" },
-    ]);
-    expect(risk).toBe("HIGH");
+    expectRisk("terraform", "Create IAM policy for S3 access", "HIGH");
   });
 
   it("returns HIGH for security group modifications", () => {
-    const risk = classifyPlanRisk([
-      { tool: "terraform", description: "Update security group rules" },
-    ]);
-    expect(risk).toBe("HIGH");
+    expectRisk("terraform", "Update security group rules", "HIGH");
   });
 
   it("returns HIGH for production deployment", () => {
-    const risk = classifyPlanRisk([
-      { tool: "kubernetes", description: "Deploy to production cluster" },
-    ]);
-    expect(risk).toBe("HIGH");
+    expectRisk("kubernetes", "Deploy to production cluster", "HIGH");
   });
 
   it("returns HIGH for secret management", () => {
-    const risk = classifyPlanRisk([{ tool: "ansible", description: "Configure secret rotation" }]);
-    expect(risk).toBe("HIGH");
+    expectRisk("ansible", "Configure secret rotation", "HIGH");
   });
 
   it("returns HIGH for RBAC configuration", () => {
-    const risk = classifyPlanRisk([
-      { tool: "kubernetes", description: "Set up RBAC for service accounts" },
-    ]);
-    expect(risk).toBe("HIGH");
+    expectRisk("kubernetes", "Set up RBAC for service accounts", "HIGH");
   });
 
   it("returns highest risk when mixed tasks", () => {

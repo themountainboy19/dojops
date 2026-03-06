@@ -228,25 +228,26 @@ export function createChatRouter(
   let lastCleanup = 0;
   const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
+  /** Evict expired sessions from in-memory cache. */
+  function evictExpiredSessions(): void {
+    const now = Date.now();
+    const ttl = process.env.DOJOPS_SESSION_TTL_MS
+      ? Number.parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
+      : 7 * 24 * 60 * 60 * 1000;
+    for (const [id, session] of sessions) {
+      const updatedAt = new Date(session.getState().updatedAt).getTime();
+      if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
+        sessions.delete(id);
+      }
+    }
+  }
+
   router.get("/sessions", (_req, res, next) => {
     try {
-      // E-4: Periodic lazy cleanup of expired disk sessions
       const now = Date.now();
       if (rootDir && now - lastCleanup > CLEANUP_INTERVAL_MS) {
         const deleted = cleanExpiredSessions(rootDir);
-        if (deleted > 0) {
-          // Remove expired sessions from in-memory cache too
-          for (const [id, session] of sessions) {
-            const state = session.getState();
-            const updatedAt = new Date(state.updatedAt).getTime();
-            const ttl = process.env.DOJOPS_SESSION_TTL_MS
-              ? Number.parseInt(process.env.DOJOPS_SESSION_TTL_MS, 10)
-              : 7 * 24 * 60 * 60 * 1000;
-            if (Number.isFinite(updatedAt) && now - updatedAt > ttl) {
-              sessions.delete(id);
-            }
-          }
-        }
+        if (deleted > 0) evictExpiredSessions();
         lastCleanup = now;
       }
 

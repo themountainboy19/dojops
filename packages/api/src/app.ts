@@ -167,6 +167,27 @@ export function createApp(deps: AppDependencies): Express {
   const PROVIDER_CHECK_TTL = 60_000;
   const authRequired = !!apiKey;
 
+  /** Check if the caller is authenticated via API key. */
+  function isCallerAuthenticated(req: Request): boolean {
+    if (!authRequired) return true;
+    const bearer = req.headers.authorization?.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined;
+    const headerKey = req.headers["x-api-key"] as string | undefined;
+    const provided = bearer ?? headerKey;
+    if (!provided || !apiKey) return false;
+
+    const keys = Array.isArray(apiKey) ? apiKey : [apiKey];
+    for (const key of keys) {
+      const expected = Buffer.from(key, "utf8");
+      const actual = Buffer.from(provided, "utf8");
+      if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   const healthHandler = async (req: Request, res: Response) => {
     if (deps.provider.listModels && Date.now() - lastProviderCheck > PROVIDER_CHECK_TTL) {
       try {
@@ -181,30 +202,7 @@ export function createApp(deps: AppDependencies): Express {
     const status = cachedProviderStatus === "ok" ? "ok" : "degraded";
     const timestamp = new Date().toISOString();
 
-    // Check if caller is authenticated (for info-leak gating)
-    let isAuthenticated = !authRequired;
-    if (authRequired) {
-      const bearer = req.headers.authorization?.startsWith("Bearer ")
-        ? req.headers.authorization.slice(7)
-        : undefined;
-      const headerKey = req.headers["x-api-key"] as string | undefined;
-      const provided = bearer ?? headerKey;
-      if (provided && apiKey) {
-        // E-3: Support single key or array of keys for health check auth gating
-        const keys = Array.isArray(apiKey) ? apiKey : [apiKey];
-        for (const key of keys) {
-          const expected = Buffer.from(key, "utf8");
-          const actual = Buffer.from(provided, "utf8");
-          if (expected.length === actual.length && crypto.timingSafeEqual(expected, actual)) {
-            isAuthenticated = true;
-            break;
-          }
-        }
-      }
-    }
-
-    if (!isAuthenticated) {
-      // Minimal payload for unauthenticated callers — no info leak
+    if (!isCallerAuthenticated(req)) {
       res.json({ status, authRequired, timestamp });
       return;
     }
@@ -269,27 +267,30 @@ export function createApp(deps: AppDependencies): Express {
   // Token budget tracker (E-7)
   const tokenTracker = new TokenTracker();
 
+  /** Extract token count from a history entry for tracking. */
+  function extractTokenCount(entry: Parameters<typeof deps.store.add>[0]): number {
+    const rec = entry as Record<string, unknown>;
+    if (rec.tokens && typeof rec.tokens === "object") {
+      const tokens = rec.tokens as Record<string, unknown>;
+      return typeof tokens.total === "number" ? tokens.total : 0;
+    }
+    if (!entry.response || typeof entry.response !== "object") return 0;
+    const resp = entry.response as Record<string, unknown>;
+    if (typeof resp.totalTokens === "number") return resp.totalTokens;
+    if (typeof resp.usage === "object" && resp.usage !== null) {
+      const usage = resp.usage as Record<string, unknown>;
+      if (typeof usage.totalTokens === "number") return usage.totalTokens;
+      if (typeof usage.total_tokens === "number") return usage.total_tokens;
+    }
+    return 0;
+  }
+
   // Hook token tracking into history store additions
   const originalAdd = deps.store.add.bind(deps.store);
   deps.store.add = (entry) => {
     const result = originalAdd(entry);
-    // Extract token usage from entry.tokens (set by route handlers) or entry.response
-    const rec = entry as Record<string, unknown>;
-    if (rec.tokens && typeof rec.tokens === "object") {
-      const tokens = rec.tokens as Record<string, unknown>;
-      const total = typeof tokens.total === "number" ? tokens.total : 0;
-      if (total > 0) tokenTracker.record(total);
-    } else if (entry.response && typeof entry.response === "object") {
-      const resp = entry.response as Record<string, unknown>;
-      if (typeof resp.totalTokens === "number") {
-        tokenTracker.record(resp.totalTokens);
-      } else if (typeof resp.usage === "object" && resp.usage !== null) {
-        const usage = resp.usage as Record<string, unknown>;
-        const totalFallback = typeof usage.total_tokens === "number" ? usage.total_tokens : 0;
-        const total = typeof usage.totalTokens === "number" ? usage.totalTokens : totalFallback;
-        if (total > 0) tokenTracker.record(total);
-      }
-    }
+    const total = extractTokenCount(entry);
+    if (total > 0) tokenTracker.record(total);
     return result;
   };
 

@@ -144,78 +144,77 @@ function hasShellShebang(filePath: string): boolean {
   }
 }
 
+/** Scan a single directory and collect shell scripts into the accumulator. */
+function scanDirForScripts(
+  dir: string,
+  projectRoot: string,
+  seen: Set<string>,
+  results: string[],
+): void {
+  if (results.length >= MAX_SCRIPTS) return;
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (results.length >= MAX_SCRIPTS) return;
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+      const fullPath = path.join(dir, entry.name);
+
+      // Symlink containment: resolve and verify within project root
+      if (entry.isSymbolicLink() && !isContainedSymlink(fullPath, projectRoot)) continue;
+
+      const isShellExt = entry.name.endsWith(".sh") || entry.name.endsWith(".bash");
+      const isShebangScript = !entry.name.includes(".") && hasShellShebang(fullPath);
+      if ((isShellExt || isShebangScript) && !seen.has(fullPath)) {
+        seen.add(fullPath);
+        results.push(fullPath);
+      }
+    }
+  } catch {
+    // Skip unreadable directories
+  }
+}
+
+/** Resolve symlinks and verify the real path stays within the project root. */
+function isContainedSymlink(filePath: string, projectRoot: string): boolean {
+  try {
+    const real = fs.realpathSync(filePath);
+    return real.startsWith(projectRoot + path.sep) || real === projectRoot;
+  } catch {
+    return false;
+  }
+}
+
+/** Scan a base directory and its well-known script subdirectories. */
+function scanBaseAndSubdirs(
+  basePath: string,
+  scanDirs: string[],
+  projectRoot: string,
+  seen: Set<string>,
+  results: string[],
+): void {
+  scanDirForScripts(basePath, projectRoot, seen, results);
+  for (const dir of scanDirs) {
+    const dirPath = path.join(basePath, dir);
+    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
+      scanDirForScripts(dirPath, projectRoot, seen, results);
+    }
+  }
+}
+
 function findShellScripts(projectPath: string): string[] {
   const results: string[] = [];
   const seen = new Set<string>();
   const projectRoot = path.resolve(projectPath);
 
-  function addScript(filePath: string): boolean {
-    if (results.length >= MAX_SCRIPTS) return false;
-    if (!seen.has(filePath)) {
-      seen.add(filePath);
-      results.push(filePath);
-    }
-    return true;
-  }
-
-  /** Resolve symlinks and verify the real path stays within the project root. */
-  function isContainedPath(filePath: string): boolean {
-    try {
-      const real = fs.realpathSync(filePath);
-      return real.startsWith(projectRoot + path.sep) || real === projectRoot;
-    } catch {
-      return false;
-    }
-  }
-
-  function scanDir(dir: string): void {
-    if (results.length >= MAX_SCRIPTS) return;
-    try {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (results.length >= MAX_SCRIPTS) return;
-        if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-        const fullPath = path.join(dir, entry.name);
-
-        // Symlink containment: resolve and verify within project root
-        if (entry.isSymbolicLink() && !isContainedPath(fullPath)) continue;
-
-        const isShellExt = entry.name.endsWith(".sh") || entry.name.endsWith(".bash");
-        const isShebangScript = !entry.name.includes(".") && hasShellShebang(fullPath);
-        if (isShellExt || isShebangScript) {
-          if (!addScript(fullPath)) return;
-        }
-      }
-    } catch {
-      // Skip unreadable directories
-    }
-  }
-
   // Directories to scan for shell scripts
   const scanDirs = ["scripts", "bin", "ci", path.join(".github", "scripts"), "hack"];
 
-  // Scan root
-  scanDir(projectPath);
-
-  // Scan well-known script directories
-  for (const dir of scanDirs) {
-    const dirPath = path.join(projectPath, dir);
-    if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-      scanDir(dirPath);
-    }
-  }
+  // Scan root + well-known script directories
+  scanBaseAndSubdirs(projectPath, scanDirs, projectRoot, seen, results);
 
   // Scan sub-project directories
   for (const child of listSubDirs(projectPath)) {
-    const childPath = path.join(projectPath, child);
-    scanDir(childPath);
-
-    for (const dir of scanDirs) {
-      const childDirPath = path.join(childPath, dir);
-      if (fs.existsSync(childDirPath) && fs.statSync(childDirPath).isDirectory()) {
-        scanDir(childDirPath);
-      }
-    }
+    scanBaseAndSubdirs(path.join(projectPath, child), scanDirs, projectRoot, seen, results);
   }
 
   return results;

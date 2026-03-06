@@ -21,6 +21,7 @@ export interface JSONSchemaObject {
  */
 function safeRegex(pattern: string): RegExp {
   if (/[+*{]\s*\??[+*{]/.test(pattern) || /\([^)]*[+*]\)[^)]*[+*{]/.test(pattern)) {
+    // NOSONAR - safe: ReDoS guard patterns with bounded character classes
     throw new Error(`Potentially unsafe regex pattern rejected: "${pattern}"`);
   }
   try {

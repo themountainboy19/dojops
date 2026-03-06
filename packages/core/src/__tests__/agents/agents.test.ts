@@ -16,6 +16,19 @@ function mockProvider(response: string): LLMProvider {
   };
 }
 
+/** Create a default AgentRouter with a mock provider. */
+function createRouter(configs?: SpecialistConfig[]): AgentRouter {
+  return new AgentRouter(mockProvider("ok"), configs);
+}
+
+/** Route a prompt through a default router and assert the expected domain with positive confidence. */
+function expectRouteToDomain(prompt: string, expectedDomain: string): void {
+  const router = createRouter();
+  const result = router.route(prompt);
+  expect(result.agent.domain).toBe(expectedDomain);
+  expect(result.confidence).toBeGreaterThan(0);
+}
+
 const testConfig: SpecialistConfig = {
   name: "test-specialist",
   domain: "testing",
@@ -84,9 +97,7 @@ describe("SpecialistAgent", () => {
 
 describe("AgentRouter", () => {
   it("routes to the correct specialist by keyword match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const result = router.route("Deploy a terraform infrastructure stack");
     expect(result.agent.domain).toBe("infrastructure");
     expect(result.confidence).toBeGreaterThan(0);
@@ -94,34 +105,26 @@ describe("AgentRouter", () => {
   });
 
   it("routes kubernetes-related prompts to container-orchestration specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const result = router.route("Create a kubernetes deployment with 3 pods");
     expect(result.agent.domain).toBe("container-orchestration");
     expect(result.reason).toContain("kubernetes");
   });
 
   it("routes CI/CD prompts to cicd specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const result = router.route("Set up a CI pipeline with github actions");
     expect(result.agent.domain).toBe("ci-cd");
   });
 
   it("routes security prompts to security auditor", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const result = router.route("Run a security audit and vulnerability scan");
     expect(result.agent.domain).toBe("security");
   });
 
   it("falls back to OpsCortex when no keywords match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const result = router.route("Do something completely unrelated to anything");
     expect(result.agent.domain).toBe("orchestration");
     expect(result.confidence).toBe(0);
@@ -129,18 +132,14 @@ describe("AgentRouter", () => {
   });
 
   it("picks the highest-confidence match when multiple specialists match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     // "security scan" matches security specialist strongly
     const result = router.route("security vulnerability scan audit compliance");
     expect(result.agent.domain).toBe("security");
   });
 
   it("returns all agents via getAgents()", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
+    const router = createRouter();
     const agents = router.getAgents();
     expect(agents).toHaveLength(ALL_SPECIALIST_CONFIGS.length);
     expect(agents.map((a) => a.domain)).toContain("orchestration");
@@ -149,9 +148,7 @@ describe("AgentRouter", () => {
   });
 
   it("accepts custom configs", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider, [testConfig]);
-
+    const router = createRouter([testConfig]);
     const agents = router.getAgents();
     expect(agents).toHaveLength(1);
     expect(agents[0].name).toBe("test-specialist");
@@ -160,115 +157,69 @@ describe("AgentRouter", () => {
   // --- New agent routing tests ---
 
   it("routes observability prompts to observability specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Set up prometheus monitoring with grafana dashboards");
-    expect(result.agent.domain).toBe("observability");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Set up prometheus monitoring with grafana dashboards", "observability");
   });
 
   it("routes docker prompts to containerization specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Create a multi-stage dockerfile with alpine base image");
-    expect(result.agent.domain).toBe("containerization");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain(
+      "Create a multi-stage dockerfile with alpine base image",
+      "containerization",
+    );
   });
 
   it("routes cloud architecture prompts to cloud-architect", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Design a serverless lambda architecture on aws");
-    expect(result.agent.domain).toBe("cloud-architecture");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Design a serverless lambda architecture on aws", "cloud-architecture");
   });
 
   it("routes networking prompts to network specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Configure dns with route53 and set up a load balancer");
-    expect(result.agent.domain).toBe("networking");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Configure dns with route53 and set up a load balancer", "networking");
   });
 
   it("routes database prompts to database specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Set up postgres replication with redis cache");
-    expect(result.agent.domain).toBe("data-storage");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Set up postgres replication with redis cache", "data-storage");
   });
 
   it("routes gitops prompts to gitops specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Set up argocd with flux for gitops reconciliation");
-    expect(result.agent.domain).toBe("gitops");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Set up argocd with flux for gitops reconciliation", "gitops");
   });
 
   it("routes compliance prompts to compliance auditor", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Audit our infrastructure for soc2 and hipaa compliance");
-    expect(result.agent.domain).toBe("compliance");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Audit our infrastructure for soc2 and hipaa compliance", "compliance");
   });
 
   it("routes CI debugging prompts to ci-debugger specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Debug this error: build failed with exit code 1");
-    expect(result.agent.domain).toBe("ci-debugging");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain("Debug this error: build failed with exit code 1", "ci-debugging");
   });
 
   it("routes appsec prompts to application-security specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route(
+    expectRouteToDomain(
       "Run owasp sast code review to find xss and injection vulnerabilities",
+      "application-security",
     );
-    expect(result.agent.domain).toBe("application-security");
-    expect(result.confidence).toBeGreaterThan(0);
   });
 
   it("routes shell scripting prompts to shell-scripting specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Write a bash shell script with shellcheck and pipefail");
-    expect(result.agent.domain).toBe("shell-scripting");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain(
+      "Write a bash shell script with shellcheck and pipefail",
+      "shell-scripting",
+    );
   });
 
   it("routes python prompts to python-scripting specialist", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider);
-
-    const result = router.route("Create a python script with pytest tests and mypy types");
-    expect(result.agent.domain).toBe("python-scripting");
-    expect(result.confidence).toBeGreaterThan(0);
+    expectRouteToDomain(
+      "Create a python script with pytest tests and mypy types",
+      "python-scripting",
+    );
   });
 
   it("routes to custom agent by keyword match", () => {
-    const provider = mockProvider("ok");
     const customConfig: SpecialistConfig = {
       name: "sre-specialist",
       domain: "site-reliability",
       systemPrompt: "You are an SRE specialist.",
       keywords: ["sre", "incident", "reliability", "error budget", "postmortem"],
     };
-    const router = new AgentRouter(provider, [...ALL_SPECIALIST_CONFIGS, customConfig]);
+    const router = createRouter([...ALL_SPECIALIST_CONFIGS, customConfig]);
 
     const result = router.route("How to set up error budget tracking for SRE incident response");
     expect(result.agent.name).toBe("sre-specialist");
@@ -276,7 +227,6 @@ describe("AgentRouter", () => {
   });
 
   it("custom agent can override built-in by name", () => {
-    const provider = mockProvider("ok");
     const overrideConfig: SpecialistConfig = {
       name: "terraform-specialist",
       domain: "custom-infra",
@@ -286,7 +236,7 @@ describe("AgentRouter", () => {
     // Place override last so it replaces the built-in in the map
     const configs = ALL_SPECIALIST_CONFIGS.filter((c) => c.name !== "terraform-specialist");
     configs.push(overrideConfig);
-    const router = new AgentRouter(provider, configs);
+    const router = createRouter(configs);
 
     const tfAgent = router.getAgents().find((a) => a.name === "terraform-specialist");
     expect(tfAgent).toBeDefined();
@@ -294,14 +244,13 @@ describe("AgentRouter", () => {
   });
 
   it("mixes custom and built-in agents in getAgents()", () => {
-    const provider = mockProvider("ok");
     const customConfig: SpecialistConfig = {
       name: "custom-agent",
       domain: "custom",
       systemPrompt: "Custom agent.",
       keywords: ["custom"],
     };
-    const router = new AgentRouter(provider, [...ALL_SPECIALIST_CONFIGS, customConfig]);
+    const router = createRouter([...ALL_SPECIALIST_CONFIGS, customConfig]);
 
     const agents = router.getAgents();
     expect(agents.length).toBe(ALL_SPECIALIST_CONFIGS.length + 1);
@@ -336,9 +285,7 @@ describe("AgentRouter edge cases", () => {
   ];
 
   it("routes to fallback with confidence 0 when no keywords match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider, minimalConfigs);
-
+    const router = createRouter(minimalConfigs);
     const result = router.route("hello world zzz qqq");
 
     expect(result.agent.domain).toBe("orchestration");
@@ -349,8 +296,7 @@ describe("AgentRouter edge cases", () => {
   });
 
   it("routes to fallback on low confidence match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider, minimalConfigs);
+    const router = createRouter(minimalConfigs);
 
     // Only "hcl" matches from terraform's keywords ["terraform", "hcl", "infrastructure"]
     // matchedKeywords.length = 1, matchRatio = 1/3
@@ -364,8 +310,7 @@ describe("AgentRouter edge cases", () => {
   });
 
   it("routes to fallback on multi-domain ambiguity", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider, minimalConfigs);
+    const router = createRouter(minimalConfigs);
 
     // "terraform" + "hcl" match terraform (2 of 3 keywords): confidence = 2*0.3 + (2/3)*0.1 = ~0.667
     // "kubernetes" + "deployment" match kubernetes (2 of 4 keywords): confidence = 2*0.3 + (2/4)*0.1 = 0.65
@@ -379,8 +324,7 @@ describe("AgentRouter edge cases", () => {
   });
 
   it("routes to correct agent on clear match", () => {
-    const provider = mockProvider("ok");
-    const router = new AgentRouter(provider, minimalConfigs);
+    const router = createRouter(minimalConfigs);
 
     // "terraform", "infrastructure", "hcl" all match terraform (3 of 3 keywords)
     // confidence = 3*0.3 + (3/3)*0.1 = 1.0 — clear winner, no other agent matches closely
@@ -393,10 +337,8 @@ describe("AgentRouter edge cases", () => {
   });
 
   it("throws when no agents configured", () => {
-    const provider = mockProvider("ok");
-
     expect(() => {
-      const router = new AgentRouter(provider, []);
+      const router = createRouter([]);
       router.route("anything");
     }).toThrow("AgentRouter has no agents configured");
   });
@@ -427,7 +369,7 @@ describe("Primary keywords boost", () => {
   ];
 
   it("boosts confidence when primary keyword matches", () => {
-    const router = new AgentRouter(mockProvider("ok"), configs);
+    const router = createRouter(configs);
     // "terraform hcl" matches 2/5 keywords, both are primary
     // base = 2*0.25 + (2/5)*0.25 = 0.5 + 0.1 = 0.6
     // primaryBonus = 2 * 0.1 = 0.2
@@ -438,7 +380,7 @@ describe("Primary keywords boost", () => {
   });
 
   it("no boost when matched keywords are not primary", () => {
-    const router = new AgentRouter(mockProvider("ok"), configs);
+    const router = createRouter(configs);
     // "infrastructure module" matches 2/5 keywords, none primary
     // base = 2*0.25 + (2/5)*0.25 = 0.6
     // primaryBonus = 0
@@ -461,7 +403,7 @@ describe("Primary keywords boost", () => {
         keywords: ["alpha", "beta", "gamma"],
       },
     ];
-    const router = new AgentRouter(mockProvider("ok"), noPrimaryConfigs);
+    const router = createRouter(noPrimaryConfigs);
     // "alpha beta" matches 2/3, no primaryKeywords
     // base = 2*0.25 + (2/3)*0.25 = 0.5 + 0.1667 = 0.6667
     const result = router.route("alpha beta query");
@@ -492,7 +434,7 @@ describe("Project context biased routing", () => {
   ];
 
   it("boosts confidence when agent domain matches project domains", () => {
-    const router = new AgentRouter(mockProvider("ok"), configs);
+    const router = createRouter(configs);
     // Without context: "infrastructure module" → 2*0.25 + (2/5)*0.25 = 0.6
     const noCtx = router.route("infrastructure module query");
     // With context: +0.15 boost
@@ -503,7 +445,7 @@ describe("Project context biased routing", () => {
   });
 
   it("no boost when project domains do not match agent domain", () => {
-    const router = new AgentRouter(mockProvider("ok"), configs);
+    const router = createRouter(configs);
     const noCtx = router.route("terraform hcl query");
     const withCtx = router.route("terraform hcl query", {
       projectDomains: ["container-orchestration"],
@@ -512,7 +454,7 @@ describe("Project context biased routing", () => {
   });
 
   it("empty projectDomains produces same result as no options", () => {
-    const router = new AgentRouter(mockProvider("ok"), configs);
+    const router = createRouter(configs);
     const noOpts = router.route("kubernetes k8s query");
     const emptyOpts = router.route("kubernetes k8s query", { projectDomains: [] });
     expect(emptyOpts.confidence).toBe(noOpts.confidence);

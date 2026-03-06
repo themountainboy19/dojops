@@ -132,18 +132,9 @@ registerSubcommand("toolchain", "clean", toolchainCleanCommand);
 
 // ── Main ───────────────────────────────────────────────────────────
 
-async function main() {
-  // L-2: Restore cursor visibility on SIGINT (interrupted spinner leaves cursor hidden)
-  process.on("SIGINT", () => {
-    process.stdout.write("\x1b[?25h"); // Show cursor
-    process.exit(130);
-  });
-
-  // Prepend toolchain bin to PATH so they are found by all commands
-  prependToolchainBinToPath();
-
-  // CI auto-detection: force non-interactive mode and suppress banner in CI environments
-  const isCI = !!(
+/** Detect if we're running in a CI environment. */
+function detectCI(): boolean {
+  return !!(
     process.env.CI ||
     process.env.GITHUB_ACTIONS ||
     process.env.GITLAB_CI ||
@@ -151,49 +142,157 @@ async function main() {
     process.env.CIRCLECI ||
     process.env.TF_BUILD
   );
+}
 
-  const rawArgs = process.argv.slice(2);
-
-  // No args → global help
+/** Handle early-exit flags (--version, empty args). Returns true if exited. */
+function handleEarlyExits(rawArgs: string[]): boolean {
   if (rawArgs.length === 0) {
     printHelp();
     process.exit(0);
   }
-
-  // --version / -V
   if (rawArgs.includes("--version") || rawArgs.includes("-V")) {
     console.log(`dojops v${getDojopsVersion()}`);
     process.exit(0);
   }
+  return false;
+}
 
-  // Parse global options first
-  const { globalOpts, remaining } = parseGlobalOptions(rawArgs);
-
-  // In CI or non-TTY, force non-interactive mode and suppress color
+/** Apply CI / non-TTY / --no-color environment overrides. */
+function applyEnvironmentOverrides(
+  globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
+  isCI: boolean,
+): void {
   if (isCI || !process.stdout.isTTY) {
     globalOpts.nonInteractive = true;
-    if (!process.stdout.isTTY) {
-      process.env.NO_COLOR = "1";
+    if (!process.stdout.isTTY) process.env.NO_COLOR = "1";
+  }
+  if (globalOpts.nonInteractive && !process.env.NO_COLOR) process.env.NO_COLOR = "1";
+  if (globalOpts.noColor) process.env.NO_COLOR = "1";
+}
+
+/** Build the lazy-initializing LLM provider for CLIContext. */
+function buildLazyProvider(
+  globalOpts: ReturnType<typeof parseGlobalOptions>["globalOpts"],
+  config: ReturnType<typeof loadProfileConfig>,
+): () => LLMProvider {
+  let cachedProvider: LLMProvider | undefined;
+  return () => {
+    if (cachedProvider) return cachedProvider;
+
+    let providerName: string;
+    try {
+      providerName = resolveProvider(globalOpts.provider, config);
+    } catch (err) {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
     }
+
+    const model = resolveModel(globalOpts.model, config);
+    const apiKey = resolveToken(providerName, config);
+    const ollamaHost = providerName === "ollama" ? resolveOllamaHost(undefined, config) : undefined;
+    const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, config) : undefined;
+    let provider: LLMProvider = createProvider({
+      provider: providerName,
+      model,
+      apiKey,
+      ollamaHost,
+      ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
+    });
+
+    const fallbackName = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
+    if (fallbackName) {
+      try {
+        const fallbackKey = resolveToken(fallbackName, config);
+        const fallbackProv = createProvider({ provider: fallbackName, apiKey: fallbackKey });
+        provider = new FallbackProvider([provider, fallbackProv]);
+      } catch {
+        // Fallback provider misconfigured — use primary only
+      }
+    }
+
+    cachedProvider = provider;
+    return cachedProvider;
+  };
+}
+
+const QUIET_COMMANDS = new Set([
+  "config",
+  "auth",
+  "provider",
+  "init",
+  "doctor",
+  "status",
+  "tools",
+  "toolchain",
+  "scan",
+  "chat",
+  "check",
+  "verify",
+  "upgrade",
+  "modules",
+  "agents",
+  "history",
+  "serve",
+  "help",
+]);
+
+const NESTED_COMMAND_PARENTS = new Set([
+  "debug",
+  "analyze",
+  "agents",
+  "history",
+  "tools",
+  "toolchain",
+  "inspect",
+  "scan",
+]);
+
+/** Route the resolved command or fall back to generate. */
+async function dispatchCommand(
+  resolved: ReturnType<typeof resolveCommand>,
+  command: string[],
+  remapped: string[],
+  ctx: CLIContext,
+): Promise<void> {
+  if (resolved) {
+    await resolved.handler(resolved.remaining, ctx);
+    return;
+  }
+  if (command.length > 0 && NESTED_COMMAND_PARENTS.has(command[0])) {
+    printCommandHelp(command[0]);
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
-  // When --non-interactive is explicitly set, suppress ANSI even on TTY
-  if (globalOpts.nonInteractive && !process.env.NO_COLOR) {
-    process.env.NO_COLOR = "1";
+  const firstArg = remapped[0];
+  if (firstArg && /^[a-z][a-z-]*$/.test(firstArg) && !firstArg.startsWith("-")) {
+    p.log.warn(
+      `Unknown command: "${firstArg}". Run ${pc.dim("dojops --help")} to see available commands.`,
+    );
+    p.log.info(pc.dim(`If you meant to generate, use: dojops generate "${remapped.join(" ")}"`));
+    process.exit(ExitCode.VALIDATION_ERROR);
   }
 
-  // Handle --no-color
-  if (globalOpts.noColor) {
-    process.env.NO_COLOR = "1";
-  }
+  const { generateCommand } = await import("./commands/generate");
+  await generateCommand(remapped, ctx);
+}
 
-  // Backward compatibility remapping
+async function main() {
+  process.on("SIGINT", () => {
+    process.stdout.write("\x1b[?25h");
+    process.exit(130);
+  });
+
+  prependToolchainBinToPath();
+
+  const isCI = detectCI();
+  const rawArgs = process.argv.slice(2);
+  handleEarlyExits(rawArgs);
+
+  const { globalOpts, remaining } = parseGlobalOptions(rawArgs);
+  applyEnvironmentOverrides(globalOpts, isCI);
+
   const remapped = remapLegacyArgs(remaining);
-
-  // Parse command path
   const { command, positional } = parseCommandPath(remapped);
 
-  // Help flag: show per-command or global help
   if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
     if (command.length > 0) {
       printCommandHelp(command.join(" "));
@@ -203,139 +302,36 @@ async function main() {
     process.exit(0);
   }
 
-  // Resolve command handler
   const resolved = resolveCommand(command, positional);
-
-  // Load config (with profile support)
   const config = loadProfileConfig(globalOpts.profile);
+  const getProvider = buildLazyProvider(globalOpts, config);
 
-  // Build CLIContext with lazy provider
-  let cachedProvider: LLMProvider | undefined;
   const ctx: CLIContext = {
     globalOpts,
     config,
     cwd: process.cwd(),
     resolvedTemperature: resolveTemperature(globalOpts.temperature, config),
-    getProvider() {
-      if (cachedProvider) return cachedProvider;
-
-      let providerName: string;
-      try {
-        providerName = resolveProvider(globalOpts.provider, config);
-      } catch (err) {
-        throw new CLIError(ExitCode.VALIDATION_ERROR, (err as Error).message);
-      }
-
-      const model = resolveModel(globalOpts.model, config);
-      const apiKey = resolveToken(providerName, config);
-
-      const ollamaHost =
-        providerName === "ollama" ? resolveOllamaHost(undefined, config) : undefined;
-      const ollamaTls = providerName === "ollama" ? resolveOllamaTls(undefined, config) : undefined;
-      let provider: LLMProvider = createProvider({
-        provider: providerName,
-        model,
-        apiKey,
-        ollamaHost,
-        ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
-      });
-
-      // F-2: Multi-provider fallback
-      const fallbackName = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
-      if (fallbackName) {
-        try {
-          const fallbackKey = resolveToken(fallbackName, config);
-          const fallbackProv = createProvider({ provider: fallbackName, apiKey: fallbackKey });
-          provider = new FallbackProvider([provider, fallbackProv]);
-        } catch {
-          // Fallback provider misconfigured — use primary only
-        }
-      }
-
-      cachedProvider = provider;
-      return cachedProvider;
-    },
+    getProvider,
   };
 
-  // Non-LLM commands: config, auth, serve, init, doctor — no intro banner
-  const quietCommands = new Set([
-    "config",
-    "auth",
-    "provider",
-    "init",
-    "doctor",
-    "status",
-    "tools",
-    "toolchain",
-    "scan",
-    "chat",
-    "check",
-    "verify",
-    "upgrade",
-    "modules",
-    "agents",
-    "history",
-    "serve",
-    "help",
-  ]);
-  const isQuiet = command.length > 0 && quietCommands.has(command[0]);
-
-  if (!isQuiet && !isCI && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table") {
-    printBanner();
-  }
-
-  // Known parent commands that have subcommands (used for better error messages)
-  const NESTED_COMMAND_PARENTS = new Set([
-    "debug",
-    "analyze",
-    "agents",
-    "history",
-    "tools",
-    "toolchain",
-    "inspect",
-    "scan",
-  ]);
+  const isQuiet = command.length > 0 && QUIET_COMMANDS.has(command[0]);
+  const showBanner =
+    !isQuiet && !isCI && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table";
+  if (showBanner) printBanner();
 
   try {
-    if (resolved) {
-      await resolved.handler(resolved.remaining, ctx);
-    } else if (command.length > 0 && NESTED_COMMAND_PARENTS.has(command[0])) {
-      // Known parent without valid subcommand — show per-command help
-      printCommandHelp(command[0]);
-      process.exit(ExitCode.VALIDATION_ERROR);
-    } else {
-      // Warn if first arg looks like a mistyped command (single lowercase word, no spaces)
-      const firstArg = remapped[0];
-      if (firstArg && /^[a-z][a-z-]*$/.test(firstArg) && !firstArg.startsWith("-")) {
-        p.log.warn(
-          `Unknown command: "${firstArg}". Run ${pc.dim("dojops --help")} to see available commands.`,
-        );
-        p.log.info(
-          pc.dim(`If you meant to generate, use: dojops generate "${remapped.join(" ")}"`),
-        );
-        process.exit(ExitCode.VALIDATION_ERROR);
-      }
-
-      // Default: generate command (dojops "prompt")
-      const { generateCommand } = await import("./commands/generate");
-      await generateCommand(remapped, ctx);
-    }
+    await dispatchCommand(resolved, command, remapped, ctx);
   } catch (err) {
     if (err instanceof CLIError) {
       if (err.message) p.log.error(err.message);
       process.exit(err.exitCode);
     }
-    const msg = toErrorMessage(err);
-    p.log.error(msg);
-    if (globalOpts.debug) {
-      console.error(err);
-    }
+    p.log.error(toErrorMessage(err));
+    if (globalOpts.debug) console.error(err);
     process.exit(ExitCode.GENERAL_ERROR);
   }
 
-  if (!isQuiet && !globalOpts.quiet && !globalOpts.raw && globalOpts.output === "table") {
-    p.outro("Done.");
-  }
+  if (showBanner) p.outro("Done.");
 }
 
 // Top-level async IIFE — CJS module, top-level await not supported

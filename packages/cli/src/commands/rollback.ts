@@ -73,25 +73,31 @@ function restoreProjectFiles(files: string[], root: string): number {
   return restored;
 }
 
-export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const root = findProjectRoot();
-  if (!root) {
-    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
-  }
+/** Display dry-run summary for rollback. */
+function displayDryRun(filesToDelete: string[], filesToRestore: string[]): void {
+  if (filesToDelete.length > 0) p.log.info(`${filesToDelete.length} file(s) would be removed.`);
+  if (filesToRestore.length > 0)
+    p.log.info(`${filesToRestore.length} file(s) would be restored from .bak.`);
+  p.log.info(pc.dim("Dry run — no changes will be made."));
+}
 
-  const dryRun = hasFlag(args, "--dry-run");
+/** Validate inputs and resolve execution records for rollback. */
+function resolveRollbackTargets(
+  root: string,
+  args: string[],
+): {
+  planId: string;
+  filesToDelete: string[];
+  filesToRestore: string[];
+} {
   const planId = args.find((a) => !a.startsWith("-"));
   if (!planId) {
     p.log.info(`  ${pc.dim("$")} dojops rollback <plan-id>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for rollback.");
   }
-
   const plan = loadPlan(root, planId);
-  if (!plan) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
-  }
+  if (!plan) throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
 
-  // Find execution records for this plan
   const executions = listExecutions(root).filter((e) => e.planId === planId);
   if (executions.length === 0) {
     p.log.info("Only applied plans can be rolled back.");
@@ -100,10 +106,17 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       `No execution records found for plan "${planId}".`,
     );
   }
-
   const latest = executions[0];
-  const filesToDelete = latest.filesCreated;
-  const filesToRestore = latest.filesModified ?? [];
+  return { planId, filesToDelete: latest.filesCreated, filesToRestore: latest.filesModified ?? [] };
+}
+
+export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const root = findProjectRoot();
+  if (!root)
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
+
+  const dryRun = hasFlag(args, "--dry-run");
+  const { planId, filesToDelete, filesToRestore } = resolveRollbackTargets(root, args);
 
   if (filesToDelete.length === 0 && filesToRestore.length === 0) {
     p.log.info("No files to roll back.");
@@ -111,31 +124,20 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const lines: string[] = [];
-  for (const f of filesToDelete) {
-    lines.push(`  ${pc.red("-")} ${f}`);
-  }
-  for (const f of filesToRestore) {
+  for (const f of filesToDelete) lines.push(`  ${pc.red("-")} ${f}`);
+  for (const f of filesToRestore)
     lines.push(`  ${pc.yellow("↩")} ${f} ${pc.dim("(restore from .bak)")}`);
-  }
   p.note(lines.join("\n"), pc.yellow(`Rollback plan ${planId}`));
 
   if (dryRun) {
-    if (filesToDelete.length > 0) {
-      p.log.info(`${filesToDelete.length} file(s) would be removed.`);
-    }
-    if (filesToRestore.length > 0) {
-      p.log.info(`${filesToRestore.length} file(s) would be restored from .bak.`);
-    }
-    p.log.info(pc.dim("Dry run — no changes will be made."));
+    displayDryRun(filesToDelete, filesToRestore);
     return;
   }
 
-  const totalActions = filesToDelete.length + filesToRestore.length;
   const skipPrompt = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   if (!skipPrompt) {
-    const confirm = await p.confirm({
-      message: `Roll back ${totalActions} file(s)?`,
-    });
+    const totalActions = filesToDelete.length + filesToRestore.length;
+    const confirm = await p.confirm({ message: `Roll back ${totalActions} file(s)?` });
     if (p.isCancel(confirm) || !confirm) {
       p.cancel("Cancelled.");
       process.exit(0);
@@ -154,7 +156,6 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   try {
     const deleted = deleteProjectFiles(filesToDelete, root);
     const restored = restoreProjectFiles(filesToRestore, root);
-
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
@@ -164,7 +165,6 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       status: "success",
       durationMs: Date.now() - startTime,
     });
-
     const parts: string[] = [];
     if (filesToDelete.length > 0) parts.push(`${deleted}/${filesToDelete.length} removed`);
     if (filesToRestore.length > 0) parts.push(`${restored}/${filesToRestore.length} restored`);

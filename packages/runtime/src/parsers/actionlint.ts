@@ -18,7 +18,7 @@ export function parseActionlint(output: string): VerificationIssue[] {
 
   for (const line of lines) {
     // Match actionlint format: file:line:col: message [rule]
-    const match = /^(.+?):(\d+):(\d+):\s+(.+)$/.exec(line);
+    const match = /^(.+?):(\d+):(\d+):\s+(.+)$/.exec(line); // NOSONAR - safe: anchored pattern on single line
     if (match) {
       const message = match[4];
       issues.push({

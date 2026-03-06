@@ -410,56 +410,31 @@ async function runInitWizard(
   return { toolName, description, technology, fileFormat, outputFilePath, useLLM };
 }
 
-export const toolsInitCommand: CommandHandler = async (args, ctx) => {
-  let toolName = args.find((a) => !a.startsWith("-"));
-  let description = "";
-  let technology = "";
-  let fileFormat: FileFormatType = "yaml";
-  let outputFilePath = "";
-  let useLLM = false;
-  const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
-  const isLegacy = args.includes("--legacy");
+/** Fill in default values for any unset init parameters. */
+function applyInitDefaults(params: {
+  toolName: string;
+  description: string;
+  technology: string;
+  fileFormat: FileFormatType;
+  outputFilePath: string;
+}): { description: string; technology: string; outputFilePath: string } {
+  const description = params.description || `${params.toolName} configuration generator`;
+  const technology = params.technology || titleCase(params.toolName);
+  const fileExt = params.fileFormat === "raw" ? "conf" : params.fileFormat;
+  const outputFilePath = params.outputFilePath || `${params.toolName}.${fileExt}`;
+  return { description, technology, outputFilePath };
+}
 
-  if (!toolName && !isNonInteractive) {
-    const result = await runInitWizard(ctx, isLegacy);
-    if (!result) return;
-    toolName = result.toolName;
-    description = result.description;
-    technology = result.technology;
-    fileFormat = result.fileFormat;
-    outputFilePath = result.outputFilePath;
-    useLLM = result.useLLM;
-  }
-
-  if (!toolName) {
-    p.log.info(`  ${pc.dim("$")} dojops modules init <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
-  }
-
-  if (!/^[a-z0-9-]+$/.test(toolName)) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      "Module name must be lowercase alphanumeric with hyphens.",
-    );
-  }
-
-  if (!description) description = `${toolName} configuration generator`;
-  if (!technology) technology = titleCase(toolName);
-  const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
-  if (!outputFilePath) outputFilePath = `${toolName}.${fileExt}`;
-
-  if (isLegacy) {
-    const legacyPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
-    const legacyFilePath = `{outputPath}/${outputFilePath}`;
-    return scaffoldLegacyTool(
-      toolName,
-      description,
-      fileFormat === "ini" || fileFormat === "toml" ? "raw" : fileFormat,
-      legacyPrompt,
-      legacyFilePath,
-    );
-  }
-
+/** Scaffold a v2 .dops module file, optionally using LLM-generated content. */
+async function scaffoldV2Module(
+  ctx: CLIContext,
+  toolName: string,
+  description: string,
+  technology: string,
+  fileFormat: FileFormatType,
+  outputFilePath: string,
+  useLLM: boolean,
+): Promise<void> {
   const toolsDir = path.resolve(".dojops", "modules");
   const dopsPath = path.join(toolsDir, `${toolName}.dops`);
 
@@ -496,6 +471,73 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     p.log.info(`  ${pc.dim("AI-generated best practices and prompt included.")}`);
   }
   p.log.info(`  ${pc.dim("Edit the .dops file to customize your module.")}`);
+}
+
+export const toolsInitCommand: CommandHandler = async (args, ctx) => {
+  let toolName = args.find((a) => !a.startsWith("-"));
+  let description = "";
+  let technology = "";
+  let fileFormat: FileFormatType = "yaml";
+  let outputFilePath = "";
+  let useLLM = false;
+  const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
+  const isLegacy = args.includes("--legacy");
+
+  if (!toolName && !isNonInteractive) {
+    const result = await runInitWizard(ctx, isLegacy);
+    if (!result) return;
+    toolName = result.toolName;
+    description = result.description;
+    technology = result.technology;
+    fileFormat = result.fileFormat;
+    outputFilePath = result.outputFilePath;
+    useLLM = result.useLLM;
+  }
+
+  if (!toolName) {
+    p.log.info(`  ${pc.dim("$")} dojops modules init <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
+  }
+
+  if (!/^[a-z0-9-]+$/.test(toolName)) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      "Module name must be lowercase alphanumeric with hyphens.",
+    );
+  }
+
+  const defaults = applyInitDefaults({
+    toolName,
+    description,
+    technology,
+    fileFormat,
+    outputFilePath,
+  });
+  description = defaults.description;
+  technology = defaults.technology;
+  outputFilePath = defaults.outputFilePath;
+
+  if (isLegacy) {
+    const legacyPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
+    const legacyFilePath = `{outputPath}/${outputFilePath}`;
+    return scaffoldLegacyTool(
+      toolName,
+      description,
+      fileFormat === "ini" || fileFormat === "toml" ? "raw" : fileFormat,
+      legacyPrompt,
+      legacyFilePath,
+    );
+  }
+
+  return scaffoldV2Module(
+    ctx,
+    toolName,
+    description,
+    technology,
+    fileFormat,
+    outputFilePath,
+    useLLM,
+  );
 };
 
 // ── LLM-powered module generation ─────────────────────────────────

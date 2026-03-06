@@ -12,6 +12,45 @@ function parseV2Module(filename: string): DopsModuleV2 {
   return mod;
 }
 
+/** Assert a module's context technology and fileFormat. */
+function expectContext(filename: string, technology: string, fileFormat: string): void {
+  const module = parseV2Module(filename);
+  expect(module.frontmatter.context.technology).toBe(technology);
+  expect(module.frontmatter.context.fileFormat).toBe(fileFormat);
+}
+
+/** Assert a module's binary verification parser. */
+function expectBinaryParser(filename: string, parser: string): void {
+  const module = parseV2Module(filename);
+  expect(module.frontmatter.verification?.binary?.parser).toBe(parser);
+}
+
+/** Assert a module has structural verification rules matching the given paths. */
+function expectStructuralPaths(filename: string, paths: string[]): void {
+  const module = parseV2Module(filename);
+  const rules = module.frontmatter.verification?.structural ?? [];
+  for (const p of paths) {
+    expect(rules.some((r) => r.path === p)).toBe(true);
+  }
+}
+
+/** Assert a module has context7Libraries referencing the given library name. */
+function expectContext7Library(filename: string, libraryName: string): void {
+  const module = parseV2Module(filename);
+  const libs = module.frontmatter.context.context7Libraries ?? [];
+  expect(libs.some((l) => l.name === libraryName)).toBe(true);
+}
+
+/** Assert the first file spec has the given format and optionally matches a path pattern. */
+function expectFirstFile(filename: string, format: string, pathMatch?: string): void {
+  const module = parseV2Module(filename);
+  const file = module.frontmatter.files[0];
+  expect(file.format).toBe(format);
+  if (pathMatch !== undefined) {
+    expect(file.path).toContain(pathMatch);
+  }
+}
+
 describe("Built-in .dops modules", () => {
   const moduleFiles = fs.readdirSync(MODULES_DIR).filter((f) => f.endsWith(".dops"));
 
@@ -72,76 +111,53 @@ describe("Built-in .dops modules", () => {
 
 describe("terraform.dops", () => {
   it("has context with Terraform technology and HCL format", () => {
-    const module = parseV2Module("terraform.dops");
-    expect(module.frontmatter.context.technology).toBe("Terraform");
-    expect(module.frontmatter.context.fileFormat).toBe("hcl");
+    expectContext("terraform.dops", "Terraform", "hcl");
   });
 
   it("has context7Libraries referencing terraform", () => {
-    const module = parseV2Module("terraform.dops");
-    const libs = module.frontmatter.context.context7Libraries ?? [];
-    expect(libs.some((l) => l.name === "terraform")).toBe(true);
+    expectContext7Library("terraform.dops", "terraform");
   });
 
   it("has binary verification with terraform-json parser", () => {
-    const module = parseV2Module("terraform.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("terraform-json");
+    expectBinaryParser("terraform.dops", "terraform-json");
   });
 
   it("generates raw .tf files", () => {
-    const module = parseV2Module("terraform.dops");
-    const file = module.frontmatter.files[0];
-    expect(file.format).toBe("raw");
-    expect(file.path).toContain(".tf");
+    expectFirstFile("terraform.dops", "raw", ".tf");
   });
 });
 
 describe("github-actions.dops", () => {
   it("has context with GitHub Actions technology and YAML format", () => {
-    const module = parseV2Module("github-actions.dops");
-    expect(module.frontmatter.context.technology).toBe("GitHub Actions");
-    expect(module.frontmatter.context.fileFormat).toBe("yaml");
+    expectContext("github-actions.dops", "GitHub Actions", "yaml");
   });
 
   it("has structural verification for on/jobs", () => {
-    const module = parseV2Module("github-actions.dops");
-    const rules = module.frontmatter.verification?.structural ?? [];
-    expect(rules.some((r) => r.path === "on")).toBe(true);
-    expect(rules.some((r) => r.path === "jobs")).toBe(true);
+    expectStructuralPaths("github-actions.dops", ["on", "jobs"]);
   });
 
   it("has context7Libraries referencing github-actions", () => {
-    const module = parseV2Module("github-actions.dops");
-    const libs = module.frontmatter.context.context7Libraries ?? [];
-    expect(libs.some((l) => l.name === "github-actions")).toBe(true);
+    expectContext7Library("github-actions.dops", "github-actions");
   });
 });
 
 describe("kubernetes.dops", () => {
   it("has context with Kubernetes technology and YAML format", () => {
-    const module = parseV2Module("kubernetes.dops");
-    expect(module.frontmatter.context.technology).toBe("Kubernetes");
-    expect(module.frontmatter.context.fileFormat).toBe("yaml");
+    expectContext("kubernetes.dops", "Kubernetes", "yaml");
   });
 
   it("has binary verification with kubectl", () => {
-    const module = parseV2Module("kubernetes.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("kubectl-stderr");
+    expectBinaryParser("kubernetes.dops", "kubectl-stderr");
   });
 
   it("has structural verification for kind and apiVersion", () => {
-    const module = parseV2Module("kubernetes.dops");
-    const rules = module.frontmatter.verification?.structural ?? [];
-    expect(rules.some((r) => r.path === "kind")).toBe(true);
-    expect(rules.some((r) => r.path === "apiVersion")).toBe(true);
+    expectStructuralPaths("kubernetes.dops", ["kind", "apiVersion"]);
   });
 });
 
 describe("helm.dops", () => {
   it("has context with Helm technology and JSON format (multi-file wrapper)", () => {
-    const module = parseV2Module("helm.dops");
-    expect(module.frontmatter.context.technology).toBe("Helm");
-    expect(module.frontmatter.context.fileFormat).toBe("json");
+    expectContext("helm.dops", "Helm", "json");
   });
 
   it("has multiple file specs including templates", () => {
@@ -152,52 +168,39 @@ describe("helm.dops", () => {
   });
 
   it("has binary verification with helm lint", () => {
-    const module = parseV2Module("helm.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("helm-lint");
+    expectBinaryParser("helm.dops", "helm-lint");
   });
 
   it("has context7Libraries referencing helm", () => {
-    const module = parseV2Module("helm.dops");
-    const libs = module.frontmatter.context.context7Libraries ?? [];
-    expect(libs.some((l) => l.name === "helm")).toBe(true);
+    expectContext7Library("helm.dops", "helm");
   });
 });
 
 describe("ansible.dops", () => {
   it("has context with Ansible technology and raw format", () => {
-    const module = parseV2Module("ansible.dops");
-    expect(module.frontmatter.context.technology).toBe("Ansible");
-    expect(module.frontmatter.context.fileFormat).toBe("raw");
+    expectContext("ansible.dops", "Ansible", "raw");
   });
 
   it("has binary verification with ansible-playbook", () => {
-    const module = parseV2Module("ansible.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("ansible-syntax");
+    expectBinaryParser("ansible.dops", "ansible-syntax");
   });
 
   it("generates raw playbook file", () => {
-    const module = parseV2Module("ansible.dops");
-    const file = module.frontmatter.files[0];
-    expect(file.format).toBe("raw");
+    expectFirstFile("ansible.dops", "raw");
   });
 });
 
 describe("docker-compose.dops", () => {
   it("has context with Docker Compose technology and YAML format", () => {
-    const module = parseV2Module("docker-compose.dops");
-    expect(module.frontmatter.context.technology).toBe("Docker Compose");
-    expect(module.frontmatter.context.fileFormat).toBe("yaml");
+    expectContext("docker-compose.dops", "Docker Compose", "yaml");
   });
 
   it("has structural verification for services", () => {
-    const module = parseV2Module("docker-compose.dops");
-    const rules = module.frontmatter.verification?.structural ?? [];
-    expect(rules.some((r) => r.path === "services")).toBe(true);
+    expectStructuralPaths("docker-compose.dops", ["services"]);
   });
 
   it("has binary verification with docker compose", () => {
-    const module = parseV2Module("docker-compose.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("docker-compose-config");
+    expectBinaryParser("docker-compose.dops", "docker-compose-config");
   });
 
   it("detects multiple compose file names", () => {
@@ -210,9 +213,7 @@ describe("docker-compose.dops", () => {
 
 describe("dockerfile.dops", () => {
   it("has context with Docker technology and raw format", () => {
-    const module = parseV2Module("dockerfile.dops");
-    expect(module.frontmatter.context.technology).toBe("Docker");
-    expect(module.frontmatter.context.fileFormat).toBe("raw");
+    expectContext("dockerfile.dops", "Docker", "raw");
   });
 
   it("generates raw Dockerfile", () => {
@@ -223,36 +224,27 @@ describe("dockerfile.dops", () => {
   });
 
   it("has binary verification with hadolint", () => {
-    const module = parseV2Module("dockerfile.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("hadolint-json");
+    expectBinaryParser("dockerfile.dops", "hadolint-json");
   });
 });
 
 describe("nginx.dops", () => {
   it("has context with Nginx technology and raw format", () => {
-    const module = parseV2Module("nginx.dops");
-    expect(module.frontmatter.context.technology).toBe("Nginx");
-    expect(module.frontmatter.context.fileFormat).toBe("raw");
+    expectContext("nginx.dops", "Nginx", "raw");
   });
 
   it("generates raw nginx.conf", () => {
-    const module = parseV2Module("nginx.dops");
-    const file = module.frontmatter.files[0];
-    expect(file.format).toBe("raw");
-    expect(file.path).toContain("nginx.conf");
+    expectFirstFile("nginx.dops", "raw", "nginx.conf");
   });
 
   it("has binary verification with nginx", () => {
-    const module = parseV2Module("nginx.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("nginx-stderr");
+    expectBinaryParser("nginx.dops", "nginx-stderr");
   });
 });
 
 describe("makefile.dops", () => {
   it("has context with GNU Make technology and raw format", () => {
-    const module = parseV2Module("makefile.dops");
-    expect(module.frontmatter.context.technology).toBe("GNU Make");
-    expect(module.frontmatter.context.fileFormat).toBe("raw");
+    expectContext("makefile.dops", "GNU Make", "raw");
   });
 
   it("generates raw Makefile", () => {
@@ -263,8 +255,7 @@ describe("makefile.dops", () => {
   });
 
   it("has binary verification with make", () => {
-    const module = parseV2Module("makefile.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("make-dryrun");
+    expectBinaryParser("makefile.dops", "make-dryrun");
   });
 
   it("detects multiple Makefile names", () => {
@@ -278,15 +269,11 @@ describe("makefile.dops", () => {
 
 describe("gitlab-ci.dops", () => {
   it("has context with GitLab CI technology and YAML format", () => {
-    const module = parseV2Module("gitlab-ci.dops");
-    expect(module.frontmatter.context.technology).toBe("GitLab CI");
-    expect(module.frontmatter.context.fileFormat).toBe("yaml");
+    expectContext("gitlab-ci.dops", "GitLab CI", "yaml");
   });
 
   it("has structural verification for stages", () => {
-    const module = parseV2Module("gitlab-ci.dops");
-    const rules = module.frontmatter.verification?.structural ?? [];
-    expect(rules.some((r) => r.path === "stages")).toBe(true);
+    expectStructuralPaths("gitlab-ci.dops", ["stages"]);
   });
 
   it("has binary verification via yamllint", () => {
@@ -300,9 +287,7 @@ describe("gitlab-ci.dops", () => {
 
 describe("prometheus.dops", () => {
   it("has context with Prometheus technology and JSON format (multi-file wrapper)", () => {
-    const module = parseV2Module("prometheus.dops");
-    expect(module.frontmatter.context.technology).toBe("Prometheus");
-    expect(module.frontmatter.context.fileFormat).toBe("json");
+    expectContext("prometheus.dops", "Prometheus", "json");
   });
 
   it("has three file specs", () => {
@@ -317,27 +302,20 @@ describe("prometheus.dops", () => {
   });
 
   it("has binary verification with promtool", () => {
-    const module = parseV2Module("prometheus.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("promtool");
+    expectBinaryParser("prometheus.dops", "promtool");
   });
 });
 
 describe("systemd.dops", () => {
   it("has context with systemd technology and raw format", () => {
-    const module = parseV2Module("systemd.dops");
-    expect(module.frontmatter.context.technology).toBe("systemd");
-    expect(module.frontmatter.context.fileFormat).toBe("raw");
+    expectContext("systemd.dops", "systemd", "raw");
   });
 
   it("generates raw .service file", () => {
-    const module = parseV2Module("systemd.dops");
-    const file = module.frontmatter.files[0];
-    expect(file.format).toBe("raw");
-    expect(file.path).toContain(".service");
+    expectFirstFile("systemd.dops", "raw", ".service");
   });
 
   it("has binary verification with systemd-analyze", () => {
-    const module = parseV2Module("systemd.dops");
-    expect(module.frontmatter.verification?.binary?.parser).toBe("systemd-analyze");
+    expectBinaryParser("systemd.dops", "systemd-analyze");
   });
 });

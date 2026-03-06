@@ -463,38 +463,38 @@ export function computeAuditHash(entry: AuditEntry, hmacKey?: string | null): st
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
+/** Try to remove a stale lock file. Returns true if removed or already gone. */
+function tryRemoveStaleLock(lockPath: string): boolean {
+  try {
+    const stat = fs.statSync(lockPath);
+    if (Date.now() - stat.mtimeMs <= 10_000) return false; // Active lock
+    try {
+      fs.unlinkSync(lockPath);
+    } catch {
+      /* already cleaned */
+    }
+    return true;
+  } catch {
+    return true; // stat failed — file gone, treat as removed
+  }
+}
+
 function acquireAuditLock(lockPath: string, maxRetries = 5, delayMs = 50): number {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       return fs.openSync(lockPath, "wx");
     } catch (err: unknown) {
       const code = (err as NodeJS.ErrnoException).code;
-      if (code === "EEXIST") {
-        // Lock held by another process — check if stale (> 10s)
-        try {
-          const stat = fs.statSync(lockPath);
-          if (Date.now() - stat.mtimeMs > 10_000) {
-            // Stale lock — remove and retry
-            try {
-              fs.unlinkSync(lockPath);
-            } catch {
-              // Another process may have already cleaned it up
-            }
-            continue;
-          }
-        } catch {
-          // stat failed — file may already be gone, retry
-          continue;
-        }
-        // Active lock — busy-wait with exponential backoff (synchronous sleep via loop)
-        const waitMs = delayMs * Math.pow(2, attempt);
-        const end = Date.now() + waitMs;
-        while (Date.now() < end) {
-          /* spin */
-        }
-        continue;
+      if (code !== "EEXIST") throw err;
+
+      if (tryRemoveStaleLock(lockPath)) continue;
+
+      // Active lock — busy-wait with exponential backoff
+      const waitMs = delayMs * Math.pow(2, attempt);
+      const end = Date.now() + waitMs;
+      while (Date.now() < end) {
+        /* spin */
       }
-      throw err;
     }
   }
   return -1;

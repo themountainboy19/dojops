@@ -220,22 +220,23 @@ function hasSudo(): boolean {
 }
 
 /**
- * Install an npm package globally. Uses sudo when the global prefix
- * is not writable and sudo is available.
+ * Install an npm package globally using sudo.
  */
-function npmInstallGlobal(pkg: string, useSudo: boolean): void {
-  // NOSONAR — boolean param is intentional
-  if (useSudo) {
-    execFileSync("sudo", ["npm", "install", "-g", pkg], {
-      timeout: 120_000,
-      stdio: "pipe",
-    });
-  } else {
-    execFileSync("npm", ["install", "-g", pkg], {
-      timeout: 120_000,
-      stdio: "pipe",
-    });
-  }
+function npmInstallGlobalSudo(pkg: string): void {
+  execFileSync("sudo", ["npm", "install", "-g", pkg], {
+    timeout: 120_000,
+    stdio: "pipe",
+  });
+}
+
+/**
+ * Install an npm package globally without elevated permissions.
+ */
+function npmInstallGlobal(pkg: string): void {
+  execFileSync("npm", ["install", "-g", pkg], {
+    timeout: 120_000,
+    stdio: "pipe",
+  });
 }
 
 /**
@@ -303,7 +304,11 @@ export async function offerToolInstall(options?: {
     const s = p.spinner();
     s.start(`Installing ${dep.name} (${prefix}npm install -g ${pkg})...`);
     try {
-      npmInstallGlobal(pkg, useSudo);
+      if (useSudo) {
+        npmInstallGlobalSudo(pkg);
+      } else {
+        npmInstallGlobal(pkg);
+      }
       s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
       installed.push(pkg);
     } catch (err) {

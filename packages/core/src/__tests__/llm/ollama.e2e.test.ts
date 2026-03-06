@@ -27,6 +27,7 @@ interface ProbeResult {
 function probeOllamaSync(): ProbeResult {
   try {
     const raw = execSync(
+      // NOSONAR - test pre-flight probe with controlled input
       `node -e "const http=require('http');const r=http.get('${OLLAMA_HOST}/api/tags',{timeout:5000},s=>{let d='';s.on('data',c=>d+=c);s.on('end',()=>{console.log(d);process.exit(0)});});r.on('error',()=>process.exit(1));"`,
       { timeout: 10_000, encoding: "utf-8" },
     );

@@ -291,9 +291,11 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   const configCheck = checkConfigPermissions();
   if (configCheck) checks.push(configCheck);
 
-  checks.push(...checkBuiltInTools(projectDomains));
-  checks.push(...checkSystemTools(projectDomains));
-  checks.push(...checkProjectMetrics(root));
+  checks.push(
+    ...checkBuiltInTools(projectDomains),
+    ...checkSystemTools(projectDomains),
+    ...checkProjectMetrics(root),
+  );
 
   // Output
   if (ctx.globalOpts.output === "json") {

@@ -294,6 +294,37 @@ function parseYarnAudit(
  * Parse pnpm audit JSON output.
  * pnpm audit --json outputs a structure similar to npm: { advisories: { [id]: advisory } }
  */
+/** Build a ScanFinding from a single pnpm advisory entry. */
+function buildPnpmFinding(
+  advisory: Record<string, unknown>,
+  subProject: string | undefined,
+  lockFile: string,
+): ScanFinding {
+  const prefix = subProject ? `${subProject}: ` : "";
+  const moduleName = extractPnpmModuleName(advisory);
+  const severity = mapSeverity(
+    typeof advisory.severity === "string" ? advisory.severity : "moderate",
+  );
+  const title = extractPnpmTitle(advisory);
+  const patchedVersions =
+    typeof advisory.patched_versions === "string" ? advisory.patched_versions : undefined;
+  const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
+
+  return {
+    id: deterministicFindingId("pnpm", moduleName, severity),
+    tool: "npm-audit",
+    severity,
+    category: "DEPENDENCY",
+    file: subProject ? `${subProject}/${lockFile}` : lockFile,
+    message: `${prefix}${moduleName}: ${title}`,
+    recommendation: patchedVersions
+      ? `Update to ${moduleName}@${patchedVersions}`
+      : "No automatic fix available — review manually",
+    autoFixAvailable: !!patchedVersions,
+    cve: cves[0] ? String(cves[0]) : undefined,
+  };
+}
+
 function parsePnpmAudit(
   rawOutput: string,
   findings: ScanFinding[],
@@ -304,29 +335,7 @@ function parsePnpmAudit(
   // pnpm audit may use `advisories` (older) or `vulnerabilities` (newer, npm-compatible)
   const advisories: Record<string, unknown> = audit.advisories ?? {};
   for (const advisory of Object.values(advisories) as Array<Record<string, unknown>>) {
-    const prefix = subProject ? `${subProject}: ` : "";
-    const moduleName = extractPnpmModuleName(advisory);
-    const severity = mapSeverity(
-      typeof advisory.severity === "string" ? advisory.severity : "moderate",
-    );
-    const title = extractPnpmTitle(advisory);
-    const patchedVersions =
-      typeof advisory.patched_versions === "string" ? advisory.patched_versions : undefined;
-    const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
-
-    findings.push({
-      id: deterministicFindingId("pnpm", moduleName, severity),
-      tool: "npm-audit",
-      severity,
-      category: "DEPENDENCY",
-      file: subProject ? `${subProject}/${lockFile}` : lockFile,
-      message: `${prefix}${moduleName}: ${title}`,
-      recommendation: patchedVersions
-        ? `Update to ${moduleName}@${patchedVersions}`
-        : "No automatic fix available — review manually",
-      autoFixAvailable: !!patchedVersions,
-      cve: cves[0] ? String(cves[0]) : undefined,
-    });
+    findings.push(buildPnpmFinding(advisory, subProject, lockFile));
   }
 
   // Also try npm-compatible vulnerabilities format

@@ -5,7 +5,38 @@ import {
   buildBinaryPathInArchive,
   isToolSupportedOnCurrentPlatform,
   SYSTEM_TOOLS,
+  type ArchiveType,
 } from "../../agents/system-tools";
+
+/** Look up a tool by name and assert it exists with expected properties. */
+function expectToolProps(
+  name: string,
+  props: {
+    archiveType?: ArchiveType;
+    binaryName?: string;
+    binaryPathInArchive?: string | null; // null = expect undefined, string = expect toContain
+  },
+): void {
+  const tool = findSystemTool(name);
+  expect(tool).toBeDefined();
+  if (props.archiveType) expect(tool!.archiveType).toBe(props.archiveType);
+  if (props.binaryName) expect(tool!.binaryName).toBe(props.binaryName);
+  if (props.binaryPathInArchive === null) {
+    expect(tool!.binaryPathInArchive).toBeUndefined();
+  } else if (props.binaryPathInArchive) {
+    expect(tool!.binaryPathInArchive).toContain(props.binaryPathInArchive);
+  }
+}
+
+/** Build a download URL for a tool and assert it contains all expected substrings. */
+function expectDownloadUrl(name: string, version: string, expectedSubstrings: string[]): void {
+  const tool = findSystemTool(name)!;
+  const url = buildDownloadUrl(tool, version);
+  expect(url).toBeDefined();
+  for (const sub of expectedSubstrings) {
+    expect(url).toContain(sub);
+  }
+}
 
 describe("system-tools", () => {
   describe("findSystemTool", () => {
@@ -28,11 +59,7 @@ describe("system-tools", () => {
 
   describe("buildDownloadUrl", () => {
     it("interpolates terraform URL with version, platform, and arch", () => {
-      const tool = findSystemTool("terraform")!;
-      const url = buildDownloadUrl(tool, "1.10.5");
-      expect(url).toBeDefined();
-      expect(url).toContain("1.10.5");
-      expect(url).toContain("releases.hashicorp.com/terraform");
+      expectDownloadUrl("terraform", "1.10.5", ["1.10.5", "releases.hashicorp.com/terraform"]);
     });
 
     it("uses latestVersion when no version specified", () => {
@@ -48,21 +75,11 @@ describe("system-tools", () => {
     });
 
     it("interpolates trivy URL correctly", () => {
-      const tool = findSystemTool("trivy")!;
-      const url = buildDownloadUrl(tool, "0.69.1");
-      expect(url).toBeDefined();
-      expect(url).toContain("aquasecurity/trivy");
-      expect(url).toContain("0.69.1");
-      expect(url).toContain(".tar.gz");
+      expectDownloadUrl("trivy", "0.69.1", ["aquasecurity/trivy", "0.69.1", ".tar.gz"]);
     });
 
     it("interpolates gitleaks URL correctly", () => {
-      const tool = findSystemTool("gitleaks")!;
-      const url = buildDownloadUrl(tool, "8.30.0");
-      expect(url).toBeDefined();
-      expect(url).toContain("gitleaks/gitleaks");
-      expect(url).toContain("8.30.0");
-      expect(url).toContain(".tar.gz");
+      expectDownloadUrl("gitleaks", "8.30.0", ["gitleaks/gitleaks", "8.30.0", ".tar.gz"]);
     });
   });
 
@@ -91,86 +108,60 @@ describe("system-tools", () => {
 
   describe("new system tools", () => {
     it("finds helm", () => {
-      const tool = findSystemTool("helm");
-      expect(tool).toBeDefined();
-      expect(tool!.archiveType).toBe("tar.gz");
-      expect(tool!.binaryName).toBe("helm");
-      expect(tool!.binaryPathInArchive).toBeDefined();
+      expectToolProps("helm", { archiveType: "tar.gz", binaryName: "helm" });
+      expect(findSystemTool("helm")!.binaryPathInArchive).toBeDefined();
     });
 
     it("finds shellcheck with tar.xz archive", () => {
-      const tool = findSystemTool("shellcheck");
-      expect(tool).toBeDefined();
-      expect(tool!.archiveType).toBe("tar.xz");
-      expect(tool!.binaryName).toBe("shellcheck");
-      expect(tool!.binaryPathInArchive).toContain("shellcheck");
+      expectToolProps("shellcheck", {
+        archiveType: "tar.xz",
+        binaryName: "shellcheck",
+        binaryPathInArchive: "shellcheck",
+      });
     });
 
     it("finds actionlint", () => {
-      const tool = findSystemTool("actionlint");
-      expect(tool).toBeDefined();
-      expect(tool!.archiveType).toBe("tar.gz");
-      expect(tool!.binaryName).toBe("actionlint");
-      expect(tool!.binaryPathInArchive).toBeUndefined();
+      expectToolProps("actionlint", {
+        archiveType: "tar.gz",
+        binaryName: "actionlint",
+        binaryPathInArchive: null,
+      });
     });
 
     it("finds promtool", () => {
-      const tool = findSystemTool("promtool");
-      expect(tool).toBeDefined();
-      expect(tool!.archiveType).toBe("tar.gz");
-      expect(tool!.binaryName).toBe("promtool");
-      expect(tool!.binaryPathInArchive).toContain("promtool");
+      expectToolProps("promtool", {
+        archiveType: "tar.gz",
+        binaryName: "promtool",
+        binaryPathInArchive: "promtool",
+      });
     });
 
     it("finds circleci", () => {
-      const tool = findSystemTool("circleci");
-      expect(tool).toBeDefined();
-      expect(tool!.archiveType).toBe("tar.gz");
-      expect(tool!.binaryName).toBe("circleci");
-      expect(tool!.binaryPathInArchive).toContain("circleci");
+      expectToolProps("circleci", {
+        archiveType: "tar.gz",
+        binaryName: "circleci",
+        binaryPathInArchive: "circleci",
+      });
     });
 
     it("builds correct helm download URL", () => {
-      const tool = findSystemTool("helm")!;
-      const url = buildDownloadUrl(tool, "3.17.3");
-      expect(url).toBeDefined();
-      expect(url).toContain("get.helm.sh");
-      expect(url).toContain("3.17.3");
-      expect(url).toContain(".tar.gz");
+      expectDownloadUrl("helm", "3.17.3", ["get.helm.sh", "3.17.3", ".tar.gz"]);
     });
 
     it("builds correct shellcheck download URL", () => {
-      const tool = findSystemTool("shellcheck")!;
-      const url = buildDownloadUrl(tool, "0.10.0");
-      expect(url).toBeDefined();
-      expect(url).toContain("koalaman/shellcheck");
-      expect(url).toContain("0.10.0");
-      expect(url).toContain(".tar.xz");
+      expectDownloadUrl("shellcheck", "0.10.0", ["koalaman/shellcheck", "0.10.0", ".tar.xz"]);
     });
 
     it("builds correct actionlint download URL", () => {
-      const tool = findSystemTool("actionlint")!;
-      const url = buildDownloadUrl(tool, "1.7.7");
-      expect(url).toBeDefined();
-      expect(url).toContain("rhysd/actionlint");
-      expect(url).toContain("1.7.7");
-      expect(url).toContain(".tar.gz");
+      expectDownloadUrl("actionlint", "1.7.7", ["rhysd/actionlint", "1.7.7", ".tar.gz"]);
     });
 
     it("builds correct promtool download URL", () => {
-      const tool = findSystemTool("promtool")!;
-      const url = buildDownloadUrl(tool, "2.55.1");
-      expect(url).toBeDefined();
-      expect(url).toContain("prometheus/prometheus");
-      expect(url).toContain("2.55.1");
+      expectDownloadUrl("promtool", "2.55.1", ["prometheus/prometheus", "2.55.1"]);
     });
 
     it("builds correct circleci download URL", () => {
-      const tool = findSystemTool("circleci")!;
-      const url = buildDownloadUrl(tool, "0.1.31364");
-      expect(url).toBeDefined();
-      expect(url).toContain("CircleCI-Public/circleci-cli");
-      expect(url).toContain("0.1.31364");
+      expectDownloadUrl("circleci", "0.1.31364", ["CircleCI-Public/circleci-cli", "0.1.31364"]);
     });
   });
 

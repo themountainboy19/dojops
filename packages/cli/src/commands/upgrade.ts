@@ -75,6 +75,7 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
 
   try {
     execSync(`npm install -g @dojops/cli@${latestVersion}`, {
+      // NOSONAR
       stdio: "inherit",
       timeout: 120_000,
     });
@@ -97,7 +98,8 @@ export async function upgradeCommand(args: string[], ctx: CLIContext): Promise<v
     );
     return;
   }
-  p.log.success(`Upgraded to ${pc.cyan(`v${latestVersion}`)}`);
+  const vLatest = `v${latestVersion}`;
+  p.log.success(`Upgraded to ${pc.cyan(vLatest)}`);
 }
 
 async function fetchWithSpinner(isJson: boolean): Promise<string | null> {
@@ -122,7 +124,8 @@ function handleUpToDate(isJson: boolean, current: string, latest: string): void 
     console.log(JSON.stringify({ current, latest, upToDate: true }));
     return;
   }
-  p.log.success(`Already up to date — ${pc.cyan(`v${current}`)}`);
+  const vCurrent = `v${current}`;
+  p.log.success(`Already up to date — ${pc.cyan(vCurrent)}`);
 }
 
 function handleCheckOnly(isJson: boolean, current: string, latest: string): void {
@@ -130,7 +133,9 @@ function handleCheckOnly(isJson: boolean, current: string, latest: string): void
     console.log(JSON.stringify({ current, latest, upToDate: false }));
     return;
   }
-  p.log.info(`Update available: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+  const vCurrent = `v${current}`;
+  const vLatest = `v${latest}`;
+  p.log.info(`Update available: ${pc.dim(vCurrent)} → ${pc.cyan(vLatest)}`);
   p.log.info(`Run ${pc.cyan("dojops upgrade")} to install.`);
   throw new CLIError(ExitCode.GENERAL_ERROR);
 }
@@ -141,15 +146,17 @@ async function confirmUpgrade(
   current: string,
   latest: string,
 ): Promise<boolean> {
+  const vCurrent = `v${current}`;
+  const vLatest = `v${latest}`;
   if (!autoYes) {
-    p.log.info(`Update available: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+    p.log.info(`Update available: ${pc.dim(vCurrent)} → ${pc.cyan(vLatest)}`);
     const shouldProceed = await p.confirm({ message: "Install update?" });
     if (p.isCancel(shouldProceed) || !shouldProceed) {
       p.log.info("Upgrade cancelled.");
       return false;
     }
   } else if (!isJson) {
-    p.log.info(`Upgrading: ${pc.dim(`v${current}`)} → ${pc.cyan(`v${latest}`)}`);
+    p.log.info(`Upgrading: ${pc.dim(vCurrent)} → ${pc.cyan(vLatest)}`);
   }
   return true;
 }

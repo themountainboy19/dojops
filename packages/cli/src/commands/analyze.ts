@@ -8,26 +8,66 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
 
-export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // Resolve content from: --file flag > stdin > positional args
+/** Resolve diff content from --file, stdin, or positional args. */
+function resolveDiffContent(args: string[]): string | undefined {
   const filePath = extractFlagValue(args, "--file");
-  let content: string | undefined;
-
   if (filePath) {
     try {
-      content = fs.readFileSync(filePath, "utf-8");
+      return fs.readFileSync(filePath, "utf-8");
     } catch {
       throw new CLIError(ExitCode.VALIDATION_ERROR, `Cannot read file: ${filePath}`);
     }
-  } else {
-    const stdinContent = readStdin();
-    if (stdinContent?.trim()) {
-      content = stdinContent;
-    } else {
-      content = args.filter((a) => !a.startsWith("-")).join(" ");
+  }
+  const stdinContent = readStdin();
+  if (stdinContent?.trim()) return stdinContent;
+  return args.filter((a) => !a.startsWith("-")).join(" ") || undefined;
+}
+
+/** Format diff analysis into display lines. */
+function formatAnalysis(analysis: {
+  summary: string;
+  riskLevel: string;
+  costImpact: { direction: string; details: string };
+  rollbackComplexity: string;
+  confidence: number;
+  changes: Array<{ action: string; resource: string; attribute?: string }>;
+  riskFactors: string[];
+  securityImpact: string[];
+  recommendations: string[];
+}): string[] {
+  const lines = [
+    `${pc.bold("Summary:")}     ${analysis.summary}`,
+    `${pc.bold("Risk Level:")}  ${riskColor(analysis.riskLevel)}`,
+    `${pc.bold("Cost Impact:")} ${analysis.costImpact.direction} — ${analysis.costImpact.details}`,
+    `${pc.bold("Rollback:")}    ${analysis.rollbackComplexity}`,
+    `${pc.bold("Confidence:")}  ${formatConfidence(analysis.confidence)}`,
+  ];
+
+  if (analysis.changes.length > 0) {
+    lines.push("", pc.bold(`Changes (${analysis.changes.length}):`));
+    for (const change of analysis.changes) {
+      const detail = change.attribute ? pc.dim(` (${change.attribute})`) : "";
+      lines.push(`  ${changeColor(change.action.toUpperCase())} ${change.resource}${detail}`);
     }
   }
 
+  const sections: Array<{ items: string[]; title: string; color: (s: string) => string }> = [
+    { items: analysis.riskFactors, title: "Risk Factors:", color: pc.yellow },
+    { items: analysis.securityImpact, title: "Security Impact:", color: pc.red },
+    { items: analysis.recommendations, title: "Recommendations:", color: pc.blue },
+  ];
+  for (const { items, title, color } of sections) {
+    if (items.length > 0) {
+      lines.push("", pc.bold(title));
+      for (const item of items) lines.push(`  ${color("-")} ${item}`);
+    }
+  }
+
+  return lines;
+}
+
+export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const content = resolveDiffContent(args);
   if (!content?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops analyze diff <diff-content>`);
     p.log.info(`  ${pc.dim("$")} dojops analyze diff --file <path>`);
@@ -49,43 +89,5 @@ export async function analyzeCommand(args: string[], ctx: CLIContext): Promise<v
     return;
   }
 
-  const bodyLines = [
-    `${pc.bold("Summary:")}     ${analysis.summary}`,
-    `${pc.bold("Risk Level:")}  ${riskColor(analysis.riskLevel)}`,
-    `${pc.bold("Cost Impact:")} ${analysis.costImpact.direction} — ${analysis.costImpact.details}`,
-    `${pc.bold("Rollback:")}    ${analysis.rollbackComplexity}`,
-    `${pc.bold("Confidence:")}  ${formatConfidence(analysis.confidence)}`,
-  ];
-
-  if (analysis.changes.length > 0) {
-    bodyLines.push("", pc.bold(`Changes (${analysis.changes.length}):`));
-    for (const change of analysis.changes) {
-      const detail = change.attribute ? pc.dim(` (${change.attribute})`) : "";
-      const action = changeColor(change.action.toUpperCase());
-      bodyLines.push(`  ${action} ${change.resource}${detail}`);
-    }
-  }
-
-  if (analysis.riskFactors.length > 0) {
-    bodyLines.push("", pc.bold("Risk Factors:"));
-    for (const r of analysis.riskFactors) {
-      bodyLines.push(`  ${pc.yellow("-")} ${r}`);
-    }
-  }
-
-  if (analysis.securityImpact.length > 0) {
-    bodyLines.push("", pc.bold("Security Impact:"));
-    for (const si of analysis.securityImpact) {
-      bodyLines.push(`  ${pc.red("-")} ${si}`);
-    }
-  }
-
-  if (analysis.recommendations.length > 0) {
-    bodyLines.push("", pc.bold("Recommendations:"));
-    for (const rec of analysis.recommendations) {
-      bodyLines.push(`  ${pc.blue("-")} ${rec}`);
-    }
-  }
-
-  p.note(wrapForNote(bodyLines.join("\n")), "Infrastructure Diff Analysis");
+  p.note(wrapForNote(formatAnalysis(analysis).join("\n")), "Infrastructure Diff Analysis");
 }

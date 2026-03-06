@@ -8,26 +8,60 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
 
-export async function debugCommand(args: string[], ctx: CLIContext): Promise<void> {
-  // Resolve content from: --file flag > stdin > positional args
+/** Resolve content from --file flag, stdin, or positional args. */
+function resolveInputContent(args: string[]): string | undefined {
   const filePath = extractFlagValue(args, "--file");
-  let logContent: string | undefined;
-
   if (filePath) {
     try {
-      logContent = fs.readFileSync(filePath, "utf-8");
+      return fs.readFileSync(filePath, "utf-8");
     } catch {
       throw new CLIError(ExitCode.VALIDATION_ERROR, `Cannot read file: ${filePath}`);
     }
-  } else {
-    const stdinContent = readStdin();
-    if (stdinContent?.trim()) {
-      logContent = stdinContent;
-    } else {
-      logContent = args.filter((a) => !a.startsWith("-")).join(" ");
+  }
+  const stdinContent = readStdin();
+  if (stdinContent?.trim()) return stdinContent;
+  return args.filter((a) => !a.startsWith("-")).join(" ") || undefined;
+}
+
+/** Format the CI diagnosis into display lines. */
+function formatDiagnosis(diagnosis: {
+  errorType: string;
+  summary: string;
+  rootCause: string;
+  confidence: number;
+  affectedFiles: string[];
+  suggestedFixes: Array<{
+    confidence: number;
+    description: string;
+    command?: string;
+    file?: string;
+  }>;
+}): string[] {
+  const lines = [
+    `${pc.bold("Error Type:")}  ${pc.red(diagnosis.errorType)}`,
+    `${pc.bold("Summary:")}     ${diagnosis.summary}`,
+    `${pc.bold("Root Cause:")}  ${diagnosis.rootCause}`,
+    `${pc.bold("Confidence:")}  ${formatConfidence(diagnosis.confidence)}`,
+  ];
+  if (diagnosis.affectedFiles.length > 0) {
+    lines.push("", pc.bold("Affected Files:"));
+    for (const f of diagnosis.affectedFiles) {
+      lines.push(`  ${pc.dim("-")} ${pc.underline(f)}`);
     }
   }
+  if (diagnosis.suggestedFixes.length > 0) {
+    lines.push("", pc.bold("Suggested Fixes:"));
+    for (const fix of diagnosis.suggestedFixes) {
+      lines.push(`  ${formatConfidence(fix.confidence)} ${fix.description}`);
+      if (fix.command) lines.push(`       ${pc.dim("$")} ${pc.cyan(fix.command)}`);
+      if (fix.file) lines.push(`       ${pc.dim("File:")} ${pc.underline(fix.file)}`);
+    }
+  }
+  return lines;
+}
 
+export async function debugCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const logContent = resolveInputContent(args);
   if (!logContent?.trim()) {
     p.log.info(`  ${pc.dim("$")} dojops debug ci <log-content>`);
     p.log.info(`  ${pc.dim("$")} dojops debug ci --file <path>`);
@@ -49,28 +83,5 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
     return;
   }
 
-  const bodyLines = [
-    `${pc.bold("Error Type:")}  ${pc.red(diagnosis.errorType)}`,
-    `${pc.bold("Summary:")}     ${diagnosis.summary}`,
-    `${pc.bold("Root Cause:")}  ${diagnosis.rootCause}`,
-    `${pc.bold("Confidence:")}  ${formatConfidence(diagnosis.confidence)}`,
-  ];
-
-  if (diagnosis.affectedFiles.length > 0) {
-    bodyLines.push("", pc.bold("Affected Files:"));
-    for (const f of diagnosis.affectedFiles) {
-      bodyLines.push(`  ${pc.dim("-")} ${pc.underline(f)}`);
-    }
-  }
-
-  if (diagnosis.suggestedFixes.length > 0) {
-    bodyLines.push("", pc.bold("Suggested Fixes:"));
-    for (const fix of diagnosis.suggestedFixes) {
-      bodyLines.push(`  ${formatConfidence(fix.confidence)} ${fix.description}`);
-      if (fix.command) bodyLines.push(`       ${pc.dim("$")} ${pc.cyan(fix.command)}`);
-      if (fix.file) bodyLines.push(`       ${pc.dim("File:")} ${pc.underline(fix.file)}`);
-    }
-  }
-
-  p.note(wrapForNote(bodyLines.join("\n")), "CI Diagnosis");
+  p.note(wrapForNote(formatDiagnosis(diagnosis).join("\n")), "CI Diagnosis");
 }

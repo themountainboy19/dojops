@@ -304,7 +304,7 @@ export function detectContainer(root: string): ContainerDetection {
   if (!hasSwarm && composePath) {
     try {
       const content = fs.readFileSync(path.join(root, composePath), "utf-8");
-      hasSwarm = /deploy:\s*\n\s+(mode:|placement:|replicas:)/m.test(content);
+      hasSwarm = /deploy:\s*\n\s+(mode:|placement:|replicas:)/m.test(content); // NOSONAR
     } catch {
       /* unreadable */
     }

@@ -39,56 +39,49 @@ function deleteProjectFiles(files: string[], root: string): number {
   return deleted;
 }
 
+/** Show available plans when no planId is provided. */
+async function showAvailablePlans(root: string): Promise<void> {
+  const { listPlans } = await import("../state");
+  const plans = listPlans(root);
+  if (plans.length === 0) return;
+
+  p.log.info("");
+  p.log.info(pc.bold("Available plans:"));
+  for (const plan of plans.slice(0, 10)) {
+    const status = plan.approvalStatus ?? "PENDING";
+    const date = new Date(plan.createdAt).toLocaleDateString();
+    p.log.info(`  ${pc.cyan(plan.id)} ${pc.dim(`(${status}, ${date})`)} ${plan.goal}`);
+  }
+  if (plans.length > 10) p.log.info(pc.dim(`  ...and ${plans.length - 10} more`));
+}
+
 export async function cleanCommand(
   args: string[],
   ctx: CLIContext,
   isLegacyDestroy = false,
 ): Promise<void> {
-  if (isLegacyDestroy) {
-    p.log.warn(pc.yellow("'destroy' is deprecated. Use 'clean' instead."));
-  }
+  if (isLegacyDestroy) p.log.warn(pc.yellow("'destroy' is deprecated. Use 'clean' instead."));
 
   const root = findProjectRoot();
-  if (!root) {
+  if (!root)
     throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
-  }
 
   const dryRun = hasFlag(args, "--dry-run");
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
   const planId = args.find((a) => !a.startsWith("-"));
+
   if (!planId) {
     p.log.info(`  ${pc.dim("$")} dojops clean <plan-id>`);
-
-    // UX #13: List available plans to help the user
-    const { listPlans } = await import("../state");
-    const plans = listPlans(root);
-    if (plans.length > 0) {
-      p.log.info("");
-      p.log.info(pc.bold("Available plans:"));
-      for (const plan of plans.slice(0, 10)) {
-        const status = plan.approvalStatus ?? "PENDING";
-        const date = new Date(plan.createdAt).toLocaleDateString();
-        const planMeta = pc.dim(`(${status}, ${date})`);
-        p.log.info(`  ${pc.cyan(plan.id)} ${planMeta} ${plan.goal}`);
-      }
-      if (plans.length > 10) {
-        p.log.info(pc.dim(`  ...and ${plans.length - 10} more`));
-      }
-    }
-
+    await showAvailablePlans(root);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for clean (safety measure).");
   }
 
   const plan = loadPlan(root, planId);
-  if (!plan) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
-  }
+  if (!plan) throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
 
-  // Collect files from execution records (same source as rollback)
-  const executions = listExecutions(root).filter((e) => e.planId === planId);
-  const execFiles = executions.flatMap((e) => e.filesCreated);
-
-  // Also include plan.files for backward compatibility
+  const execFiles = listExecutions(root)
+    .filter((e) => e.planId === planId)
+    .flatMap((e) => e.filesCreated);
   const allFiles = [...new Set([...plan.files, ...execFiles])];
 
   if (allFiles.length === 0) {
@@ -96,9 +89,10 @@ export async function cleanCommand(
     return;
   }
 
-  // Show what will be destroyed
-  const lines = allFiles.map((f) => `  ${pc.red("-")} ${f}`);
-  p.note(lines.join("\n"), pc.red(`Clean artifacts from ${plan.id}`));
+  p.note(
+    allFiles.map((f) => `  ${pc.red("-")} ${f}`).join("\n"),
+    pc.red(`Clean artifacts from ${plan.id}`),
+  );
 
   if (dryRun) {
     p.log.info(`${allFiles.length} file(s) would be deleted.`);
@@ -127,7 +121,6 @@ export async function cleanCommand(
   const startTime = Date.now();
   try {
     const deleted = deleteProjectFiles(allFiles, root);
-
     appendAudit(root, {
       timestamp: new Date().toISOString(),
       user: getCurrentUser(),
@@ -137,7 +130,6 @@ export async function cleanCommand(
       status: "success",
       durationMs: Date.now() - startTime,
     });
-
     p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
   } finally {
     releaseLock(root);

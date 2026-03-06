@@ -18,6 +18,7 @@ const HAS_KEY = !!process.env.ANTHROPIC_API_KEY;
 function run(args: string, opts?: { cwd?: string; env?: Record<string, string> }): string {
   const env = { ...process.env, NO_COLOR: "1", ...opts?.env };
   return execSync(`node ${CLI_BIN} ${args}`, {
+    // NOSONAR - test helper with controlled input
     cwd: opts?.cwd,
     env,
     encoding: "utf-8",

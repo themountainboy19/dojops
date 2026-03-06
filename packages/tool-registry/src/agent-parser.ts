@@ -25,7 +25,7 @@ export function parseAgentReadme(content: string, dirName: string): CustomAgentC
   let currentContent: string[] = [];
 
   for (const line of lines) {
-    const headingMatch = /^##\s+(.+)$/.exec(line);
+    const headingMatch = /^##\s+(.+)$/.exec(line); // NOSONAR - safe: anchored pattern on single line
     if (headingMatch) {
       // Save previous section
       if (currentSection) {

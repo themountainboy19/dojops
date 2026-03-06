@@ -488,52 +488,57 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     }
   }
 
+  /** Write generated content to all declared file specs. */
+  private writeFileSpecs(
+    input: Record<string, unknown>,
+    generated: string,
+    isUpdate: boolean,
+    basePath: string,
+  ): { filesWritten: string[]; filesModified: string[] } {
+    const filesWritten: string[] = [];
+    const filesModified: string[] = [];
+
+    for (const fileSpec of this.module.frontmatter.files) {
+      const resolvedPath = resolveFilePath(fileSpec.path, input);
+      const fullPath = path.isAbsolute(resolvedPath)
+        ? resolvedPath
+        : path.join(basePath, resolvedPath);
+
+      if (this.module.frontmatter.scope) {
+        if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
+          throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
+        }
+      }
+
+      if (isUpdate && fs.existsSync(fullPath)) {
+        fs.copyFileSync(fullPath, fullPath + ".bak");
+        filesModified.push(resolvedPath);
+      } else {
+        filesWritten.push(resolvedPath);
+      }
+
+      const dir = path.dirname(fullPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(fullPath, generated, "utf-8");
+    }
+
+    return { filesWritten, filesModified };
+  }
+
   async execute(input: Record<string, unknown>): Promise<ToolOutput> {
-    // 1. Generate
     const genResult = await this.generate(input);
     if (!genResult.success || !genResult.data) return genResult;
 
-    const { generated, isUpdate } = genResult.data as {
-      generated: string;
-      isUpdate: boolean;
-    };
+    const { generated, isUpdate } = genResult.data as { generated: string; isUpdate: boolean };
 
     try {
-      const filesWritten: string[] = [];
-      const filesModified: string[] = [];
       const basePath = this.options.basePath ?? process.cwd();
-
-      for (const fileSpec of this.module.frontmatter.files) {
-        // Resolve path template — v2 paths use simple patterns
-        const resolvedPath = resolveFilePath(fileSpec.path, input);
-        const fullPath = path.isAbsolute(resolvedPath)
-          ? resolvedPath
-          : path.join(basePath, resolvedPath);
-
-        // Scope enforcement
-        if (this.module.frontmatter.scope) {
-          if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
-            throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
-          }
-        }
-
-        // Backup existing files on update
-        if (isUpdate && fs.existsSync(fullPath)) {
-          fs.copyFileSync(fullPath, fullPath + ".bak");
-          filesModified.push(resolvedPath);
-        } else {
-          filesWritten.push(resolvedPath);
-        }
-
-        // Ensure directory exists
-        const dir = path.dirname(fullPath);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true });
-        }
-
-        // Write raw content directly — no serialization step
-        fs.writeFileSync(fullPath, generated, "utf-8");
-      }
+      const { filesWritten, filesModified } = this.writeFileSpecs(
+        input,
+        generated,
+        isUpdate,
+        basePath,
+      );
 
       return {
         success: true,

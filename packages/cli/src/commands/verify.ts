@@ -22,6 +22,51 @@ interface VerificationResult {
   rawOutput?: string;
 }
 
+/** Route file to the appropriate verifier based on extension/name. */
+async function routeVerifier(
+  content: string,
+  basename: string,
+  ext: string,
+): Promise<VerificationResult> {
+  if (ext === ".tf") {
+    return verifyTerraformContent(content);
+  }
+  if (basename === "Dockerfile" || basename.startsWith("Dockerfile.")) {
+    return verifyWithBinary({
+      content,
+      filename: "Dockerfile",
+      config: {
+        command: "hadolint --format json Dockerfile",
+        parser: "hadolint-json",
+        timeout: 30_000,
+        cwd: "output",
+      },
+      childProcessPermission: "required",
+    });
+  }
+  if (ext === ".yaml" || ext === ".yml") {
+    return verifyYamlFile(content, basename);
+  }
+  throw new CLIError(
+    ExitCode.VALIDATION_ERROR,
+    `Cannot verify file type: ${ext || basename}. Supported: .tf, Dockerfile, .yaml/.yml`,
+  );
+}
+
+/** Format and display verification issues. */
+function displayIssues(issues: VerificationResult["issues"]): void {
+  if (issues.length === 0) return;
+  console.log();
+  for (const issue of issues) {
+    const labelInner = issue.severity === "warning" ? pc.yellow("WARN ") : pc.dim("INFO ");
+    const label = issue.severity === "error" ? pc.red("ERROR") : labelInner;
+    const lineInfo = issue.line ? ` ${pc.dim(`line ${issue.line}`)}` : "";
+    const ruleInfo = issue.rule ? ` ${pc.dim(`[${issue.rule}]`)}` : "";
+    console.log(`  ${label}${lineInfo}${ruleInfo}  ${issue.message}`);
+  }
+  console.log();
+}
+
 /**
  * Detect file type from filename/extension and content, then run
  * the appropriate verifier.
@@ -48,61 +93,23 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
   if (!isStructured) spinner.start(`Verifying ${pc.cyan(basename)}...`);
 
   let result: VerificationResult;
-
   try {
-    if (ext === ".tf") {
-      result = await verifyTerraformContent(content);
-    } else if (basename === "Dockerfile" || basename.startsWith("Dockerfile.")) {
-      result = await verifyWithBinary({
-        content,
-        filename: "Dockerfile",
-        config: {
-          command: "hadolint --format json Dockerfile",
-          parser: "hadolint-json",
-          timeout: 30_000,
-          cwd: "output",
-        },
-        childProcessPermission: "required",
-      });
-    } else if (ext === ".yaml" || ext === ".yml") {
-      result = await verifyYamlFile(content, basename);
-    } else {
-      if (!isStructured) spinner.stop("Unknown file type");
-      throw new CLIError(
-        ExitCode.VALIDATION_ERROR,
-        `Cannot verify file type: ${ext || basename}. Supported: .tf, Dockerfile, .yaml/.yml`,
-      );
-    }
+    result = await routeVerifier(content, basename, ext);
   } catch (err) {
-    if (err instanceof CLIError) {
-      throw err;
-    }
+    if (err instanceof CLIError) throw err;
     if (!isStructured) spinner.stop("Verification failed");
     throw new CLIError(ExitCode.GENERAL_ERROR, toErrorMessage(err));
   }
 
   if (!isStructured) spinner.stop(`Verified with ${pc.cyan(result.tool)}`);
 
-  // Display results
   if (result.passed) {
     p.log.success(`${pc.green("PASSED")} - ${result.tool}`);
   } else {
     p.log.error(`${pc.red("FAILED")} - ${result.tool}`);
   }
 
-  if (result.issues.length > 0) {
-    console.log();
-    for (const issue of result.issues) {
-      const labelInner = issue.severity === "warning" ? pc.yellow("WARN ") : pc.dim("INFO ");
-      const label = issue.severity === "error" ? pc.red("ERROR") : labelInner;
-      const lineDim = issue.line ? pc.dim(`line ${issue.line}`) : null;
-      const lineInfo = lineDim ? ` ${lineDim}` : "";
-      const ruleDim = issue.rule ? pc.dim(`[${issue.rule}]`) : null;
-      const ruleInfo = ruleDim ? ` ${ruleDim}` : "";
-      console.log(`  ${label}${lineInfo}${ruleInfo}  ${issue.message}`);
-    }
-    console.log();
-  }
+  displayIssues(result.issues);
 
   if (!result.passed) {
     throw new CLIError(ExitCode.VALIDATION_ERROR);
@@ -356,6 +363,35 @@ async function verifyYamlFile(content: string, basename: string): Promise<Verifi
   };
 }
 
+/** Validate a single GitHub Actions job definition. */
+function validateGitHubActionsJob(
+  jobName: string,
+  job: Record<string, unknown>,
+  issues: VerificationResult["issues"],
+): void {
+  if (!job || typeof job !== "object") {
+    issues.push({ severity: "error", message: `Job '${jobName}' is not a valid object` });
+    return;
+  }
+  if (!job["runs-on"] && !job.uses) {
+    issues.push({ severity: "error", message: `Job '${jobName}' missing 'runs-on'` });
+  }
+  if (!job.steps && !job.uses) {
+    issues.push({ severity: "warning", message: `Job '${jobName}' has no steps` });
+  }
+  if (job.steps && Array.isArray(job.steps)) {
+    for (let i = 0; i < job.steps.length; i++) {
+      const step = job.steps[i] as Record<string, unknown>;
+      if (!step.run && !step.uses) {
+        issues.push({
+          severity: "warning",
+          message: `Job '${jobName}' step ${i + 1} has neither 'run' nor 'uses'`,
+        });
+      }
+    }
+  }
+}
+
 /**
  * Structural verification for GitHub Actions YAML.
  */
@@ -379,30 +415,7 @@ function verifyGitHubActions(yamlContent: string): VerificationResult {
     } else {
       const jobs = doc.jobs as Record<string, Record<string, unknown>>;
       for (const [jobName, job] of Object.entries(jobs)) {
-        if (!job || typeof job !== "object") {
-          issues.push({ severity: "error", message: `Job '${jobName}' is not a valid object` });
-          continue;
-        }
-
-        if (!job["runs-on"] && !job.uses) {
-          issues.push({ severity: "error", message: `Job '${jobName}' missing 'runs-on'` });
-        }
-
-        if (!job.steps && !job.uses) {
-          issues.push({ severity: "warning", message: `Job '${jobName}' has no steps` });
-        }
-
-        if (job.steps && Array.isArray(job.steps)) {
-          for (let i = 0; i < job.steps.length; i++) {
-            const step = job.steps[i] as Record<string, unknown>;
-            if (!step.run && !step.uses) {
-              issues.push({
-                severity: "warning",
-                message: `Job '${jobName}' step ${i + 1} has neither 'run' nor 'uses'`,
-              });
-            }
-          }
-        }
+        validateGitHubActionsJob(jobName, job, issues);
       }
     }
   } catch (err) {
@@ -433,6 +446,37 @@ const GITLAB_RESERVED_KEYS = new Set([
   "pages",
 ]);
 
+/** Validate a single GitLab CI job definition. */
+function validateGitLabCIJob(
+  jobName: string,
+  job: Record<string, unknown>,
+  stages: string[] | undefined,
+  issues: VerificationResult["issues"],
+): void {
+  if (!job || typeof job !== "object") {
+    issues.push({ severity: "error", message: `Job '${jobName}' is not a valid object` });
+    return;
+  }
+  if (!job.script && !job.trigger && !job.extends) {
+    issues.push({
+      severity: "error",
+      message: `Job '${jobName}' missing required 'script' property`,
+    });
+  }
+  if (job.script && !Array.isArray(job.script) && typeof job.script !== "string") {
+    issues.push({
+      severity: "error",
+      message: `Job '${jobName}' 'script' must be a string or array`,
+    });
+  }
+  if (job.stage && stages && Array.isArray(stages) && !stages.includes(job.stage as string)) {
+    issues.push({
+      severity: "warning",
+      message: `Job '${jobName}' references undeclared stage '${String(job.stage)}'`,
+    });
+  }
+}
+
 /**
  * Structural verification for GitLab CI YAML.
  */
@@ -461,41 +505,10 @@ function verifyGitLabCI(yamlContent: string): VerificationResult {
     }
 
     for (const jobName of jobNames) {
-      const job = doc[jobName] as Record<string, unknown>;
-
-      if (!job || typeof job !== "object") {
-        issues.push({ severity: "error", message: `Job '${jobName}' is not a valid object` });
-        continue;
-      }
-
-      if (!job.script && !job.trigger && !job.extends) {
-        issues.push({
-          severity: "error",
-          message: `Job '${jobName}' missing required 'script' property`,
-        });
-      }
-
-      if (job.script && !Array.isArray(job.script) && typeof job.script !== "string") {
-        issues.push({
-          severity: "error",
-          message: `Job '${jobName}' 'script' must be a string or array`,
-        });
-      }
-
-      if (job.stage && stages && Array.isArray(stages)) {
-        if (!stages.includes(job.stage as string)) {
-          issues.push({
-            severity: "warning",
-            message: `Job '${jobName}' references undeclared stage '${String(job.stage)}'`,
-          });
-        }
-      }
+      validateGitLabCIJob(jobName, doc[jobName] as Record<string, unknown>, stages, issues);
     }
   } catch (err) {
-    issues.push({
-      severity: "error",
-      message: `YAML parse error: ${(err as Error).message}`,
-    });
+    issues.push({ severity: "error", message: `YAML parse error: ${(err as Error).message}` });
   }
 
   return {

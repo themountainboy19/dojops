@@ -345,7 +345,7 @@ export class CustomTool implements DevOpsTool<Record<string, unknown>> {
     }
 
     // Check for unresolved template variables
-    const unresolvedMatch = /\{[^}]+\}/.exec(resolved);
+    const unresolvedMatch = /\{[^}]+\}/.exec(resolved); // NOSONAR - safe: negated character class prevents backtracking
     if (unresolvedMatch) {
       throw new Error(
         `Unresolved template variable ${unresolvedMatch[0]} in file path "${templatePath}"`,

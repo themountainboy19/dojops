@@ -184,6 +184,21 @@ export function discoverDopsFiles(dir: string, location: "global" | "project"): 
   return entries;
 }
 
+/** Merge discovered .dops entries into the map. When `override` is true, always overwrites; otherwise only adds new names. */
+function mergeDopsEntries(
+  dir: string,
+  location: "global" | "project",
+  byName: Map<string, DopsFileEntry>,
+  override: boolean,
+): void {
+  for (const entry of discoverDopsFiles(dir, location)) {
+    const name = path.basename(entry.filePath, ".dops");
+    if (override || !byName.has(name)) {
+      byName.set(name, entry);
+    }
+  }
+}
+
 /**
  * Discover all user .dops files from global and project directories.
  * Project .dops files override global by name.
@@ -191,34 +206,16 @@ export function discoverDopsFiles(dir: string, location: "global" | "project"): 
 export function discoverUserDopsFiles(projectPath?: string): DopsFileEntry[] {
   const byName = new Map<string, DopsFileEntry>();
 
-  // Global: modules/ (primary), then tools/ (fallback)
+  // Global: modules/ (primary, overrides), then tools/ (fallback, no override)
   const globalModDir = getGlobalModulesDir();
-  if (globalModDir) {
-    for (const entry of discoverDopsFiles(globalModDir, "global")) {
-      const name = path.basename(entry.filePath, ".dops");
-      byName.set(name, entry);
-    }
-  }
+  if (globalModDir) mergeDopsEntries(globalModDir, "global", byName, true);
   const globalDir = getGlobalToolsDir();
-  if (globalDir) {
-    for (const entry of discoverDopsFiles(globalDir, "global")) {
-      const name = path.basename(entry.filePath, ".dops");
-      if (!byName.has(name)) byName.set(name, entry);
-    }
-  }
+  if (globalDir) mergeDopsEntries(globalDir, "global", byName, false);
 
-  // Project (overrides global): modules/ (primary), then tools/ (fallback)
+  // Project (overrides global): modules/ (primary, overrides), then tools/ (fallback, no override)
   if (projectPath) {
-    const projectModDir = getProjectModulesDir(projectPath);
-    for (const entry of discoverDopsFiles(projectModDir, "project")) {
-      const name = path.basename(entry.filePath, ".dops");
-      byName.set(name, entry);
-    }
-    const projectDir = getProjectToolsDir(projectPath);
-    for (const entry of discoverDopsFiles(projectDir, "project")) {
-      const name = path.basename(entry.filePath, ".dops");
-      if (!byName.has(name)) byName.set(name, entry);
-    }
+    mergeDopsEntries(getProjectModulesDir(projectPath), "project", byName, true);
+    mergeDopsEntries(getProjectToolsDir(projectPath), "project", byName, false);
   }
 
   return Array.from(byName.values());

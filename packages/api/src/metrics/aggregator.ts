@@ -289,32 +289,59 @@ export class MetricsAggregator {
     return data;
   }
 
-  private computeSecurity(): SecurityMetrics {
-    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.dojopsDir, "scan-history"));
-
+  /** Tally severity and category counts from scan findings. */
+  private tallyFindings(scanReports: ScanReport[]): {
+    bySeverity: { critical: number; high: number; medium: number; low: number };
+    byCategory: { security: number; dependency: number; iac: number; secrets: number };
+    issueCounts: Map<string, { severity: string; count: number; tool: string }>;
+  } {
     const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
     const byCategory = { security: 0, dependency: 0, iac: 0, secrets: 0 };
     const issueCounts = new Map<string, { severity: string; count: number; tool: string }>();
 
     for (const report of scanReports) {
-      const findings = report.findings || [];
-      for (const f of findings) {
+      for (const f of report.findings || []) {
         const sev = f.severity.toLowerCase() as keyof typeof bySeverity;
         if (sev in bySeverity) bySeverity[sev]++;
-
         const cat = (f.category || "security").toLowerCase() as keyof typeof byCategory;
         if (cat in byCategory) byCategory[cat]++;
-
-        const key = f.message;
-        const existing = issueCounts.get(key);
+        const existing = issueCounts.get(f.message);
         if (existing) {
           existing.count++;
         } else {
-          issueCounts.set(key, { severity: f.severity, count: 1, tool: f.tool });
+          issueCounts.set(f.message, { severity: f.severity, count: 1, tool: f.tool });
         }
       }
     }
+    return { bySeverity, byCategory, issueCounts };
+  }
 
+  /** Build findings trend grouped by date from scan reports. */
+  private buildFindingsTrend(
+    scanReports: ScanReport[],
+  ): Array<{ date: string; critical: number; high: number; medium: number; low: number }> {
+    const dateMap = new Map<
+      string,
+      { critical: number; high: number; medium: number; low: number }
+    >();
+    for (const report of scanReports) {
+      const date = report.timestamp ? report.timestamp.slice(0, 10) : "unknown";
+      if (!dateMap.has(date)) dateMap.set(date, { critical: 0, high: 0, medium: 0, low: 0 });
+      const bucket = dateMap.get(date)!;
+      for (const f of report.findings || []) {
+        const sev = f.severity.toLowerCase() as keyof typeof bucket;
+        if (sev in bucket) bucket[sev]++;
+      }
+    }
+    return Array.from(dateMap.entries())
+      .map(([date, counts]) => ({ date, ...counts }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-30);
+  }
+
+  private computeSecurity(): SecurityMetrics {
+    const scanReports = this.readJsonFiles<ScanReport>(path.join(this.dojopsDir, "scan-history"));
+    const { bySeverity, byCategory, issueCounts } = this.tallyFindings(scanReports);
     const totalFindings =
       bySeverity.critical + bySeverity.high + bySeverity.medium + bySeverity.low;
 
@@ -323,34 +350,10 @@ export class MetricsAggregator {
       .sort((a, b) => b.count - a.count)
       .slice(0, MetricsAggregator.MAX_TOP_ISSUES);
 
-    // Findings trend: group by date
-    const dateMap = new Map<
-      string,
-      { critical: number; high: number; medium: number; low: number }
-    >();
-    for (const report of scanReports) {
-      const date = report.timestamp ? report.timestamp.slice(0, 10) : "unknown";
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { critical: 0, high: 0, medium: 0, low: 0 });
-      }
-      const bucket = dateMap.get(date)!;
-      for (const f of report.findings || []) {
-        const sev = f.severity.toLowerCase() as keyof typeof bucket;
-        if (sev in bucket) bucket[sev]++;
-      }
-    }
-    const findingsTrend = Array.from(dateMap.entries())
-      .map(([date, counts]) => ({ date, ...counts }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(-30);
+    const findingsTrend = this.buildFindingsTrend(scanReports);
 
-    // Scan history
     const scanHistory = [...scanReports]
-      .sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        return tb - ta;
-      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .map((r) => ({
         id: r.id,
         timestamp: r.timestamp,

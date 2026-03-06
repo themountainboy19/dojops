@@ -109,6 +109,96 @@ export class SafeExecutor {
     return undefined;
   }
 
+  /** Request approval or return "approved" if not required. */
+  private async resolveApproval(
+    taskId: string,
+    tool: DevOpsTool,
+    generateOutput: ToolOutput,
+  ): Promise<ApprovalDecision> {
+    if (!this.policy.requireApproval) return "approved";
+    const preview = buildPreview(generateOutput, tool.name);
+    return this.approvalHandler.requestApproval({
+      taskId,
+      toolName: tool.name,
+      description: `Execute ${tool.name} tool`,
+      preview,
+    });
+  }
+
+  /** Run tool.execute and check file path policies. */
+  private async runExecution(
+    taskId: string,
+    tool: DevOpsTool,
+    input: unknown,
+    generateOutput: ToolOutput,
+    approval: ApprovalDecision,
+    verification: VerificationResult | undefined,
+    startTime: number,
+    meta?: Record<string, unknown>,
+  ): Promise<ExecutionResult> {
+    const filesWritten: string[] = [];
+    const filesModified: string[] = [];
+    try {
+      const executeOutput = await withTimeout(
+        tool.execute!(input as never),
+        this.policy.executeTimeoutMs ?? this.policy.timeoutMs,
+        "Execute phase timed out",
+      );
+
+      if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
+      if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
+
+      if (this.policy.allowWrite) {
+        const violation = this.checkFilePaths([...filesWritten, ...filesModified]);
+        if (violation) {
+          return this.buildResult(taskId, tool.name, "failed", startTime, {
+            error: `Policy violation on written file: ${violation}`,
+            output: executeOutput.data,
+            approval,
+            verification,
+            filesWritten,
+            filesModified,
+            usage: generateOutput.usage,
+            metadata: meta,
+          });
+        }
+      }
+
+      if (!executeOutput.success) {
+        return this.buildResult(taskId, tool.name, "failed", startTime, {
+          error: executeOutput.error,
+          output: executeOutput.data,
+          approval,
+          verification,
+          filesWritten,
+          filesModified,
+          usage: generateOutput.usage,
+          metadata: meta,
+        });
+      }
+
+      return this.buildResult(taskId, tool.name, "completed", startTime, {
+        output: executeOutput.data,
+        approval,
+        verification,
+        filesWritten,
+        filesModified,
+        usage: generateOutput.usage,
+        metadata: meta,
+      });
+    } catch (err) {
+      const { status, error } = this.handleTimeoutError(err, "Execute");
+      return this.buildResult(taskId, tool.name, status, startTime, {
+        error,
+        approval,
+        verification,
+        filesWritten,
+        usage: generateOutput.usage,
+        metadata: meta,
+      });
+    }
+  }
+
   async executeTask(
     taskId: string,
     tool: DevOpsTool,
@@ -117,7 +207,6 @@ export class SafeExecutor {
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const filesWritten: string[] = [];
-    const filesModified: string[] = [];
     const meta = metadata;
 
     const validation = tool.validate(input);
@@ -180,28 +269,16 @@ export class SafeExecutor {
       });
     }
 
-    let approval: ApprovalDecision;
-    if (this.policy.requireApproval) {
-      const preview = buildPreview(generateOutput, tool.name);
-      approval = await this.approvalHandler.requestApproval({
-        taskId,
-        toolName: tool.name,
-        description: `Execute ${tool.name} tool`,
-        preview,
+    const approval = await this.resolveApproval(taskId, tool, generateOutput);
+    if (approval === "denied") {
+      return this.buildResult(taskId, tool.name, "denied", startTime, {
+        output: generateOutput.data,
+        approval,
+        verification,
+        filesWritten,
+        usage: generateOutput.usage,
+        metadata: meta,
       });
-
-      if (approval === "denied") {
-        return this.buildResult(taskId, tool.name, "denied", startTime, {
-          output: generateOutput.data,
-          approval,
-          verification,
-          filesWritten,
-          usage: generateOutput.usage,
-          metadata: meta,
-        });
-      }
-    } else {
-      approval = "approved";
     }
 
     if (this.policy.allowWrite && generateOutput.data) {
@@ -220,65 +297,16 @@ export class SafeExecutor {
       }
     }
 
-    try {
-      const executeOutput = await withTimeout(
-        tool.execute(input as never),
-        this.policy.executeTimeoutMs ?? this.policy.timeoutMs,
-        "Execute phase timed out",
-      );
-
-      if (executeOutput.filesWritten) filesWritten.push(...executeOutput.filesWritten);
-      if (executeOutput.filesModified) filesModified.push(...executeOutput.filesModified);
-
-      if (this.policy.allowWrite) {
-        const violation = this.checkFilePaths([...filesWritten, ...filesModified]);
-        if (violation) {
-          return this.buildResult(taskId, tool.name, "failed", startTime, {
-            error: `Policy violation on written file: ${violation}`,
-            output: executeOutput.data,
-            approval,
-            verification,
-            filesWritten,
-            filesModified,
-            usage: generateOutput.usage,
-            metadata: meta,
-          });
-        }
-      }
-
-      if (!executeOutput.success) {
-        return this.buildResult(taskId, tool.name, "failed", startTime, {
-          error: executeOutput.error,
-          output: executeOutput.data,
-          approval,
-          verification,
-          filesWritten,
-          filesModified,
-          usage: generateOutput.usage,
-          metadata: meta,
-        });
-      }
-
-      return this.buildResult(taskId, tool.name, "completed", startTime, {
-        output: executeOutput.data,
-        approval,
-        verification,
-        filesWritten,
-        filesModified,
-        usage: generateOutput.usage,
-        metadata: meta,
-      });
-    } catch (err) {
-      const { status, error } = this.handleTimeoutError(err, "Execute");
-      return this.buildResult(taskId, tool.name, status, startTime, {
-        error,
-        approval,
-        verification,
-        filesWritten,
-        usage: generateOutput.usage,
-        metadata: meta,
-      });
-    }
+    return this.runExecution(
+      taskId,
+      tool,
+      input,
+      generateOutput,
+      approval,
+      verification,
+      startTime,
+      meta,
+    );
   }
 
   getAuditLog(): ExecutionAuditEntry[] {

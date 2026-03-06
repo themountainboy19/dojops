@@ -65,6 +65,77 @@ export interface BinaryVerifierInput {
   networkPermission?: "required" | "none";
 }
 
+/** Build a skip/error result for pre-execution checks. */
+function skipResult(
+  parser: string,
+  severity: "info" | "error" | "warning",
+  message: string,
+  passed = false,
+): VerificationResult {
+  return { passed, tool: parser, issues: [{ severity, message }] };
+}
+
+/** Execute a single command in a chained verification pipeline. */
+function executeVerificationCommand(
+  binary: string,
+  args: string[],
+  config: BinaryVerificationConfig,
+  tmpDir: string,
+  networkPermission: string | undefined,
+): { rawOutput: string; earlyReturn?: VerificationResult; shouldBreak?: boolean } {
+  let finalArgs = args;
+
+  // E-8: Network safety
+  if (networkPermission !== "required") {
+    if (binary === "terraform" && finalArgs[0] === "init" && !finalArgs.includes("-get=false")) {
+      finalArgs = [...finalArgs, "-get=false"];
+    }
+  }
+
+  if (!ALLOWED_VERIFICATION_BINARIES.has(binary)) {
+    return {
+      rawOutput: "",
+      earlyReturn: skipResult(
+        config.parser,
+        "error",
+        `Verification command not allowed: ${binary}`,
+      ),
+    };
+  }
+
+  try {
+    const rawOutput = execFileSync(binary, finalArgs, {
+      encoding: "utf-8",
+      timeout: config.timeout,
+      stdio: "pipe",
+      cwd: tmpDir,
+    });
+    return { rawOutput };
+  } catch (err: unknown) {
+    if (isENOENT(err)) {
+      return {
+        rawOutput: "",
+        earlyReturn: skipResult(
+          config.parser,
+          "warning",
+          `${binary} not found — verification skipped`,
+          true,
+        ),
+      };
+    }
+    const execErr = err as { stdout?: string; stderr?: string };
+    const rawOutput = execErr.stdout || execErr.stderr || "";
+    if (!rawOutput) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        rawOutput: "",
+        earlyReturn: skipResult(config.parser, "error", `Verification failed: ${msg}`),
+      };
+    }
+    return { rawOutput, shouldBreak: true };
+  }
+}
+
 /**
  * Run binary verification in a temp directory.
  * Returns VerificationResult with rich parsed issues.
@@ -73,124 +144,50 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
   const { content, filename, config, severityMapping, childProcessPermission, networkPermission } =
     input;
 
-  // Security gate 1: child_process permission
   if (childProcessPermission !== "required") {
-    return {
-      passed: true,
-      tool: config.parser,
-      issues: [
-        { severity: "info", message: "Binary verification skipped (no child_process permission)" },
-      ],
-    };
+    return skipResult(
+      config.parser,
+      "info",
+      "Binary verification skipped (no child_process permission)",
+      true,
+    );
   }
-
-  // Security gate 2: command whitelist
   if (!isVerificationCommandAllowed(config.command)) {
-    return {
-      passed: false,
-      tool: config.parser,
-      issues: [
-        {
-          severity: "error",
-          message: `Verification command not allowed: ${config.command.split(/\s+/)[0]}`,
-        },
-      ],
-    };
+    return skipResult(
+      config.parser,
+      "error",
+      `Verification command not allowed: ${config.command.split(/\s+/)[0]}`,
+    ); // NOSONAR
   }
 
-  // Get the parser
   const parser = getParser(config.parser);
   if (!parser) {
-    return {
-      passed: false,
-      tool: config.parser,
-      issues: [{ severity: "error", message: `Unknown verification parser: ${config.parser}` }],
-    };
+    return skipResult(config.parser, "error", `Unknown verification parser: ${config.parser}`);
   }
 
-  // Create temp directory and write content
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-verify-"));
-
   try {
     fs.writeFileSync(path.join(tmpDir, filename), content, "utf-8");
 
-    // Split on && to handle chained commands (e.g. "terraform init ... && terraform validate ...")
-    // execFileSync passes && as a literal argument, so we must run each command separately.
-    const commands = config.command.split(/\s*&&\s*/);
-
+    const commands = config.command.split(/\s*&&\s*/); // NOSONAR
     let rawOutput = "";
     for (let i = 0; i < commands.length; i++) {
       const parts = commands[i].split(/\s+/).filter(Boolean);
-      const binary = parts[0];
-      let args = parts.slice(1);
-
-      // E-8: Network safety — prevent unintended network access during verification.
-      // When network permission is not "required", add flags to prevent provider downloads.
-      if (networkPermission !== "required") {
-        if (binary === "terraform" && args[0] === "init" && !args.includes("-get=false")) {
-          args = [...args, "-get=false"];
-        }
-      }
-
-      // Validate each sub-command binary against the whitelist
-      if (!ALLOWED_VERIFICATION_BINARIES.has(binary)) {
-        return {
-          passed: false,
-          tool: config.parser,
-          issues: [
-            {
-              severity: "error",
-              message: `Verification command not allowed: ${binary}`,
-            },
-          ],
-        };
-      }
-
-      try {
-        rawOutput = execFileSync(binary, args, {
-          encoding: "utf-8",
-          timeout: config.timeout,
-          stdio: "pipe",
-          cwd: tmpDir,
-        });
-      } catch (err: unknown) {
-        if (isENOENT(err)) {
-          return {
-            passed: true,
-            tool: config.parser,
-            issues: [
-              { severity: "warning", message: `${binary} not found — verification skipped` },
-            ],
-          };
-        }
-        // Many tools exit non-zero on validation errors but still produce parseable output
-        const execErr = err as { stdout?: string; stderr?: string };
-        rawOutput = execErr.stdout || execErr.stderr || "";
-        if (!rawOutput) {
-          const msg = err instanceof Error ? err.message : String(err);
-          return {
-            passed: false,
-            tool: config.parser,
-            issues: [{ severity: "error", message: `Verification failed: ${msg}` }],
-          };
-        }
-        // If a non-final command fails, stop the chain (mirrors shell && behavior)
-        if (i < commands.length - 1) {
-          break;
-        }
-      }
+      const result = executeVerificationCommand(
+        parts[0],
+        parts.slice(1),
+        config,
+        tmpDir,
+        networkPermission,
+      );
+      if (result.earlyReturn) return result.earlyReturn;
+      rawOutput = result.rawOutput;
+      if (result.shouldBreak && i < commands.length - 1) break;
     }
 
-    // Parse the output from the last command
     const issues: VerificationIssue[] = parser(rawOutput, severityMapping);
     const hasErrors = issues.some((i) => i.severity === "error");
-
-    return {
-      passed: !hasErrors,
-      tool: config.parser,
-      issues,
-      rawOutput,
-    };
+    return { passed: !hasErrors, tool: config.parser, issues, rawOutput };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }

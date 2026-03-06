@@ -68,7 +68,7 @@ function renderFindings(
 }
 
 function applyFixContent(fixContent: string, root: string): number {
-  const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g;
+  const fileRegex = /FILE:\s*(.+?)\n```[^\n]*\n([\s\S]*?)```/g; // NOSONAR
   let match;
   let filesFixed = 0;
   while ((match = fileRegex.exec(fixContent)) !== null) {
@@ -272,6 +272,23 @@ export const checkCommand: CommandHandler = async (_args, cliCtx) => {
   }
 };
 
+/** Output provider check result as JSON or table. */
+function outputProviderResult(
+  isStructured: boolean,
+  isJson: boolean,
+  data: Record<string, unknown>,
+  tableMessage: string,
+  spinner?: ReturnType<typeof p.spinner>,
+  spinnerMessage?: string,
+): void {
+  if (spinner && !isStructured) spinner.stop(spinnerMessage ?? "Done.");
+  if (isJson) {
+    console.log(JSON.stringify(data));
+    return;
+  }
+  p.log.success(tableMessage);
+}
+
 /** F-6: Provider connectivity test — `dojops check provider` */
 async function checkProviderCommand(
   _args: string[],
@@ -289,6 +306,7 @@ async function checkProviderCommand(
   }
 
   const isStructured = cliCtx.globalOpts.output !== "table";
+  const isJson = cliCtx.globalOpts.output === "json";
   const s = p.spinner();
   if (!isStructured) s.start(`Testing ${provider.name} connectivity...`);
 
@@ -297,49 +315,33 @@ async function checkProviderCommand(
     if (provider.listModels) {
       const models = await provider.listModels();
       const latency = Date.now() - start;
-
-      if (cliCtx.globalOpts.output === "json") {
-        if (!isStructured) s.stop("Done.");
-        console.log(
-          JSON.stringify({
-            status: "ok",
-            provider: provider.name,
-            latencyMs: latency,
-            models: models.length,
-          }),
-        );
-        return;
-      }
-
-      if (!isStructured) s.stop(`Connected to ${pc.bold(provider.name)} (${latency}ms)`);
-      p.log.success(
+      outputProviderResult(
+        isStructured,
+        isJson,
+        { status: "ok", provider: provider.name, latencyMs: latency, models: models.length },
         `Provider ${pc.bold(provider.name)} is reachable. ${models.length} models available.`,
+        s,
+        `Connected to ${pc.bold(provider.name)} (${latency}ms)`,
       );
     } else {
       const latency = Date.now() - start;
-      if (!isStructured) s.stop("Done.");
-
-      if (cliCtx.globalOpts.output === "json") {
-        console.log(
-          JSON.stringify({
-            status: "ok",
-            provider: provider.name,
-            latencyMs: latency,
-            note: "listModels not supported",
-          }),
-        );
-        return;
-      }
-
-      p.log.success(
+      outputProviderResult(
+        isStructured,
+        isJson,
+        {
+          status: "ok",
+          provider: provider.name,
+          latencyMs: latency,
+          note: "listModels not supported",
+        },
         `Provider ${pc.bold(provider.name)} configured (listModels not supported — cannot verify connectivity).`,
+        s,
       );
     }
   } catch (err) {
     const latency = Date.now() - start;
     if (!isStructured) s.stop("Connection failed.");
-
-    if (cliCtx.globalOpts.output === "json") {
+    if (isJson) {
       console.log(
         JSON.stringify({
           status: "error",
@@ -350,7 +352,6 @@ async function checkProviderCommand(
       );
       return;
     }
-
     throw new CLIError(
       ExitCode.GENERAL_ERROR,
       `Provider ${provider.name} connectivity check failed: ${toErrorMessage(err)}`,
