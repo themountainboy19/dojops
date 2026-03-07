@@ -4,7 +4,7 @@ Tool registry with plugin system for [DojOps](https://github.com/dojops/dojops) 
 
 ## Features
 
-- **Unified registry**: Combines 12 built-in tools + custom tools via `getAll()` / `get(name)` / `has()`
+- **Unified registry**: Combines 13 built-in tools + custom tools via `getAll()` / `get(name)` / `has()`
 - **Custom tool discovery**: Loads from `~/.dojops/tools/` (global) and `.dojops/tools/` (project)
 - **Declarative manifests**: `tool.yaml` + `input.schema.json` converted to runtime tools
 - **JSON Schema → Zod**: Automatic conversion for custom tool input validation

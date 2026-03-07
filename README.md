@@ -141,7 +141,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Tools
 
-- **12 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd
+- **13 built-in DevOps tools** — GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile
 - **Declarative tool metadata** — `.dops` modules declare `scope` (write boundaries), `risk` (LOW/MEDIUM/HIGH self-classification), `execution` (deterministic/idempotent flags), `update` strategy, `context` block (v2: technology context, output guidance, best practices, Context7 libraries), and optional `icon` URLs for marketplace display. Scope enforcement rejects out-of-bounds writes at runtime
 - **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
@@ -191,7 +191,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 @dojops/tool-registry  Tool registry + custom tool system + custom agent discovery
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+@dojops/runtime        13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
 @dojops/scanner        10 security scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint,
                        shellcheck, trivy-sbom, trivy-license, semgrep) + remediation
 @dojops/context        Context7 documentation augmentation for v2 tools
@@ -484,8 +484,9 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | GitLab CI      | YAML               | `.gitlab-ci.yml`                    | ---                  |
 | Prometheus     | YAML               | `prometheus.yml`, `alert-rules.yml` | ---                  |
 | Systemd        | INI                | `{name}.service`                    | ---                  |
+| Jenkinsfile    | Groovy DSL         | `Jenkinsfile`                       | ---                  |
 
-All 12 built-in tools are `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
+All 13 built-in tools are `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM. Tools auto-detect and update existing config files with `.bak` backup. All file writes are atomic (temp + rename).
 
 ---
 
@@ -657,7 +658,7 @@ packages/
   core/             LLM providers (6) + specialist agents (16 built-in) + CI debugger + infra diff + DevOps checker
   planner/          Task graph decomposition + topological executor
   executor/         SafeExecutor + policy engine + approval workflows + audit log
-  runtime/          12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+  runtime/          13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
   scanner/          10 security scanners + LLM-powered remediation
   context/          Context7 documentation augmentation for v2 tools
   session/          Chat session management + memory + context injection

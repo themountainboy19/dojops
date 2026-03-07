@@ -82,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Simplified `.dops` v2 Format**: v2 `.dops` files now only require `## Prompt` and `## Keywords` markdown sections. Removed `## Examples` (replaced by Context7 runtime docs), `## Constraints` (merged into `context.bestPractices`), and `## Update Prompt` (generic update fallback is always used). This makes it much easier for users to contribute new `.dops` modules
-- **All 12 Built-in Modules Updated**: Constraints merged into `context.bestPractices` arrays; `## Examples`, `## Constraints`, and `## Update Prompt` sections removed from all built-in `.dops` modules
+- **All 13 Built-in Modules Updated**: Constraints merged into `context.bestPractices` arrays; `## Examples`, `## Constraints`, and `## Update Prompt` sections removed from all built-in `.dops` modules
 - **36 Community Modules Updated**: All modules in `dojops-dops-tools` updated to the simplified v2 format
 - **Tool → Module Rename**: User-facing CLI commands renamed from `dojops tools` to `dojops modules` (with `tools` as backward-compatible alias). `--tool` flag renamed to `--module` (with `--tool` alias). Custom module discovery now searches `.dojops/modules/` as the primary path with `.dojops/tools/` as fallback. Internal TypeScript types (`BaseTool`, `ToolRegistry`, etc.) are unchanged. All documentation, website, and community repos updated
 - **`analyze diff` Help Text**: Reordered usage to recommend `--file` first for multiline diffs, added note about shell escaping limitations with inline arguments
@@ -100,16 +100,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`.dops` v2 Format**: New `.dops v2` module format that replaces `input.fields` and `output` blocks with a `context` block containing `technology`, `fileFormat`, `outputGuidance`, `bestPractices`, and `context7Libraries`. The LLM generates raw file content directly (no JSON→serialize step), producing cleaner output with less schema overhead
 - **`DopsRuntimeV2`**: New runtime class (`packages/runtime/src/runtime.ts`) for processing v2 modules — compiles prompts with `compilePromptV2()`, strips code fences from raw LLM output via `stripCodeFences()`, and integrates with Context7 via the `DocProvider` interface
-- **All 12 Built-in Tools Converted to v2**: All built-in `.dops` modules in `packages/runtime/modules/` now use v2 format with `context` blocks, best practices, and Context7 library references
+- **All 13 Built-in Tools Converted to v2**: All built-in `.dops` modules in `packages/runtime/modules/` now use v2 format with `context` blocks, best practices, and Context7 library references
 - **Version-Detecting Parsers**: `parseDopsStringAny()` and `parseDopsFileAny()` (`packages/runtime/src/parser.ts`) automatically detect the `dops` version field and route to `DopsRuntime` (v1) or `DopsRuntimeV2` (v2)
 - **v2 Prompt Variables**: New template variables for v2 prompts — `{outputGuidance}` (from `context.outputGuidance`), `{bestPractices}` (numbered list from `context.bestPractices`), `{context7Docs}` (documentation fetched at runtime via Context7), `{projectContext}` (project scanner context)
 - **`DocProvider` Interface**: Duck-typed interface (`{ augmentPrompt() }`) for Context7 documentation augmentation in v2 tools, injected into `DopsRuntimeV2` at construction time
 - **Hub v1/v2 Backward Compatibility**: Hub database extended with `dopsVersion` and `contextBlock` columns on the `Version` model, supporting both v1 and v2 `.dops` format uploads and downloads
 - **93 New v2 Tests**: Comprehensive test coverage for v2 parsing, prompt compilation, raw content generation, code fence stripping, Context7 integration, and version detection (total: 1931 → 2140 tests)
-- **Context7 Documentation Augmentation (`@dojops/context`)**: New package that fetches up-to-date documentation from [Context7](https://context7.com) and injects it into LLM system prompts during generation — improving output accuracy even when the LLM's training data is stale. Covers all 12 built-in tool domains and specialist agent domains via static library mapping. Opt-in via `DOJOPS_CONTEXT_ENABLED=true`.
+- **Context7 Documentation Augmentation (`@dojops/context`)**: New package that fetches up-to-date documentation from [Context7](https://context7.com) and injects it into LLM system prompts during generation — improving output accuracy even when the LLM's training data is stale. Covers all 13 built-in tool domains and specialist agent domains via static library mapping. Opt-in via `DOJOPS_CONTEXT_ENABLED=true`.
 - **Context7 REST Client**: Native `fetch()` client for Context7 API (`/v2/libs/search` + `/v2/context`) with configurable timeout (10s default), optional API key auth (`DOJOPS_CONTEXT7_API_KEY`), and in-memory TTL cache (5 min default, configurable via `DOJOPS_CONTEXT_CACHE_TTL`)
 - **Documentation-Augmented Agent Routing**: `SpecialistAgent.run()` and `runWithHistory()` now accept an optional duck-typed `docAugmenter` and prepend a `## Reference Documentation` section to the system prompt with current syntax references
-- **Documentation-Augmented Tool Generation**: `DopsRuntime.generate()` augments the compiled system prompt with Context7 docs after `compilePrompt()`, giving all 12 built-in tools and user `.dops` files access to current documentation
+- **Documentation-Augmented Tool Generation**: `DopsRuntime.generate()` augments the compiled system prompt with Context7 docs after `compilePrompt()`, giving all 13 built-in tools and user `.dops` files access to current documentation
 - **Augmenter Threading**: `createRouter()` and `createToolRegistry()` factories accept an optional `docAugmenter` param; CLI creates the augmenter in `generate`, `chat`, and `serve` commands when enabled
 - **Schema Injection for LLM Providers**: All 6 providers (OpenAI, Anthropic, DeepSeek, Gemini, GitHub Copilot, Ollama) now embed the full JSON Schema in the system prompt via `augmentSystemPrompt()`, dramatically improving structured output accuracy — especially for providers without native schema enforcement
 - **Scanner Install Hints**: `dojops scan` now displays per-scanner install instructions (brew/apt/pip/URL) when scanners are skipped due to missing binaries
@@ -189,11 +189,11 @@ First official public release. Versions 1.0.0 and 1.0.1 were internal testing re
 ### Added
 
 - **LLM Providers**: 6 providers (OpenAI, Anthropic, Ollama, DeepSeek, Gemini, GitHub Copilot) with structured JSON output via Zod schemas, temperature passthrough, and dynamic model selection via `listModels()`. GitHub Copilot uses OAuth Device Flow with JWT auto-refresh.
-- **DevOps Tools**: 12 built-in tools (GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd) with generate, detect, verify, and execute lifecycle.
+- **DevOps Tools**: 13 built-in tools (GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, Jenkinsfile) with generate, detect, verify, and execute lifecycle.
 - **Plugin System**: Declarative `plugin.yaml` manifests with JSON Schema input validation, plugin discovery from global (`~/.dojops/plugins/`) and project (`.dojops/plugins/`) directories, policy enforcement via `.dojops/policy.yaml`, verification command whitelist, and path traversal prevention.
 - **Specialist Agents**: 16 built-in specialist agents (ops-cortex, terraform, kubernetes, cicd, security-auditor, observability, docker, cloud-architect, network, database, gitops, compliance-auditor, ci-debugger, appsec, shell, python) with keyword-based routing and confidence scoring. Custom agent discovery from `.dojops/agents/` README.md files.
-- **Security Scanning**: 9 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, semgrep) supporting `--security`, `--deps`, `--iac`, and `--sbom` scan modes with structured reports saved to `.dojops/scans/`. Scan comparison via `--compare` flag shows new/resolved findings.
-- **REST API & Web Dashboard**: Express-based API with 19 endpoints for generation, planning, debugging, scanning, chat, agents, history, and metrics. Vanilla web dashboard with dark theme and 5 tabs (Overview, Security, Audit, Agents, History).
+- **Security Scanning**: 10 scanners (npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, trivy-license, semgrep) supporting `--security`, `--deps`, `--iac`, and `--sbom` scan modes with structured reports saved to `.dojops/scans/`. Scan comparison via `--compare` flag shows new/resolved findings.
+- **REST API & Web Dashboard**: Express-based API with 20 endpoints for generation, planning, debugging, scanning, chat, agents, history, and metrics. Vanilla web dashboard with dark theme and 5 tabs (Overview, Security, Audit, Agents, History).
 - **CLI**: Rich terminal UI via `@clack/prompts` with commands for `init`, `plan`, `validate`, `apply`, `destroy`, `rollback`, `explain`, `debug ci`, `analyze diff`, `chat`, `scan`, `serve`, `agents`, `history`, `tools`, and more.
 - **Sandboxed Execution**: `SafeExecutor` with `ExecutionPolicy` (write/path/env/timeout/size restrictions), `SandboxedFs` for restricted file operations, and `ApprovalHandler` interface (auto-approve, auto-deny, callback).
 - **Audit Trails**: Hash-chained JSONL audit logs with verification results, plugin metadata, execution context, and `systemPromptHash` tracking.
@@ -203,7 +203,7 @@ First official public release. Versions 1.0.0 and 1.0.1 were internal testing re
 - **Chat Sessions**: Interactive multi-turn conversation support with session persistence and agent routing.
 - **Metrics Dashboard**: `MetricsAggregator` for `.dojops/` data aggregation (plans, executions, scans, audit) with Overview, Security, and Audit dashboard tabs.
 - **Trust Hardening**: Hard file write allowlist, plan snapshot freezing, risk classification, drift awareness warnings, SBOM persistence versioning, change impact summary, CI provider schema validation.
-- **Atomic File Writes**: Write to `.tmp` then rename for crash safety across all 12 tools and `SandboxedFs`.
+- **Atomic File Writes**: Write to `.tmp` then rename for crash safety across all 13 tools and `SandboxedFs`.
 - **DOPS Spec Hardening**: 5 new `.dops` frontmatter sections for v1 contract freeze:
   - `scope` — Write boundary enforcement with `{var}` path expansion; out-of-scope writes rejected at runtime
   - `risk` — Tool self-classification (`LOW`/`MEDIUM`/`HIGH`) with rationale; exposed in `ToolMetadata.riskLevel`
@@ -214,7 +214,7 @@ First official public release. Versions 1.0.0 and 1.0.1 were internal testing re
 - **Risk & Execution Getters**: `DopsRuntime.risk`, `.executionMode`, `.isDeterministic`, `.isIdempotent` with safe defaults
 - **Parser Validation**: Path traversal prevention on `scope.write` paths; network permission constraint for v1 tools with risk declared
 - **Prompt Compiler Update Strategy**: `preserve_structure` injects additional LLM instructions; `injectAs` controls variable name for existing content
-- **12 Module Updates**: All built-in `.dops` modules updated with `scope`, `risk`, `execution`, and `update` sections
+- **13 Module Updates**: All built-in `.dops` modules updated with `scope`, `risk`, `execution`, and `update` sections
 - **Test Coverage**: New unit tests across packages to meet 75% coverage threshold
 - **Tool Command `new` Option**: `dojops tools new` scaffolds a new custom tool from a template
 - **Tool Subcommands**: Additional `dojops tools` subcommands for managing tool lifecycle

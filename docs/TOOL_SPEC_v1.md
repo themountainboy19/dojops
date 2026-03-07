@@ -31,7 +31,7 @@ This document defines the v1 custom tool contract for DojOps using `tool.yaml` m
 
 ## 1. Overview
 
-DojOps custom tools extend the system with custom DevOps tools beyond the 12 built-in ones. Each custom tool is a declarative package consisting of:
+DojOps custom tools extend the system with custom DevOps tools beyond the 13 built-in ones. Each custom tool is a declarative package consisting of:
 
 - A **manifest** (`tool.yaml`) defining the tool's identity, LLM generation strategy, file outputs, and optional verification
 - An **input schema** (`input.schema.json`) defining the tool's input contract via JSON Schema

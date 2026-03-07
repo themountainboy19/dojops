@@ -51,13 +51,17 @@ Complete reference for the `dojops` command-line interface.
 
 ### Interactive
 
-| Command                      | Description                                            |
-| ---------------------------- | ------------------------------------------------------ |
-| `dojops chat`                | Interactive multi-turn AI DevOps session               |
-| `dojops chat --session=NAME` | Resume or create a named session                       |
-| `dojops chat --resume`       | Resume the most recent session                         |
-| `dojops chat --agent=NAME`   | Pin conversation to a specialist agent                 |
-| `dojops chat --message=TEXT` | Send a single message and exit (scriptable, also `-m`) |
+| Command                            | Description                                            |
+| ---------------------------------- | ------------------------------------------------------ |
+| `dojops chat`                      | Interactive multi-turn AI DevOps session               |
+| `dojops chat --session=NAME`       | Resume or create a named session                       |
+| `dojops chat --resume`             | Resume the most recent session                         |
+| `dojops chat --agent=NAME`         | Pin conversation to a specialist agent                 |
+| `dojops chat --message=TEXT`       | Send a single message and exit (scriptable, also `-m`) |
+| `dojops chat export`               | Export all sessions as markdown                        |
+| `dojops chat export <id>`          | Export a specific session                              |
+| `dojops chat export --format=json` | Export as JSON instead of markdown                     |
+| `dojops chat export --output=FILE` | Write export to a file instead of stdout               |
 
 Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`, `/scan`, `/history`, `/clear`, `/save`.
 
@@ -77,6 +81,8 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops modules publish <file>`   | Publish a .dops module to the DojOps Hub                   |
 | `dojops modules install <name>`   | Install a .dops module from the DojOps Hub                 |
 | `dojops modules search <query>`   | Search the DojOps Hub for modules                          |
+| `dojops modules dev <path.dops>`  | Validate a .dops file with live feedback                   |
+| `dojops modules dev --watch`      | Watch mode — re-validate on file changes                   |
 | `dojops toolchain list`           | List system toolchain binaries with install status         |
 | `dojops toolchain install <name>` | Download binary into toolchain (~/.dojops/toolchain/)      |
 | `dojops toolchain remove <name>`  | Remove a toolchain binary                                  |
@@ -111,22 +117,35 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Configuration & Server
 
-| Command                                       | Description                                                                     |
-| --------------------------------------------- | ------------------------------------------------------------------------------- |
-| `dojops config`                               | Configure provider, model, tokens (interactive)                                 |
-| `dojops config show`                          | Display current configuration                                                   |
-| `dojops config profile create NAME`           | Save current config as a named profile                                          |
-| `dojops config profile use NAME`              | Switch to a named profile                                                       |
-| `dojops config profile list`                  | List all profiles                                                               |
-| `dojops auth login`                           | Authenticate with LLM provider                                                  |
-| `dojops auth status`                          | Show saved tokens and default provider                                          |
-| `dojops serve [--port=N]`                     | Start API server + web dashboard                                                |
-| `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                    |
-| `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                              |
-| `dojops serve credentials`                    | Generate API key for dashboard/API authentication                               |
-| `dojops init`                                 | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security) |
-| `dojops status`                               | System health diagnostics + project metrics (alias: `doctor`)                   |
-| `dojops upgrade`                              | Check for and install CLI updates (`--check` for check-only)                    |
+| Command                                       | Description                                                                           |
+| --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `dojops config`                               | Configure provider, model, tokens (interactive)                                       |
+| `dojops config show`                          | Display current configuration                                                         |
+| `dojops config profile create NAME`           | Save current config as a named profile                                                |
+| `dojops config profile use NAME`              | Switch to a named profile                                                             |
+| `dojops config profile list`                  | List all profiles                                                                     |
+| `dojops config get <key>`                     | Get a specific config value (tokens are masked)                                       |
+| `dojops config set <key> <value>`             | Set a config value (supports dot notation, e.g. `tokens.openai`)                      |
+| `dojops config delete <key>`                  | Delete a config key                                                                   |
+| `dojops config validate`                      | Validate config values and file permissions                                           |
+| `dojops auth login`                           | Authenticate with LLM provider                                                        |
+| `dojops auth status`                          | Show saved tokens and default provider                                                |
+| `dojops serve [--port=N]`                     | Start API server + web dashboard                                                      |
+| `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                          |
+| `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                                    |
+| `dojops serve credentials`                    | Generate API key for dashboard/API authentication                                     |
+| `dojops init`                                 | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security)       |
+| `dojops status`                               | System health diagnostics + project metrics (alias: `doctor`, `--fix` to auto-repair) |
+| `dojops upgrade`                              | Check for and install CLI updates (`--check` for check-only)                          |
+
+### Scheduled Jobs
+
+| Command                                  | Description                                         |
+| ---------------------------------------- | --------------------------------------------------- |
+| `dojops cron`                            | Show cron usage                                     |
+| `dojops cron add "<schedule>" <command>` | Add a scheduled DojOps job (cron expression + args) |
+| `dojops cron list`                       | List all scheduled jobs                             |
+| `dojops cron remove <job-id>`            | Remove a scheduled job                              |
 
 ---
 
@@ -167,6 +186,56 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | 5    | No `.dojops/` project                |
 | 6    | HIGH security findings detected      |
 | 7    | CRITICAL security findings detected  |
+
+---
+
+## Lifecycle Hooks
+
+DojOps supports lifecycle hooks — shell commands that run at specific events during CLI operations. Configure hooks in `.dojops/hooks.json`:
+
+```json
+{
+  "hooks": {
+    "pre-generate": { "command": "echo 'Starting generation...'" },
+    "post-generate": { "command": "./scripts/lint-output.sh" },
+    "pre-plan": { "command": "git stash" },
+    "post-plan": [
+      { "command": "echo 'Plan complete'" },
+      { "command": "./notify.sh", "continueOnError": true }
+    ],
+    "on-error": { "command": "./scripts/alert-failure.sh" }
+  }
+}
+```
+
+### Hook Events
+
+| Event           | When it runs                | Abort on failure |
+| --------------- | --------------------------- | ---------------- |
+| `pre-generate`  | Before LLM generation       | Yes              |
+| `post-generate` | After successful generation | No               |
+| `pre-plan`      | Before plan decomposition   | Yes              |
+| `post-plan`     | After plan completion       | No               |
+| `pre-execute`   | Before execution/apply      | Yes              |
+| `post-execute`  | After execution completes   | No               |
+| `pre-scan`      | Before security scanning    | Yes              |
+| `post-scan`     | After scan completes        | No               |
+| `on-error`      | When any operation fails    | No               |
+
+### Hook Environment Variables
+
+Hooks receive context via environment variables:
+
+| Variable             | Description                       |
+| -------------------- | --------------------------------- |
+| `DOJOPS_HOOK_EVENT`  | The event name (e.g. `pre-plan`)  |
+| `DOJOPS_HOOK_ROOT`   | Project root directory            |
+| `DOJOPS_HOOK_AGENT`  | Active agent name (if applicable) |
+| `DOJOPS_HOOK_OUTPUT` | Output file path (if applicable)  |
+| `DOJOPS_HOOK_PROMPT` | The user prompt (if applicable)   |
+| `DOJOPS_HOOK_ERROR`  | Error message (`on-error` only)   |
+
+Pre-hooks abort the operation on failure by default. Set `"continueOnError": true` to override. Post-hooks and `on-error` hooks continue by default.
 
 ---
 
@@ -430,4 +499,39 @@ dojops upgrade
 
 # Upgrade without confirmation
 dojops upgrade --yes
+```
+
+### Config Management
+
+```bash
+dojops config get defaultProvider        # Read a value
+dojops config set defaultProvider ollama  # Set a value
+dojops config set tokens.openai sk-xxx   # Set nested value
+dojops config delete tokens.deepseek     # Remove a key
+dojops config validate                   # Check config health
+```
+
+### Scheduled Jobs
+
+```bash
+dojops cron add "0 2 * * *" plan "backup terraform"   # Schedule nightly plan
+dojops cron add "*/30 * * * *" scan --security         # Scan every 30 min
+dojops cron list                                        # View all jobs
+dojops cron remove job-abc123                           # Remove a job
+```
+
+### Module Development
+
+```bash
+dojops modules dev my-tool.dops          # Validate a module
+dojops modules dev my-tool.dops --watch  # Watch mode
+```
+
+### Chat Export
+
+```bash
+dojops chat export                       # Export all sessions as markdown
+dojops chat export session-123           # Export specific session
+dojops chat export --format=json         # Export as JSON
+dojops chat export --output=chat.md      # Save to file
 ```

@@ -30,9 +30,9 @@ dojops "Create a Terraform config for S3"                    # Uses default prov
 DOJOPS_PROVIDER=anthropic dojops "Create CI for Node app"    # Override provider
 ```
 
-### 12 Built-in DevOps Tools
+### 13 Built-in DevOps Tools
 
-GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, and Systemd. Each tool follows a full lifecycle: **detect** existing configs, **generate** new ones via LLM, **verify** with external validators (e.g. `terraform validate`, `hadolint`), and **execute** with sandboxed file writes.
+GitHub Actions, Terraform, Kubernetes, Helm, Ansible, Docker Compose, Dockerfile, Nginx, Makefile, GitLab CI, Prometheus, Systemd, and Jenkinsfile. Each tool follows a full lifecycle: **detect** existing configs, **generate** new ones via LLM, **verify** with external validators (e.g. `terraform validate`, `hadolint`), and **execute** with sandboxed file writes.
 
 ### 16 Specialist Agents
 
@@ -55,9 +55,9 @@ dojops tools publish ./my-tool       # Publish to DojOps Hub
 dojops tools install slug@1.0.0      # Install from Hub
 ```
 
-### 9 Security Scanners
+### 10 Security Scanners
 
-npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, and semgrep. Supports `--security`, `--deps`, `--iac`, and `--sbom` scan modes with structured reports saved to `.dojops/scans/`. Delta comparison via `--compare` shows new/resolved findings between runs.
+npm-audit, pip-audit, trivy, gitleaks, checkov, hadolint, shellcheck, trivy-sbom, trivy-license, and semgrep. Supports `--security`, `--deps`, `--iac`, and `--sbom` scan modes with structured reports saved to `.dojops/scans/`. Delta comparison via `--compare` shows new/resolved findings between runs.
 
 ```bash
 dojops scan --security               # Run security scans
@@ -102,7 +102,7 @@ dojops --diff "terraform plan output..."          # Risk/cost/security analysis
 
 ### REST API & Web Dashboard
 
-Express-based API with 19 endpoints covering generation, planning, debugging, scanning, chat, agents, history, and metrics. Web dashboard with dark theme and 5 tabs: Overview, Security, Audit, Agents, and History.
+Express-based API with 20 endpoints covering generation, planning, debugging, scanning, chat, agents, history, and metrics. Web dashboard with dark theme and 5 tabs: Overview, Security, Audit, Agents, and History.
 
 ```bash
 dojops serve                         # Start API on http://localhost:3000
@@ -135,10 +135,10 @@ dojops chat --session <id>           # Resume a session
 | Package                 | Description                                                  |
 | ----------------------- | ------------------------------------------------------------ |
 | `@dojops/cli`           | CLI entry point, rich TUI via @clack/prompts                 |
-| `@dojops/api`           | REST API (Express) + web dashboard, 19 endpoints             |
+| `@dojops/api`           | REST API (Express) + web dashboard, 20 endpoints             |
 | `@dojops/tool-registry` | Tool registry + custom tool system + custom agent discovery  |
-| `@dojops/runtime`       | 12 built-in DevOps tools                                     |
-| `@dojops/scanner`       | 9 security scanners                                          |
+| `@dojops/runtime`       | 13 built-in DevOps tools                                     |
+| `@dojops/scanner`       | 10 security scanners                                         |
 | `@dojops/session`       | Interactive chat session management                          |
 | `@dojops/planner`       | TaskGraph decomposition + topological executor               |
 | `@dojops/executor`      | SafeExecutor: sandbox + policy + approval + audit            |

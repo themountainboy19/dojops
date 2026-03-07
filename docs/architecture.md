@@ -1,6 +1,6 @@
 # Architecture
 
-DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 12 built-in DevOps tools, a custom tool system for extending with additional tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
+DojOps is designed as a modular, layered DevOps agent system — not a simple chatbot that generates bash commands. It is a structured, safe, extensible orchestration framework with 13 built-in DevOps tools, a custom tool system for extending with additional tools, 16 specialist agents, sandboxed execution, approval workflows, and hash-chained audit trails.
 
 ---
 
@@ -19,7 +19,7 @@ Agent Router (16 specialist agents, keyword confidence scoring)
 Planner Engine (LLM -> TaskGraph -> topological execution)
  |
  v
-Tool Registry (12 built-in tools + custom tools, unified discovery)
+Tool Registry (13 built-in tools + custom tools, unified discovery)
  |
  v
 Tool SDK Layer (BaseTool<T>, Zod validation)
@@ -42,7 +42,7 @@ DojOps is a pnpm monorepo with Turbo build orchestration. TypeScript (ES2022, Co
 @dojops/tool-registry  Tool registry + custom tool system (discovers built-in + custom tools)
 @dojops/planner        TaskGraph decomposition + topological executor
 @dojops/executor       SafeExecutor: sandbox + policy engine + approval + audit log
-@dojops/runtime        12 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
+@dojops/runtime        13 built-in DevOps tools as .dops v2 modules (DopsRuntime + DopsRuntimeV2)
 @dojops/scanner        10 security scanners + remediation engine
 @dojops/session        Chat session management + memory + context injection
 @dojops/context        Context7 documentation augmentation for v2 tools
@@ -175,13 +175,13 @@ The DOPS runtime processes `.dops` module files — a declarative format combini
 
 ### 5. DevOps Tools (`@dojops/runtime`)
 
-12 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. All 12 are now `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
+13 built-in tools covering CI/CD, IaC, containers, monitoring, and system services. All 13 are now `.dops v2` modules in `packages/runtime/modules/`, processed by `DopsRuntimeV2` — generating raw file content directly via LLM with Context7 documentation augmentation. All tools support updating existing configs via auto-detection, `existingContent` input, and `.bak` backup before overwrite. All file writes use `atomicWriteFileSync()` for crash safety. Every `execute()` returns `filesWritten`/`filesModified` for rollback tracking.
 
 See [DevOps Tools](tools.md) for the full tool list.
 
 ### 5b. Tool Registry (`@dojops/tool-registry`)
 
-Unified registry layer between consumers (Planner, Executor, CLI, API) and tool implementations. Combines all 12 built-in tools with custom tools discovered from disk:
+Unified registry layer between consumers (Planner, Executor, CLI, API) and tool implementations. Combines all 13 built-in tools with custom tools discovered from disk:
 
 - **`.dops` module discovery** — Discovers `.dops` modules alongside `tool.yaml` manifests; uses `parseDopsFileAny()` for version detection
 - **v2 module routing** — `isV2Module()` check routes v2 modules to `DopsRuntimeV2` instantiation

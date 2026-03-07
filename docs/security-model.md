@@ -140,7 +140,7 @@ The approval context includes file paths, content preview, and tool name.
 
 `SafeExecutor` also performs pre-execution path checks on declared output files and post-hoc validation on actually written files. Per-file audit logging (files written/modified, timestamps, duration) is recorded in execution audit entries.
 
-All 12 built-in tools and custom tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
+All 13 built-in tools and custom tools also use `atomicWriteFileSync()` from `@dojops/sdk` for direct file writes outside the sandbox.
 
 ### Layer 7: Immutable Audit Log
 

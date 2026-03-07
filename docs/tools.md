@@ -1,6 +1,6 @@
 # DevOps Tools
 
-DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class. Additionally, a **custom tool system** lets you extend DojOps with custom tools via declarative `tool.yaml` manifests.
+DojOps includes 13 built-in DevOps tools covering CI/CD, infrastructure-as-code, containers, monitoring, and system services. All tools follow a consistent pattern built on the `BaseTool<T>` abstract class. Additionally, a **custom tool system** lets you extend DojOps with custom tools via declarative `tool.yaml` manifests.
 
 ---
 
@@ -25,7 +25,7 @@ DojOps includes 12 built-in DevOps tools covering CI/CD, infrastructure-as-code,
 
 ## Tool Pattern
 
-All 12 built-in tools are defined as `.dops v2` module files in `packages/runtime/modules/`. Each module is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
+All 13 built-in tools are defined as `.dops v2` module files in `packages/runtime/modules/`. Each module is processed by `DopsRuntimeV2`, which compiles prompts, calls the LLM, and writes raw file content directly (no JSON→serialize step).
 
 ```
 packages/runtime/modules/
@@ -41,6 +41,7 @@ packages/runtime/modules/
   gitlab-ci.dops         GitLab CI pipeline generator
   prometheus.dops        Prometheus monitoring generator
   systemd.dops           Systemd service unit generator
+  jenkinsfile.dops       Jenkinsfile pipeline generator
 ```
 
 > **Legacy pattern (v1):** Prior to v2, built-in tools used a TypeScript file structure (`schemas.ts` → `detector.ts` → `generator.ts` → `verifier.ts` → `*-tool.ts`). This pattern is still supported for custom tools via `tool.yaml` manifests.
@@ -114,7 +115,7 @@ Verification runs by default in CLI commands. Use `--skip-verify` to disable. Ex
 
 ### Existing Config Auto-Detection
 
-All 12 tools auto-detect existing config files and switch to update mode when found. Each tool knows its output file path and reads existing content automatically:
+All 13 tools auto-detect existing config files and switch to update mode when found. Each tool knows its output file path and reads existing content automatically:
 
 | Tool           | Auto-Detect Path                                                       |
 | -------------- | ---------------------------------------------------------------------- |
@@ -130,6 +131,7 @@ All 12 tools auto-detect existing config files and switch to update mode when fo
 | GitLab CI      | `{projectPath}/.gitlab-ci.yml`                                         |
 | Prometheus     | `{outputPath}/prometheus.yml`                                          |
 | Systemd        | `{outputPath}/{serviceName}.service`                                   |
+| Jenkinsfile    | `{projectPath}/Jenkinsfile`                                            |
 
 **Behavior:**
 
