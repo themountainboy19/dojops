@@ -319,6 +319,7 @@ async function installNpmPackages(
 export async function offerToolInstall(options?: {
   nonInteractive?: boolean;
   domains?: string[];
+  autoInstallAll?: boolean;
 }): Promise<string[]> {
   const missing = options?.domains
     ? collectMissingToolsForDomains(options.domains)
@@ -336,7 +337,10 @@ export async function offerToolInstall(options?: {
 
   if (options?.nonInteractive) return [];
 
-  const selected = await selectToolsForInstall(missing);
+  // Auto-install all (used by doctor --fix)
+  const selected = options?.autoInstallAll
+    ? missing.map((d) => d.npmPackage)
+    : await selectToolsForInstall(missing);
   if (!selected) return [];
 
   const installed = await installNpmPackages(selected, missing);
@@ -402,6 +406,7 @@ export function collectMissingSystemToolsForDomains(domains: string[]): typeof S
 export async function offerSystemToolInstall(options?: {
   nonInteractive?: boolean;
   domains?: string[];
+  autoInstallAll?: boolean;
 }): Promise<string[]> {
   const missing = options?.domains
     ? collectMissingSystemToolsForDomains(options.domains)
@@ -421,18 +426,25 @@ export async function offerSystemToolInstall(options?: {
     return [];
   }
 
-  const selected = await p.multiselect({
-    message: "Select system tools to install into toolchain (~/.dojops/toolchain/):",
-    options: missing.map((tool) => ({
-      value: tool.name,
-      label: tool.name,
-      hint: tool.description,
-    })),
-    required: false,
-  });
+  // Auto-install all (used by doctor --fix)
+  let selected: string[];
+  if (options?.autoInstallAll) {
+    selected = missing.map((t) => t.name);
+  } else {
+    const picked = await p.multiselect({
+      message: "Select system tools to install into toolchain (~/.dojops/toolchain/):",
+      options: missing.map((tool) => ({
+        value: tool.name,
+        label: tool.name,
+        hint: tool.description,
+      })),
+      required: false,
+    });
 
-  if (p.isCancel(selected) || selected.length === 0) {
-    return [];
+    if (p.isCancel(picked) || picked.length === 0) {
+      return [];
+    }
+    selected = picked;
   }
 
   const installed: string[] = [];

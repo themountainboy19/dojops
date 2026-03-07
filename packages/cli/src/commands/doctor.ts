@@ -271,8 +271,8 @@ function formatChecks(checks: Check[]): string[] {
   });
 }
 
-/** Auto-fix issues that can be remediated without user intervention. */
-function autoFix(checks: Check[], ctx: CLIContext): number {
+/** Auto-fix config/project issues (no tool installs). */
+function autoFixConfig(checks: Check[], ctx: CLIContext): number {
   let fixed = 0;
 
   // Fix: Create .dojops/ if missing
@@ -314,6 +314,35 @@ function autoFix(checks: Check[], ctx: CLIContext): number {
   return fixed;
 }
 
+/** Auto-install all missing tools (npm + system) without prompting. */
+async function autoFixTools(checks: Check[], projectDomains: string[]): Promise<number> {
+  let fixed = 0;
+
+  const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
+  if (hasMissingTools) {
+    const installed = await offerToolInstall({
+      nonInteractive: false,
+      domains: projectDomains,
+      autoInstallAll: true,
+    });
+    fixed += installed.length;
+  }
+
+  const hasMissingSystemTools = checks.some(
+    (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
+  );
+  if (hasMissingSystemTools) {
+    const installed = await offerSystemToolInstall({
+      nonInteractive: false,
+      domains: projectDomains,
+      autoInstallAll: true,
+    });
+    fixed += installed.length;
+  }
+
+  return fixed;
+}
+
 export async function statusCommand(_args: string[], ctx: CLIContext): Promise<void> {
   const fixMode = hasFlag(_args, "--fix");
   // Run all checks
@@ -343,16 +372,6 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
     ...checkProjectMetrics(root),
   );
 
-  // Auto-fix mode
-  if (fixMode) {
-    const fixCount = autoFix(checks, ctx);
-    if (fixCount > 0) {
-      p.log.success(`${fixCount} issue(s) auto-fixed.`);
-    } else {
-      p.log.info("No auto-fixable issues found.");
-    }
-  }
-
   // Output
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify({ checks }, null, 2));
@@ -362,31 +381,46 @@ export async function statusCommand(_args: string[], ctx: CLIContext): Promise<v
   p.note(formatChecks(checks).join("\n"), "System Diagnostics");
 
   const failCount = checks.filter((c) => c.status === "fail").length;
-  if (failCount > 0) {
-    p.log.error(`${failCount} check(s) failed.`);
-    // Exit non-zero after offering tool installs below
-  } else {
+  const warnCount = checks.filter((c) => c.status === "warn").length;
+
+  if (failCount === 0 && warnCount === 0) {
     p.log.success("All checks passed.");
+  } else if (failCount > 0) {
+    p.log.error(`${failCount} check(s) failed, ${warnCount} warning(s).`);
+  } else {
+    p.log.warn(`${warnCount} warning(s).`);
   }
 
-  // Offer to install missing optional tool dependencies (filtered by project domains)
-  const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
-  if (hasMissingTools) {
-    await offerToolInstall({
-      nonInteractive: ctx.globalOpts.nonInteractive,
-      domains: projectDomains,
-    });
-  }
+  // --fix: auto-remediate everything possible, then show summary
+  if (fixMode) {
+    const configFixed = autoFixConfig(checks, ctx);
+    const toolsFixed = await autoFixTools(checks, projectDomains);
+    const totalFixed = configFixed + toolsFixed;
 
-  // Offer to install missing system tools (filtered by project domains)
-  const hasMissingSystemTools = checks.some(
-    (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
-  );
-  if (hasMissingSystemTools) {
-    await offerSystemToolInstall({
-      nonInteractive: ctx.globalOpts.nonInteractive,
-      domains: projectDomains,
-    });
+    if (totalFixed > 0) {
+      p.log.success(`${totalFixed} issue(s) auto-fixed.`);
+    } else {
+      p.log.info("No auto-fixable issues found.");
+    }
+  } else {
+    // Interactive mode: offer to install missing tools with prompts
+    const hasMissingTools = checks.some((c) => c.name.startsWith("Tool:") && c.status === "warn");
+    if (hasMissingTools) {
+      await offerToolInstall({
+        nonInteractive: ctx.globalOpts.nonInteractive,
+        domains: projectDomains,
+      });
+    }
+
+    const hasMissingSystemTools = checks.some(
+      (c) => c.name.startsWith("System:") && c.status === "warn" && c.detail.includes("Not found"),
+    );
+    if (hasMissingSystemTools) {
+      await offerSystemToolInstall({
+        nonInteractive: ctx.globalOpts.nonInteractive,
+        domains: projectDomains,
+      });
+    }
   }
 
   // Exit non-zero when checks failed
