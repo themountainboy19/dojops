@@ -366,7 +366,8 @@ function handleDeleteSubcommand(args: string[]): void {
   p.log.success(`Deleted ${pc.bold(key)}`);
 }
 
-function validateConfigValues(config: DojOpsConfig): string[] {
+/** @internal exported for testing */
+export function validateConfigValues(config: DojOpsConfig): string[] {
   const issues: string[] = [];
 
   if (config.defaultProvider && !VALID_PROVIDERS.includes(config.defaultProvider as never)) {
@@ -394,7 +395,8 @@ function validateConfigValues(config: DojOpsConfig): string[] {
   return issues;
 }
 
-function validateConfigPermissions(configPath: string): string[] {
+/** @internal exported for testing */
+export function validateConfigPermissions(configPath: string): string[] {
   try {
     const stat = fs.statSync(configPath);
     const mode = (stat.mode & 0o777).toString(8);

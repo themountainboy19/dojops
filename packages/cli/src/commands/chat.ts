@@ -370,13 +370,15 @@ async function runInteractiveLoop(
   process.exit(ExitCode.SUCCESS);
 }
 
-function getRoleLabel(role: string): string {
+/** @internal exported for testing */
+export function getRoleLabel(role: string): string {
   if (role === "user") return "**You**";
   if (role === "assistant") return "**Agent**";
   return "**System**";
 }
 
-function formatSessionAsMarkdown(session: ChatSessionState): string {
+/** @internal exported for testing */
+export function formatSessionAsMarkdown(session: ChatSessionState): string {
   const lines: string[] = [
     `# Chat Session: ${session.name ?? session.id}`,
     "",
