@@ -86,7 +86,8 @@ function backupAndWrite(writePath: string, content: string, verbose: boolean): v
   fs.writeFileSync(writePath, content, "utf-8");
 }
 
-function outputFormatted(
+/** @internal exported for testing */
+export function outputFormatted(
   outputMode: string | undefined,
   key: string,
   name: string,
