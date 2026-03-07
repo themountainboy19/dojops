@@ -42,6 +42,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("clean")}              Remove generated artifacts from a plan`);
   console.log(`  ${pc.dim("  destroy")}            ${pc.dim("Deprecated alias for clean")}`);
   console.log(`  ${pc.cyan("rollback")}           Reverse an applied plan`);
+  console.log(`  ${pc.cyan("cron")}               Manage scheduled jobs`);
   console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -58,6 +59,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("--debug")}            Debug-level output`);
   console.log(`  ${pc.cyan("--quiet")}            Suppress non-essential output`);
   console.log(`  ${pc.cyan("--agent=NAME")}       Force routing to a specific specialist agent`);
+  console.log(`  ${pc.cyan("--fallback-provider")} Comma-separated fallback provider chain`);
   console.log(`  ${pc.cyan("--timeout=<ms>")}     Global timeout for operations`);
   console.log(`  ${pc.cyan("--dry-run")}          Preview changes without writing files`);
   console.log(`  ${pc.cyan("--no-color")}         Disable color output`);
@@ -620,7 +622,11 @@ export function printCommandHelp(command: string): void {
         `\n${pc.bold("dojops init")} — Initialize .dojops/ project directory and scan repo`,
       );
       console.log(`\n${pc.bold("USAGE")}`);
-      console.log(`  ${pc.dim("$")} dojops init`);
+      console.log(`  ${pc.dim("$")} dojops init [options]`);
+      console.log(`\n${pc.bold("OPTIONS")}`);
+      console.log(`  ${pc.cyan("--skip-scan")}     Skip repository scanning`);
+      console.log(`  ${pc.cyan("--skip-tools")}    Skip tool dependency installation`);
+      console.log(`  ${pc.cyan("--skip-review")}   Skip interactive review prompt`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Creates the .dojops/ directory structure and scans the repository to`);
       console.log(`  build a structured context file (.dojops/context.json).`);
@@ -793,7 +799,7 @@ export function printCommandHelp(command: string): void {
       console.log(`\n${pc.bold("dojops modules")} — Manage DevOps modules (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(
-        `  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install|search]`,
+        `  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install|search|dev]`,
       );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
@@ -807,6 +813,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops module to the DojOps Hub`);
       console.log(`  ${pc.cyan("install <name>")}   Install a .dops module from the DojOps Hub`);
       console.log(`  ${pc.cyan("search <query>")}   Search the DojOps Hub for modules`);
+      console.log(
+        `  ${pc.cyan("dev <file.dops>")}  Validate and watch a .dops file during development`,
+      );
       console.log(`\n${pc.bold("OPTIONS")}`);
       console.log(`  ${pc.cyan("--output=json")}   Output list as JSON`);
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
@@ -815,6 +824,9 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("--global")}        Install to ~/.dojops/modules/ instead of project`,
       );
       console.log(`  ${pc.cyan("--legacy")}        Generate legacy v1 .dops format (init only)`);
+      console.log(
+        `  ${pc.cyan("--watch")}         Watch mode: re-validate on file changes (dev only)`,
+      );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Modules are v2 .dops files that define LLM-powered configuration generators.`);
       console.log(
@@ -838,6 +850,29 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops modules install nginx-config --version 1.0.0 --global`);
       console.log(`  ${pc.dim("$")} dojops modules search docker`);
       console.log(`  ${pc.dim("$")} dojops modules list --output json`);
+      console.log(`  ${pc.dim("$")} dojops modules dev my-module.dops`);
+      console.log(`  ${pc.dim("$")} dojops modules dev my-module.dops --watch`);
+      console.log();
+      break;
+
+    case "cron":
+      console.log(`\n${pc.bold("dojops cron")} — Manage scheduled jobs`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops cron [add|list|remove]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("add")} "<schedule>" <command>   Add a scheduled job`);
+      console.log(`  ${pc.cyan("list")}                        List all scheduled jobs`);
+      console.log(`  ${pc.cyan("remove")} <id>                 Remove a scheduled job`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Manages scheduled DojOps commands stored in .dojops/cron.json.`);
+      console.log(`  Schedule format: standard cron (minute hour day month weekday).`);
+      console.log(`  Jobs are stored as project configuration — add them to your system`);
+      console.log(`  crontab (crontab -e) for actual execution.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops cron add "0 2 * * *" plan "backup terraform"`);
+      console.log(`  ${pc.dim("$")} dojops cron add "0 */6 * * *" scan --security`);
+      console.log(`  ${pc.dim("$")} dojops cron list`);
+      console.log(`  ${pc.dim("$")} dojops cron remove job-abc123`);
       console.log();
       break;
 

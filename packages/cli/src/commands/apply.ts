@@ -29,6 +29,8 @@ import {
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { cliApprovalHandler } from "../approval";
 import { getDriftWarnings } from "../drift-warning";
+import { runHooks } from "../hooks";
+import { createProgressReporter } from "../progress";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 import { readExistingToolFile } from "../tool-file-map";
 
@@ -510,11 +512,17 @@ function createExecutorWithCallbacks(
   tools: ReturnType<ReturnType<typeof createToolRegistry>["getAll"]>,
   graph: ReturnType<typeof buildTaskGraph>,
   ctx: CLIContext,
+  jsonOutput: boolean,
 ) {
   const taskTimers = new Map<string, number>();
+  const progress = !jsonOutput ? createProgressReporter(graph.tasks.length) : null;
   const executor = new PlannerExecutor(tools, {
     taskStart(id, desc) {
-      p.log.step(`Running ${pc.blue(id)}: ${desc}`);
+      if (progress) {
+        progress.start(id, desc);
+      } else {
+        p.log.step(`Running ${pc.blue(id)}: ${desc}`);
+      }
       taskTimers.set(id, Date.now());
       if (ctx.globalOpts.verbose) {
         const task = graph.tasks.find((t) => t.id === id);
@@ -525,18 +533,26 @@ function createExecutorWithCallbacks(
     },
     taskEnd(id, status, error) {
       const elapsed = taskTimers.has(id) ? Date.now() - taskTimers.get(id)! : 0;
-      if (error) {
-        p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
+      if (progress) {
+        if (error) {
+          progress.fail(id, error);
+        } else {
+          progress.complete(id);
+        }
       } else {
-        const label = status === "completed" ? "generated" : statusText(status);
-        p.log.info(`${pc.blue(id)}: ${label}`);
+        if (error) {
+          p.log.error(`${pc.blue(id)}: ${statusText(status)} - ${pc.red(error)}`);
+        } else {
+          const label = status === "completed" ? "generated" : statusText(status);
+          p.log.info(`${pc.blue(id)}: ${label}`);
+        }
       }
       if (ctx.globalOpts.verbose) {
         p.log.info(`  Generated in ${elapsed}ms`);
       }
     },
   });
-  return executor;
+  return { executor, progress };
 }
 
 function buildToolMetadata(
@@ -906,8 +922,9 @@ async function executeApplyPlan(
 
   const toolMap = new Map(tools.map((t) => [t.name, t]));
   const graph = buildTaskGraph(plan, root);
-  const executor = createExecutorWithCallbacks(tools, graph, ctx);
+  const { executor, progress } = createExecutorWithCallbacks(tools, graph, ctx, flags.jsonOutput);
   const planResult = await executor.execute(graph, { completedTaskIds });
+  progress?.done();
 
   const applyCtx: ApplyContext = {
     plan,
@@ -962,6 +979,10 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
     throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
   }
 
+  // Pre-execute hook
+  const hookOk = runHooks(root, "pre-execute", {}, { verbose: ctx.globalOpts.verbose });
+  if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-execute hook failed.");
+
   const flags = parseApplyFlags(args, ctx);
   const plan = resolvePlan(root, flags.planId, flags.jsonOutput);
 
@@ -999,6 +1020,13 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
   const startTime = Date.now();
   try {
     await executeApplyPlan(ctx, root, plan, flags, completedTaskIds, interrupted, startTime);
+    // Post-execute hook (success)
+    runHooks(root, "post-execute", {}, { verbose: ctx.globalOpts.verbose });
+  } catch (err) {
+    // On-error hook
+    const errMsg = err instanceof Error ? err.message : String(err);
+    runHooks(root, "on-error", { error: errMsg }, { verbose: ctx.globalOpts.verbose });
+    throw err;
   } finally {
     process.removeListener("SIGINT", sigintHandler);
     process.removeListener("SIGTERM", sigtermHandler);

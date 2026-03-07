@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`chat export` Command**: Export chat sessions as Markdown or JSON — `chat export [sessionId] [--format=json|markdown] [--output=file.md]`. Supports single session or bulk export
 - **Toolchain Install Retry with Context7**: When npm or system tool installation fails during `dojops init`, the CLI now retries automatically and queries Context7 for correct install instructions. If both attempts fail, displays manual installation guidance with Context7 hints when available
 - **Context7 Enabled by Default**: Context7 documentation augmentation is now enabled by default across `generate`, `chat`, `serve`, and toolchain install. Set `DOJOPS_CONTEXT_ENABLED=false` to opt out
+- **Lifecycle Hook System**: New `.dojops/hooks.json` configuration file for shell commands that execute at lifecycle events — `pre-generate`, `post-generate`, `pre-plan`, `post-plan`, `pre-execute`, `post-execute`, `pre-scan`, `post-scan`, `on-error`. Hook context passed via `DOJOPS_HOOK_*` environment variables. Pre-hooks abort on failure; post-hooks continue by default
+- **Model Failover Chains**: New `--fallback-provider` flag and `DOJOPS_FALLBACK_PROVIDER` env var for comma-separated LLM provider fallback chains (e.g., `--fallback-provider openai,deepseek,ollama`). Primary provider is tried first; failures automatically cascade to the next provider in the chain
+- **`modules dev` Command**: New `dojops modules dev <file.dops> [--watch]` for module development — validates `.dops` files and optionally watches for changes with automatic re-validation. Shows format details (files, sections, risk, rules) on each validation pass
+- **Cron/Scheduled Jobs**: New `dojops cron add|list|remove` for managing scheduled DojOps commands stored in `.dojops/cron.json`. Jobs include cron schedule, command, and generated system crontab entries for easy integration
+- **Smart Progress Reporter**: Multi-step operations (apply) now show TTY-aware progress — inline progress bar with percentage on terminals, plain log lines on CI/non-TTY. Detects `$CI`, `$NO_COLOR`, and TTY status automatically
+- **Init `--skip-*` Flags**: New `--skip-scan`, `--skip-tools`, `--skip-review` flags on `dojops init` for selective initialization — skip repository scanning, tool dependency installation, or interactive review prompt
 
 ### Changed
 

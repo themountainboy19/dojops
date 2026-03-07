@@ -22,12 +22,18 @@ import {
   getCurrentUser,
 } from "../state";
 import { emitGitHubAnnotations } from "../ci-annotations";
+import { runHooks } from "../hooks";
 
 export async function scanCommand(args: string[], ctx: CLIContext): Promise<void> {
   const startTime = Date.now();
 
   const flags = parseScanFlags(args, ctx);
   const { root, scanRoot } = resolveScanRoot(flags.targetDir, ctx);
+
+  // Pre-scan hook
+  const hookOk = runHooks(root, "pre-scan", {}, { verbose: ctx.globalOpts.verbose });
+  if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-scan hook failed.");
+
   const context = loadContext(root) ?? undefined;
 
   const report = await executeScan(scanRoot, flags.scanType, context, ctx);
@@ -81,6 +87,9 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
       flags.autoApprove,
     );
   }
+
+  // Post-scan hook
+  runHooks(root, "post-scan", {}, { verbose: ctx.globalOpts.verbose });
 
   throwOnSeverity(rescanReport ?? report, flags.failOnSeverity);
 }

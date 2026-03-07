@@ -10,7 +10,7 @@ import { parseAndValidate } from "@dojops/core";
 import * as yaml from "js-yaml";
 import { CommandHandler, CLIContext } from "../types";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
-import { extractFlagValue } from "../parser";
+import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
 
 /**
@@ -1307,3 +1307,77 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
     throwHubError(err);
   }
 };
+
+// ── modules dev ─────────────────────────────────────────────────────
+
+/**
+ * `dojops modules dev <path>` — validate a .dops file and optionally watch for changes.
+ * Provides real-time feedback during module development.
+ */
+export const toolsDevCommand: CommandHandler = async (args) => {
+  const toolPath = args[0];
+  if (!toolPath) {
+    p.log.info(`  ${pc.dim("$")} dojops modules dev <path.dops> [--watch]`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file required.");
+  }
+
+  const watchMode = hasFlag(args, "--watch");
+  const resolvedPath = path.resolve(toolPath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${resolvedPath}`);
+  }
+  if (!resolvedPath.endsWith(".dops")) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Not a .dops file: ${resolvedPath}`);
+  }
+
+  runDevValidation(resolvedPath);
+
+  if (watchMode) {
+    p.log.info(pc.dim("Watching for changes... (Ctrl+C to stop)"));
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    fs.watch(resolvedPath, () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        console.log();
+        p.log.info(pc.dim(`[${new Date().toLocaleTimeString()}] File changed, re-validating...`));
+        runDevValidation(resolvedPath);
+      }, 300);
+    });
+    // Keep process alive
+    await new Promise(() => {});
+  }
+};
+
+function runDevValidation(filePath: string): void {
+  try {
+    const module = parseDopsFileAny(filePath);
+    const result = validateDopsModuleAny(module);
+
+    if (result.valid) {
+      p.log.success(
+        `${pc.bold(module.frontmatter.meta.name)} v${module.frontmatter.meta.version} — valid`,
+      );
+      const stats = {
+        files: module.frontmatter.files.length,
+        sections: ["Prompt", module.sections.updatePrompt ? "Update" : null, "Keywords"]
+          .filter(Boolean)
+          .join(", "),
+        risk: module.frontmatter.risk?.level ?? "unknown",
+        rules: module.frontmatter.verification?.structural?.length ?? 0,
+      };
+      p.log.info(
+        pc.dim(
+          `  Files: ${stats.files} | Sections: ${stats.sections} | Risk: ${stats.risk} | Rules: ${stats.rules}`,
+        ),
+      );
+    } else {
+      p.log.error(`Validation failed:`);
+      for (const err of result.errors ?? []) {
+        p.log.error(`  ${pc.red("✗")} ${err}`);
+      }
+    }
+  } catch (err) {
+    p.log.error(`Parse error: ${toErrorMessage(err)}`);
+  }
+}

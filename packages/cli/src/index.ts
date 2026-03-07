@@ -49,6 +49,7 @@ import {
   toolsPublishCommand,
   toolsInstallCommand,
   toolsSearchCommand,
+  toolsDevCommand,
 } from "./commands/tools";
 import {
   toolchainListCommand,
@@ -63,6 +64,7 @@ import { checkCommand } from "./commands/check";
 import { verifyCommand } from "./commands/verify";
 import { providerCommand } from "./commands/provider";
 import { upgradeCommand } from "./commands/upgrade";
+import { cronCommand } from "./commands/cron";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 
 registerCommand("init", initCommand);
@@ -79,6 +81,7 @@ registerCommand("chat", chatCommand);
 registerCommand("check", checkCommand);
 registerCommand("verify", verifyCommand);
 registerCommand("upgrade", upgradeCommand);
+registerCommand("cron", cronCommand);
 
 // `dojops help <command>` → show per-command help
 registerCommand("help", async (args) => {
@@ -113,6 +116,7 @@ registerSubcommand("modules", "load", toolsLoadCommand);
 registerSubcommand("modules", "publish", toolsPublishCommand);
 registerSubcommand("modules", "install", toolsInstallCommand);
 registerSubcommand("modules", "search", toolsSearchCommand);
+registerSubcommand("modules", "dev", toolsDevCommand);
 
 // Backward compat: "tools" alias → modules
 registerSubcommand("tools", "list", toolsListCommand);
@@ -122,6 +126,7 @@ registerSubcommand("tools", "load", toolsLoadCommand);
 registerSubcommand("tools", "publish", toolsPublishCommand);
 registerSubcommand("tools", "install", toolsInstallCommand);
 registerSubcommand("tools", "search", toolsSearchCommand);
+registerSubcommand("tools", "dev", toolsDevCommand);
 
 // Nested: toolchain <sub> (system binaries)
 registerSubcommand("toolchain", "list", toolchainListCommand);
@@ -198,14 +203,23 @@ function buildLazyProvider(
       ollamaTlsRejectUnauthorized: ollamaTls === false ? false : undefined,
     });
 
-    const fallbackName = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
-    if (fallbackName) {
-      try {
-        const fallbackKey = resolveToken(fallbackName, config);
-        const fallbackProv = createProvider({ provider: fallbackName, apiKey: fallbackKey });
-        provider = new FallbackProvider([provider, fallbackProv]);
-      } catch {
-        // Fallback provider misconfigured — use primary only
+    const fallbackSpec = globalOpts.fallbackProvider ?? process.env.DOJOPS_FALLBACK_PROVIDER;
+    if (fallbackSpec) {
+      const fallbackNames = fallbackSpec
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const chain: LLMProvider[] = [provider];
+      for (const name of fallbackNames) {
+        try {
+          const fbKey = resolveToken(name, config);
+          chain.push(createProvider({ provider: name, apiKey: fbKey }));
+        } catch {
+          // Skip misconfigured fallback provider
+        }
+      }
+      if (chain.length > 1) {
+        provider = new FallbackProvider(chain);
       }
     }
 
@@ -233,6 +247,7 @@ const QUIET_COMMANDS = new Set([
   "history",
   "serve",
   "help",
+  "cron",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([

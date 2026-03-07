@@ -12,6 +12,7 @@ import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot, loadContext } from "../state";
 import { TOOL_FILE_MAP, readExistingToolFile } from "../tool-file-map";
+import { runHooks } from "../hooks";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -401,8 +402,20 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
-  const provider = ctx.getProvider();
   const projectRoot = findProjectRoot() ?? undefined;
+
+  // Run pre-generate hooks
+  if (projectRoot) {
+    const hookOk = runHooks(
+      projectRoot,
+      "pre-generate",
+      { prompt },
+      { verbose: ctx.globalOpts.verbose },
+    );
+    if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-generate hook failed.");
+  }
+
+  const provider = ctx.getProvider();
 
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
@@ -465,4 +478,18 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   outputFormatted(ctx.globalOpts.output, "agent", route.agent.name, result.content);
+
+  // Run post-generate hooks
+  if (projectRoot) {
+    runHooks(
+      projectRoot,
+      "post-generate",
+      {
+        prompt,
+        agent: route.agent.name,
+        outputPath: writePath,
+      },
+      { verbose: ctx.globalOpts.verbose },
+    );
+  }
 }

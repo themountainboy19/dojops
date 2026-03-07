@@ -9,6 +9,7 @@ import { CommandHandler } from "../types";
 import { toErrorMessage } from "../exit-codes";
 import { initProject, findProjectRoot } from "../state";
 import { offerToolInstall, offerSystemToolInstall } from "../preflight";
+import { hasFlag } from "../parser";
 
 function collectInfraParts(ctx: RepoContext): string[] {
   const parts: string[] = [];
@@ -433,63 +434,80 @@ async function offerContextReview(contextMdPath: string): Promise<void> {
 }
 
 export const initCommand: CommandHandler = async (_args, cliCtx) => {
+  const skipScan = hasFlag(_args, "--skip-scan");
+  const skipTools = hasFlag(_args, "--skip-tools");
+  const skipReview = hasFlag(_args, "--skip-review");
+
   const root = findProjectRoot() ?? process.cwd();
   const alreadyExists = fs.existsSync(path.join(root, ".dojops"));
   const created = initProject(root);
 
-  // Scan the repository
   const isStructured = cliCtx.globalOpts.output !== "table";
-  const s = p.spinner();
-  if (!isStructured) s.start("Scanning repository...");
-  const ctx = scanRepo(root);
   const contextPath = path.join(root, ".dojops", "context.json");
-  fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
-  if (!isStructured) s.stop("Repository scanned.");
+  const contextMdPath = path.join(root, ".dojops", "context.md");
+
+  // Scan the repository (unless --skip-scan)
+  let ctx: RepoContext | undefined;
+  if (!skipScan) {
+    const s = p.spinner();
+    if (!isStructured) s.start("Scanning repository...");
+    ctx = scanRepo(root);
+    fs.writeFileSync(contextPath, JSON.stringify(ctx, null, 2) + "\n");
+    if (!isStructured) s.stop("Repository scanned.");
+  }
 
   if (alreadyExists && created.length === 0) {
     p.log.info("Project already initialized — context updated.");
     p.log.info(`  ${pc.dim(contextPath)}`);
   } else {
     const lines = created.map((f) => `  ${pc.green("+")} ${f}`);
-    lines.push(`  ${pc.green("+")} .dojops/context.json`);
+    if (ctx) lines.push(`  ${pc.green("+")} .dojops/context.json`);
     p.note(lines.join("\n"), `Initialized .dojops/ in ${pc.dim(root)}`);
     p.log.success("Project initialized.");
   }
 
-  // Display scan summary
-  const summaryLines = formatScanSummary(ctx);
-  p.note(summaryLines.join("\n"), "Repo scan results");
+  if (ctx) {
+    // Display scan summary
+    const summaryLines = formatScanSummary(ctx);
+    p.note(summaryLines.join("\n"), "Repo scan results");
 
-  // Write context.md
-  const contextMdPath = path.join(root, ".dojops", "context.md");
-  fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
+    // Write context.md
+    fs.writeFileSync(contextMdPath, formatContextMarkdown(ctx));
 
-  // LLM enrichment (optional — only if a provider is configured)
-  let provider;
-  try {
-    provider = cliCtx.getProvider();
-  } catch {
-    // No provider configured — that's fine
+    // LLM enrichment (optional — only if a provider is configured)
+    let provider;
+    try {
+      provider = cliCtx.getProvider();
+    } catch {
+      // No provider configured — that's fine
+    }
+
+    await runLLMEnrichment(provider, ctx, contextPath, contextMdPath, isStructured);
+
+    // Offer context review (interactive only, unless --skip-review)
+    if (!skipReview && !cliCtx.globalOpts.nonInteractive) {
+      await offerContextReview(contextMdPath);
+    }
+
+    p.log.info(`Context: ${pc.dim(contextMdPath)}`);
   }
 
-  await runLLMEnrichment(provider, ctx, contextPath, contextMdPath, isStructured);
-
-  // Offer context review (interactive only)
-  if (!cliCtx.globalOpts.nonInteractive) {
-    await offerContextReview(contextMdPath);
+  if (skipScan) {
+    p.log.info(pc.dim("Skipped repository scan (--skip-scan)."));
   }
 
-  p.log.info(`Context: ${pc.dim(contextMdPath)}`);
-
-  // Offer to install missing optional tool dependencies (filtered by project domains)
-  await offerToolInstall({
-    nonInteractive: cliCtx.globalOpts.nonInteractive,
-    domains: ctx.relevantDomains,
-  });
-
-  // Offer to install missing system tools (filtered by project domains)
-  await offerSystemToolInstall({
-    nonInteractive: cliCtx.globalOpts.nonInteractive,
-    domains: ctx.relevantDomains,
-  });
+  // Offer to install missing tools (unless --skip-tools)
+  if (!skipTools) {
+    const domains = ctx?.relevantDomains ?? [];
+    await offerToolInstall({
+      nonInteractive: cliCtx.globalOpts.nonInteractive,
+      domains,
+    });
+    await offerSystemToolInstall({
+      nonInteractive: cliCtx.globalOpts.nonInteractive,
+      domains,
+    });
+  } else {
+    p.log.info(pc.dim("Skipped tool installation (--skip-tools)."));
+  }
 };

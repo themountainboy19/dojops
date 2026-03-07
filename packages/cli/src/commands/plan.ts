@@ -5,6 +5,7 @@ import { createToolRegistry, ToolRegistry } from "@dojops/tool-registry";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
+import { runHooks } from "../hooks";
 import { classifyPlanRisk } from "../risk-classifier";
 import { wrapForNote } from "../formatter";
 import * as yaml from "js-yaml";
@@ -236,8 +237,20 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
-  const provider = ctx.getProvider();
   const projectRoot = findProjectRoot();
+
+  // Pre-plan hook
+  if (projectRoot) {
+    const hookOk = runHooks(
+      projectRoot,
+      "pre-plan",
+      { prompt },
+      { verbose: ctx.globalOpts.verbose },
+    );
+    if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-plan hook failed.");
+  }
+
+  const provider = ctx.getProvider();
   const registry = createToolRegistry(provider, projectRoot ?? undefined);
   const repoContext = projectRoot ? loadContext(projectRoot) : null;
   const isJson = ctx.globalOpts.output === "json";
@@ -272,6 +285,11 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     status: "success",
     durationMs: Date.now() - startTime,
   });
+
+  // Post-plan hook
+  if (root) {
+    runHooks(root, "post-plan", { prompt }, { verbose: ctx.globalOpts.verbose });
+  }
 
   outputPlanResult(planId, graph, ctx.globalOpts.output);
 }
