@@ -11,6 +11,7 @@ import {
   getInstallCommand,
   ALL_SPECIALIST_CONFIGS,
   SYSTEM_TOOLS,
+  SystemTool,
   findSystemTool,
   isToolSupportedOnCurrentPlatform,
 } from "@dojops/core";
@@ -25,6 +26,27 @@ import {
   installSystemTool,
   verifyTool,
 } from "./toolchain-sandbox";
+
+/**
+ * Attempt to look up correct install instructions via Context7.
+ * Returns install hint text if found, undefined otherwise.
+ */
+async function lookupInstallHint(toolName: string): Promise<string | undefined> {
+  if (process.env.DOJOPS_CONTEXT_ENABLED !== "true") return undefined;
+  try {
+    const { Context7Client } = await import("@dojops/context");
+    const client = new Context7Client({ apiKey: process.env.DOJOPS_CONTEXT7_API_KEY });
+    const lib = await client.resolveLibrary(toolName, `install ${toolName} npm`);
+    if (!lib) return undefined;
+    const docs = await client.queryDocs(lib.id, `how to install ${toolName}`);
+    if (!docs || docs.length < 20) return undefined;
+    // Extract first useful paragraph (up to 500 chars)
+    const trimmed = docs.slice(0, 500).trim();
+    return trimmed || undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Attempt to resolve a binary on PATH.
@@ -238,8 +260,13 @@ async function selectToolsForInstall(missing: ToolDependency[]): Promise<string[
 }
 
 /** Install a list of npm packages into the toolchain sandbox. Returns successfully installed package names. */
-function installNpmPackages(packages: string[], missing: ToolDependency[]): string[] {
+async function installNpmPackages(
+  packages: string[],
+  missing: ToolDependency[],
+): Promise<string[]> {
   const installed: string[] = [];
+  const manualInstall: Array<{ dep: ToolDependency; hint?: string }> = [];
+
   for (const pkg of packages) {
     const dep = missing.find((d) => d.npmPackage === pkg)!;
     const s = p.spinner();
@@ -248,11 +275,44 @@ function installNpmPackages(packages: string[], missing: ToolDependency[]): stri
       npmInstallSandboxed(pkg);
       s.stop(`${pc.green("\u2713")} ${dep.name} installed.`);
       installed.push(pkg);
+      continue;
+    } catch {
+      s.stop(`${pc.yellow("!")} ${dep.name} failed — checking install method...`);
+    }
+
+    // Look up correct install instructions via Context7 and retry
+    const hint = await lookupInstallHint(dep.npmPackage);
+    if (hint) {
+      p.log.info(pc.dim(`Context7: found install info for ${dep.name}`));
+    }
+
+    const retrySpinner = p.spinner();
+    retrySpinner.start(`Retrying ${dep.name}...`);
+    try {
+      npmInstallSandboxed(pkg);
+      retrySpinner.stop(`${pc.green("\u2713")} ${dep.name} installed on retry.`);
+      installed.push(pkg);
     } catch (err) {
-      s.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
-      p.log.warn(`Failed to install ${dep.name}: ${toErrorMessage(err)}`);
+      retrySpinner.stop(`${pc.red("\u2717")} ${dep.name} failed.`);
+      p.log.warn(`Could not install ${dep.name}: ${toErrorMessage(err)}`);
+      manualInstall.push({ dep, hint });
     }
   }
+
+  if (manualInstall.length > 0) {
+    p.log.info(pc.yellow(`\n${manualInstall.length} tool(s) require manual installation:`));
+    for (const { dep, hint } of manualInstall) {
+      const lines = [
+        `  ${pc.bold(dep.name)} (${dep.npmPackage})`,
+        `    ${pc.dim(`npm install -g ${dep.npmPackage}`)}`,
+      ];
+      if (hint) {
+        lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
+      }
+      p.log.message(lines.join("\n"));
+    }
+  }
+
   return installed;
 }
 
@@ -279,7 +339,7 @@ export async function offerToolInstall(options?: {
   const selected = await selectToolsForInstall(missing);
   if (!selected) return [];
 
-  const installed = installNpmPackages(selected, missing);
+  const installed = await installNpmPackages(selected, missing);
   if (installed.length > 0) {
     p.log.success(`${installed.length} tool(s) installed to ~/.dojops/toolchain/.`);
   }
@@ -376,6 +436,8 @@ export async function offerSystemToolInstall(options?: {
   }
 
   const installed: string[] = [];
+  const manualInstall: Array<{ tool: SystemTool; hint?: string }> = [];
+
   for (const name of selected) {
     const tool = findSystemTool(name)!;
     const s = p.spinner();
@@ -388,10 +450,45 @@ export async function offerSystemToolInstall(options?: {
         p.log.info(pc.dim(versionOutput));
       }
       installed.push(name);
-    } catch (err) {
-      s.stop(`${pc.red("\u2717")} ${tool.name} failed.`);
-      const msg = toErrorMessage(err);
-      p.log.warn(`Failed to install ${tool.name}: ${msg}`);
+      continue;
+    } catch {
+      s.stop(`${pc.yellow("!")} ${tool.name} failed — retrying...`);
+    }
+
+    // Retry once (transient network issues) and look up Context7 hint in parallel
+    const [retryResult, hint] = await Promise.allSettled([
+      installSystemTool(tool),
+      lookupInstallHint(tool.name),
+    ]);
+
+    if (retryResult.status === "fulfilled") {
+      p.log.success(
+        `${pc.green("\u2713")} ${tool.name} v${retryResult.value.version} installed on retry.`,
+      );
+      const versionOutput = verifyTool(tool);
+      if (versionOutput) {
+        p.log.info(pc.dim(versionOutput));
+      }
+      installed.push(name);
+    } else {
+      p.log.error(`${pc.red("\u2717")} ${tool.name} could not be installed.`);
+      const installHint = hint.status === "fulfilled" ? hint.value : undefined;
+      manualInstall.push({ tool, hint: installHint });
+    }
+  }
+
+  if (manualInstall.length > 0) {
+    p.log.info(pc.yellow(`\n${manualInstall.length} system tool(s) require manual installation:`));
+    for (const { tool, hint } of manualInstall) {
+      const lines = [
+        `  ${pc.bold(tool.name)} — ${tool.description}`,
+        `    ${pc.dim(`dojops toolchain install ${tool.name}`)}`,
+        `    ${pc.dim(`or visit the project page to install manually`)}`,
+      ];
+      if (hint) {
+        lines.push(`    ${pc.dim("Context7 hint:")} ${pc.dim(hint.split("\n")[0])}`);
+      }
+      p.log.message(lines.join("\n"));
     }
   }
 
