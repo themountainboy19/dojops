@@ -328,11 +328,42 @@ function handleSetSubcommand(args: string[]): void {
   if (!key || !value) {
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config set <key> <value>");
   }
+  if (value.startsWith("--")) {
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Invalid value "${value}". To remove a key, use: dojops config delete <key>`,
+    );
+  }
 
   const config = loadConfig();
   setNestedValue(config, key, value);
   saveConfig(config);
   p.log.success(`Set ${pc.bold(key)} = ${key.startsWith("tokens.") ? maskToken(value) : value}`);
+}
+
+function handleDeleteSubcommand(args: string[]): void {
+  const key = args[1];
+  if (!key) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config delete <key>");
+  }
+
+  const config = loadConfig();
+  const parts = key.split(".");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let current: any = config;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (current[parts[i]] == null || typeof current[parts[i]] !== "object") {
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Config key "${key}" is not set.`);
+    }
+    current = current[parts[i]];
+  }
+  const lastKey = parts[parts.length - 1];
+  if (!(lastKey in current)) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Config key "${key}" is not set.`);
+  }
+  delete current[lastKey];
+  saveConfig(config);
+  p.log.success(`Deleted ${pc.bold(key)}`);
 }
 
 function handleValidateSubcommand(): void {
@@ -445,6 +476,11 @@ export async function configCommand(args: string[], ctx: CLIContext): Promise<vo
 
   if (args[0] === "set") {
     handleSetSubcommand(args);
+    return;
+  }
+
+  if (args[0] === "delete" || args[0] === "unset") {
+    handleDeleteSubcommand(args);
     return;
   }
 

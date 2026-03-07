@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`config delete` Subcommand**: New `dojops config delete <key>` (alias: `unset`) to remove configuration keys. Previously there was no way to remove a key once set. Also guards `config set` against flag-like values (e.g., `--delete`)
+
+### Fixed
+
+- **`apply --dry-run` Not Respecting Flag**: The `--dry-run` global flag was consumed by the global parser but `apply` read it from local args, so `apply --dry-run` always wrote files. Now correctly checks `ctx.globalOpts.dryRun` as fallback
+- **`generate --output json` Double-Encoding**: JSON output wrapped content in an escaped string instead of embedding the JSON object. Content that is valid JSON is now parsed and embedded as a structured object
+- **`verify` Showing PASSED for Skipped Checks**: When a verification binary was not found (e.g., hadolint), the command displayed "PASSED" with a warning. Now correctly displays "SKIPPED" to avoid confusion
+
 ## [1.0.7] - 2026-03-07
 
 ### Added

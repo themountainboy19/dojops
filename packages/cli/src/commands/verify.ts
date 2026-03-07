@@ -105,7 +105,13 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
 
   if (!isStructured) spinner.stop(`Verified with ${pc.cyan(result.tool)}`);
 
-  if (result.passed) {
+  const skipped =
+    result.passed &&
+    result.issues.some((i) => i.severity === "warning" && i.message.includes("not found"));
+
+  if (skipped) {
+    p.log.warn(`${pc.yellow("SKIPPED")} - ${result.tool}`);
+  } else if (result.passed) {
     p.log.success(`${pc.green("PASSED")} - ${result.tool}`);
   } else {
     p.log.error(`${pc.red("FAILED")} - ${result.tool}`);

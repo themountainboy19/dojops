@@ -461,6 +461,7 @@ export function printCommandHelp(command: string): void {
         `  ${pc.cyan("get <key>")}        Get a config value (e.g., defaultProvider, tokens.openai)`,
       );
       console.log(`  ${pc.cyan("set <key> <val>")}  Set a config value with validation`);
+      console.log(`  ${pc.cyan("delete <key>")}     Remove a config key`);
       console.log(`  ${pc.cyan("validate")}         Validate config file integrity and values`);
       console.log(`  ${pc.cyan("profile create")}   Save current config as a named profile`);
       console.log(`  ${pc.cyan("profile use")}      Switch to a named profile`);
@@ -477,6 +478,7 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops config --token=sk-...`);
       console.log(`  ${pc.dim("$")} dojops config get defaultProvider`);
       console.log(`  ${pc.dim("$")} dojops config set defaultModel gpt-4o`);
+      console.log(`  ${pc.dim("$")} dojops config delete defaultModel`);
       console.log(`  ${pc.dim("$")} dojops config validate`);
       console.log(`  ${pc.dim("$")} dojops config profile create staging`);
       console.log(`  ${pc.dim("$")} dojops config profile use staging`);

@@ -93,7 +93,13 @@ function outputFormatted(
   content: string,
 ): void {
   if (outputMode === "json") {
-    console.log(JSON.stringify({ [key]: name, content }));
+    let contentValue: unknown = content;
+    try {
+      contentValue = JSON.parse(content);
+    } catch {
+      // content is not JSON — use as-is (string)
+    }
+    console.log(JSON.stringify({ [key]: name, content: contentValue }, null, 2));
   } else if (outputMode === "yaml") {
     console.log("---");
     console.log(`${key}: ${name}`);

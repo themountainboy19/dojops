@@ -64,7 +64,7 @@ interface TaskResultEntry {
 
 function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
   const autoApprove = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
-  const dryRun = hasFlag(args, "--dry-run");
+  const dryRun = hasFlag(args, "--dry-run") || ctx.globalOpts.dryRun;
   const resume = hasFlag(args, "--resume");
   const retry = hasFlag(args, "--retry");
   const replay = hasFlag(args, "--replay");
