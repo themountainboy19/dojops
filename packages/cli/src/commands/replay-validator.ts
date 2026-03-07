@@ -103,7 +103,7 @@ export function checkToolIntegrity(
 
     const currentTool = currentTools.find((t) => t.name === task.tool);
     if (!currentTool) {
-      mismatches.push(`Tool "${task.tool}" no longer available (was v${task.toolVersion})`);
+      mismatches.push(`Module "${task.tool}" no longer available (was v${task.toolVersion})`);
       continue;
     }
 
@@ -111,7 +111,7 @@ export function checkToolIntegrity(
       const currentHash = currentTool.source.toolHash;
       if (currentHash !== task.toolHash) {
         mismatches.push(
-          `Tool "${task.tool}" changed: plan used v${task.toolVersion} (${task.toolHash?.slice(0, 8)}), ` +
+          `Module "${task.tool}" changed: plan used v${task.toolVersion} (${task.toolHash?.slice(0, 8)}), ` +
             `current is v${currentTool.source.toolVersion} (${currentHash?.slice(0, 8)})`,
         );
       }

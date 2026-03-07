@@ -39,7 +39,7 @@ function validateTask(
   return errors;
 }
 
-/** Warn about tools not found in the registry. */
+/** Warn about modules not found in the registry. */
 function warnUnknownTools(
   tasks: Array<{ tool: string }>,
   registry: ReturnType<typeof createToolRegistry>,
@@ -48,8 +48,8 @@ function warnUnknownTools(
   if (unknownTools.length === 0) return;
   const unique = [...new Set(unknownTools)];
   p.log.warn(
-    `Unknown tool(s) not in registry: ${unique.map((t) => pc.bold(t)).join(", ")}. ` +
-      `These may be custom or plugin tools not currently loaded.`,
+    `Unknown module(s) not in registry: ${unique.map((t) => pc.bold(t)).join(", ")}. ` +
+      `These may be custom or plugin modules not currently loaded.`,
   );
 }
 

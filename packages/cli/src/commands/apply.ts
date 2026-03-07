@@ -193,7 +193,7 @@ function applyToolFilter(
     const usedTools = [...new Set(plan.tasks.map((t) => t.tool))].join(", ");
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `No tasks use tool "${toolFilter}". Tools in this plan: ${usedTools}`,
+      `No tasks use module "${toolFilter}". Modules in this plan: ${usedTools}`,
     );
   }
   const skippedIds = plan.tasks.filter((t) => t.tool !== toolFilter).map((t) => t.id);
@@ -201,7 +201,9 @@ function applyToolFilter(
     completedTaskIds.add(id);
   }
   if (!jsonOutput && skippedIds.length > 0) {
-    p.log.info(`Filtering by tool: ${pc.bold(toolFilter)} — skipping ${skippedIds.length} task(s)`);
+    p.log.info(
+      `Filtering by module: ${pc.bold(toolFilter)} — skipping ${skippedIds.length} task(s)`,
+    );
   }
 }
 
@@ -222,7 +224,7 @@ function displayPreFlightSummary(
 
   const toolsUsed = [...new Set(plan.tasks.map((t) => t.tool))];
   summaryLines.push(
-    `${pc.bold("Tools:")}  ${toolsUsed.join(", ")}`,
+    `${pc.bold("Modules:")}  ${toolsUsed.join(", ")}`,
     "",
     pc.bold("Task breakdown:"),
   );
@@ -301,7 +303,7 @@ async function executeDryRun(
     for (const task of remainingTasks) {
       const tool = tools.find((t) => t.name === task.tool);
       if (!tool) {
-        p.log.warn(`Skipping ${pc.bold(task.id)}: tool "${task.tool}" not found.`);
+        p.log.warn(`Skipping ${pc.bold(task.id)}: module "${task.tool}" not found.`);
         continue;
       }
       await generateDryRunPreview(task, tool);
@@ -465,7 +467,7 @@ async function handleToolIntegrityCheck(
   const { mismatches: toolMismatches, hasMismatches } = checkToolIntegrity(plan.tasks, tools);
   if (!hasMismatches) return;
 
-  p.log.warn(pc.bold("Tool integrity warnings:"));
+  p.log.warn(pc.bold("Module integrity warnings:"));
   for (const msg of toolMismatches) {
     p.log.warn(`  ${pc.yellow("!")} ${msg}`);
   }
@@ -473,10 +475,10 @@ async function handleToolIntegrityCheck(
   if (autoApprove) return;
 
   const proceed = await p.confirm({
-    message: "Tools have changed since this plan was created. Continue anyway?",
+    message: "Modules have changed since this plan was created. Continue anyway?",
   });
   if (p.isCancel(proceed) || !proceed) {
-    p.cancel("Aborted due to tool integrity mismatch.");
+    p.cancel("Aborted due to module integrity mismatch.");
     releaseLock(root);
     throw new CLIError(ExitCode.VALIDATION_ERROR);
   }
@@ -517,7 +519,7 @@ function createExecutorWithCallbacks(
       if (ctx.globalOpts.verbose) {
         const task = graph.tasks.find((t) => t.id === id);
         p.log.info(
-          `  Tool: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
+          `  Module: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
         );
       }
     },

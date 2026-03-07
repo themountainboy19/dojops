@@ -53,8 +53,8 @@ IMPORTANT: Set projectPath to "." (project root) unless the project structure su
 
 Tools automatically detect and read existing config files. For update/enhance tasks, just set the correct projectPath/outputPath — the tool handles existing file reading and preserves current configuration.
 
-Canonical output paths by tool:
-- github-actions: projectPath="." (tool auto-creates .github/workflows/)
+Canonical output paths by module:
+- github-actions: projectPath="." (module auto-creates .github/workflows/)
 - kubernetes: outputPath="k8s" (Kubernetes manifests go in k8s/ directory)
 - helm: outputPath="charts/<chart-name>" (Helm charts under charts/)
 - terraform: outputPath="terraform" or "." if .tf files already exist at root
@@ -65,7 +65,8 @@ Canonical output paths by tool:
 - nginx: outputPath="." (nginx.conf at root or /etc/nginx/)
 - systemd: outputPath="." (service files at root)
 - makefile: outputPath="." (Makefile at root)
-- gitlab-ci: outputPath="." (.gitlab-ci.yml at root)`;
+- gitlab-ci: outputPath="." (.gitlab-ci.yml at root)
+- jenkinsfile: outputPath="." (Jenkinsfile at root)`;
 
 export function buildContextSection(ctx: RepoContext): string {
   const parts: string[] = [
@@ -117,7 +118,7 @@ IMPORTANT: Each task's "input" object MUST match the tool's input fields exactly
 
 For tools that only accept a "prompt" input, provide a detailed natural-language description of what configuration to generate. Include specifics like language/runtime, versions, deployment targets, and any special requirements. The tool handles technology-specific details internally.
 
-Use canonical output paths: github-actions → projectPath="."; kubernetes → outputPath="k8s"; helm → outputPath="charts/<name>"; terraform → outputPath="terraform" (or "." if .tf already at root); dockerfile/docker-compose/makefile/gitlab-ci → outputPath="."; ansible → outputPath="ansible"; prometheus → outputPath="monitoring".
+Use canonical output paths: github-actions → projectPath="."; kubernetes → outputPath="k8s"; helm → outputPath="charts/<name>"; terraform → outputPath="terraform" (or "." if .tf already at root); dockerfile/docker-compose/makefile/gitlab-ci/jenkinsfile → outputPath="."; ansible → outputPath="ansible"; prometheus → outputPath="monitoring".
 
 Respond with a JSON object matching this structure:
 {

@@ -129,7 +129,7 @@ function parsePlanArgs(
   return { prompt, executeMode, autoApprove, skipVerify };
 }
 
-/** Filter tools to a single tool if --tool flag is set. */
+/** Filter modules to a single module if --module flag is set. */
 function applyToolFilter(
   tools: ReturnType<ToolRegistry["getAll"]>,
   toolName: string | undefined,

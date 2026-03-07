@@ -64,9 +64,11 @@ export class OllamaProvider implements LLMProvider {
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
-    const system = augmentSystemPrompt(req.system, req.schema) || undefined;
-
     const format = req.schema ? z.toJSONSchema(req.schema) : undefined;
+    // Ollama enforces JSON structure natively via `format` — skip system prompt
+    // augmentation when native format is active to avoid confusing local models.
+    const system =
+      (format ? (req.system ?? "") : augmentSystemPrompt(req.system, req.schema)) || undefined;
 
     let content: string;
     let usage: LLMUsage | undefined;

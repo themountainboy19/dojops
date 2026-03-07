@@ -229,6 +229,7 @@ Always design pipelines that are fast, reliable, and secure.${NO_FOLLOWUP_INSTRU
     "release",
     "continuous",
     "jenkins",
+    "jenkinsfile",
     "gitlab ci",
     "artifact",
     "workflow",
@@ -236,7 +237,7 @@ Always design pipelines that are fast, reliable, and secure.${NO_FOLLOWUP_INSTRU
     "matrix",
     "runner",
   ],
-  primaryKeywords: ["pipeline", "github actions", "ci", "cd"],
+  primaryKeywords: ["pipeline", "github actions", "ci", "cd", "jenkinsfile"],
 };
 
 // ---------------------------------------------------------------------------
