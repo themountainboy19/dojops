@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Node 24 Compatibility**: Fixed `crypto.randomInt(2 ** 48)` off-by-one error in toolchain download temp file naming — Node 24 enforces `max <= 2^48 - 1`, which caused all system tool installations to fail with `ERR_OUT_OF_RANGE`
+- **Stale System Tool Versions**: Updated all 10 system tool versions to latest releases — terraform 1.14.6, kubectl 1.35.2, gh 2.87.3, hadolint 2.14.0, trivy 0.69.3, helm 4.1.1, shellcheck 0.11.0, actionlint 1.7.11, promtool 3.10.0, circleci 0.1.34770 (was 404-ing on download)
 
 - **SAST / SonarCloud — Security Hotspots**
   - Replaced all `child_process.execSync()` shell calls with `execFileSync()` array-argument form across runtime, CLI, scanner, and tool-registry packages — eliminates OS command injection vectors (S4721)

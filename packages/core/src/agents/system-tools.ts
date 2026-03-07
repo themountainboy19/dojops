@@ -96,7 +96,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     name: "terraform",
     description:
       "Infrastructure as Code tool for building, changing, and versioning infrastructure",
-    latestVersion: "1.10.5",
+    latestVersion: "1.14.6",
     archiveType: "zip",
     urlTemplate:
       "https://releases.hashicorp.com/terraform/{{version}}/terraform_{{version}}_{{platform}}_{{arch}}.zip",
@@ -107,7 +107,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "kubectl",
     description: "Kubernetes command-line tool for cluster management",
-    latestVersion: "1.32.1",
+    latestVersion: "1.35.2",
     archiveType: "standalone",
     verifyCommand: ["kubectl", "version", "--client"],
     urlTemplate: "https://dl.k8s.io/release/v{{version}}/bin/{{platform}}/{{arch}}/kubectl",
@@ -117,7 +117,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "gh",
     description: "GitHub CLI for repository and workflow management",
-    latestVersion: "2.65.0",
+    latestVersion: "2.87.3",
     archiveType: "tar.gz",
     urlTemplate:
       "https://github.com/cli/cli/releases/download/v{{version}}/gh_{{version}}_{{platform}}_{{arch}}.tar.gz",
@@ -128,7 +128,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "hadolint",
     description: "Dockerfile linter for best practice validation",
-    latestVersion: "2.12.0",
+    latestVersion: "2.14.0",
     archiveType: "standalone",
     urlTemplate:
       "https://github.com/hadolint/hadolint/releases/download/v{{version}}/hadolint-{{platform}}-{{arch}}",
@@ -139,7 +139,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
     name: "trivy",
     description:
       "Comprehensive security scanner for vulnerabilities, misconfigurations, and secrets",
-    latestVersion: "0.69.1",
+    latestVersion: "0.69.3",
     archiveType: "tar.gz",
     urlTemplate:
       "https://github.com/aquasecurity/trivy/releases/download/v{{version}}/trivy_{{version}}_{{platform}}-{{arch}}.tar.gz",
@@ -169,7 +169,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "helm",
     description: "Kubernetes package manager for deploying and managing applications",
-    latestVersion: "3.17.3",
+    latestVersion: "4.1.1",
     archiveType: "tar.gz",
     verifyCommand: ["helm", "version", "--short"],
     urlTemplate: "https://get.helm.sh/helm-v{{version}}-{{platform}}-{{arch}}.tar.gz",
@@ -180,7 +180,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "shellcheck",
     description: "Static analysis tool for shell scripts",
-    latestVersion: "0.10.0",
+    latestVersion: "0.11.0",
     archiveType: "tar.xz",
     urlTemplate:
       "https://github.com/koalaman/shellcheck/releases/download/v{{version}}/shellcheck-v{{version}}.{{platform}}.{{arch}}.tar.xz",
@@ -191,7 +191,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "actionlint",
     description: "Static checker for GitHub Actions workflow files",
-    latestVersion: "1.7.7",
+    latestVersion: "1.7.11",
     archiveType: "tar.gz",
     urlTemplate:
       "https://github.com/rhysd/actionlint/releases/download/v{{version}}/actionlint_{{version}}_{{platform}}_{{arch}}.tar.gz",
@@ -201,7 +201,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "promtool",
     description: "Prometheus configuration and rules validation tool",
-    latestVersion: "2.55.1",
+    latestVersion: "3.10.0",
     archiveType: "tar.gz",
     urlTemplate:
       "https://github.com/prometheus/prometheus/releases/download/v{{version}}/prometheus-{{version}}.{{platform}}-{{arch}}.tar.gz",
@@ -212,7 +212,7 @@ export const SYSTEM_TOOLS: SystemTool[] = [
   defineTool({
     name: "circleci",
     description: "CircleCI CLI for configuration validation and local execution",
-    latestVersion: "0.1.31364",
+    latestVersion: "0.1.34770",
     archiveType: "tar.gz",
     verifyCommand: ["circleci", "version"],
     urlTemplate:

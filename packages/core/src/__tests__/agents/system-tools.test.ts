@@ -59,7 +59,7 @@ describe("system-tools", () => {
 
   describe("buildDownloadUrl", () => {
     it("interpolates terraform URL with version, platform, and arch", () => {
-      expectDownloadUrl("terraform", "1.10.5", ["1.10.5", "releases.hashicorp.com/terraform"]);
+      expectDownloadUrl("terraform", "1.14.6", ["1.14.6", "releases.hashicorp.com/terraform"]);
     });
 
     it("uses latestVersion when no version specified", () => {
@@ -75,7 +75,7 @@ describe("system-tools", () => {
     });
 
     it("interpolates trivy URL correctly", () => {
-      expectDownloadUrl("trivy", "0.69.1", ["aquasecurity/trivy", "0.69.1", ".tar.gz"]);
+      expectDownloadUrl("trivy", "0.69.3", ["aquasecurity/trivy", "0.69.3", ".tar.gz"]);
     });
 
     it("interpolates gitleaks URL correctly", () => {
@@ -86,9 +86,9 @@ describe("system-tools", () => {
   describe("buildBinaryPathInArchive", () => {
     it("returns interpolated path for gh", () => {
       const tool = findSystemTool("gh")!;
-      const archivePath = buildBinaryPathInArchive(tool, "2.65.0");
+      const archivePath = buildBinaryPathInArchive(tool, "2.87.3");
       expect(archivePath).toBeDefined();
-      expect(archivePath).toContain("2.65.0");
+      expect(archivePath).toContain("2.87.3");
       expect(archivePath).toContain("/bin/gh");
     });
 
@@ -145,23 +145,23 @@ describe("system-tools", () => {
     });
 
     it("builds correct helm download URL", () => {
-      expectDownloadUrl("helm", "3.17.3", ["get.helm.sh", "3.17.3", ".tar.gz"]);
+      expectDownloadUrl("helm", "4.1.1", ["get.helm.sh", "4.1.1", ".tar.gz"]);
     });
 
     it("builds correct shellcheck download URL", () => {
-      expectDownloadUrl("shellcheck", "0.10.0", ["koalaman/shellcheck", "0.10.0", ".tar.xz"]);
+      expectDownloadUrl("shellcheck", "0.11.0", ["koalaman/shellcheck", "0.11.0", ".tar.xz"]);
     });
 
     it("builds correct actionlint download URL", () => {
-      expectDownloadUrl("actionlint", "1.7.7", ["rhysd/actionlint", "1.7.7", ".tar.gz"]);
+      expectDownloadUrl("actionlint", "1.7.11", ["rhysd/actionlint", "1.7.11", ".tar.gz"]);
     });
 
     it("builds correct promtool download URL", () => {
-      expectDownloadUrl("promtool", "2.55.1", ["prometheus/prometheus", "2.55.1"]);
+      expectDownloadUrl("promtool", "3.10.0", ["prometheus/prometheus", "3.10.0"]);
     });
 
     it("builds correct circleci download URL", () => {
-      expectDownloadUrl("circleci", "0.1.31364", ["CircleCI-Public/circleci-cli", "0.1.31364"]);
+      expectDownloadUrl("circleci", "0.1.34770", ["CircleCI-Public/circleci-cli", "0.1.34770"]);
     });
   });
 
