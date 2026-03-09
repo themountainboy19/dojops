@@ -10,12 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`config delete` Subcommand**: New `dojops config delete <key>` (alias: `unset`) to remove configuration keys. Previously there was no way to remove a key once set. Also guards `config set` against flag-like values (e.g., `--delete`)
+- **Auto-Install Missing Verification Binaries**: When a verification binary (e.g., `ansible-playbook`, `terraform`) is not found during the verify step, DojOps automatically installs the required system tool via the toolchain and retries verification. Uses `OnBinaryMissing` callback pattern threaded from CLI → tool-registry → runtime → binary-verifier
+- **Dynamic `{entryFile}` Placeholder in Verification Commands**: Verification commands in `.dops` modules can now use `{entryFile}` to reference the actual generated filename instead of hardcoding it. Resolves to the main entry file from multi-file outputs (prefers `site.yml`/`playbook.yml`, falls back to first top-level `.yml`)
+- **`doctor` Always Shows Installed Tools**: The `dojops doctor` command now always displays installed system tools regardless of project relevance. Previously, tools like ansible were hidden if the project context didn't detect matching files
+
+### Changed
+
+- **Sandboxed-First Ansible Install**: `installAnsible()` now uses a sandboxed Python venv (`~/.dojops/toolchain/venvs/ansible/`) as the primary strategy, with pipx as fallback only when python3 is unavailable. Broken venvs (stale shebangs from directory migration) are auto-detected and recreated
+- **`BINARY_TO_SYSTEM_TOOL` Mapping**: New lookup table maps verification binary names (e.g., `ansible-playbook`) to their parent system tool (e.g., `ansible`) for auto-install resolution
+- **Test Coverage**: 2275 → 2649 tests (+374 new tests covering auto-install, {entryFile} resolution, BINARY_TO_SYSTEM_TOOL mapping, DevSecOps review pipeline, and execution memory)
 
 ### Fixed
 
 - **`apply --dry-run` Not Respecting Flag**: The `--dry-run` global flag was consumed by the global parser but `apply` read it from local args, so `apply --dry-run` always wrote files. Now correctly checks `ctx.globalOpts.dryRun` as fallback
 - **`generate --output json` Double-Encoding**: JSON output wrapped content in an escaped string instead of embedding the JSON object. Content that is valid JSON is now parsed and embedded as a structured object
 - **`verify` Showing PASSED for Skipped Checks**: When a verification binary was not found (e.g., hadolint), the command displayed "PASSED" with a warning. Now correctly displays "SKIPPED" to avoid confusion
+- **Ansible Verification Fails with Dynamic Filenames**: Verification command `ansible-playbook --syntax-check playbook.yml` was hardcoded, failing when the LLM generated files with different names (e.g., `setup-ec2.yml`). Now uses `{entryFile}` placeholder resolved at runtime
+- **Broken Ansible Venv After Toolchain Migration**: Python venv scripts retained shebangs pointing to old `~/.dojops/tools/` path after auto-migration to `~/.dojops/toolchain/`. `symlinkAnsibleCompanions()` now validates shebangs via `isVenvScriptWorking()` and skips broken sources
+- **ESLint Errors**: Converted 6 `require()` calls to dynamic `import()`, removed 7 unused variables/imports across api, cli packages
 
 ## [1.0.7] - 2026-03-07
 

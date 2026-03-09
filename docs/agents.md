@@ -248,7 +248,7 @@ All agents include a `NO_FOLLOWUP_INSTRUCTION` suffix ensuring single-shot respo
 
 ## Specialized Analyzers
 
-In addition to the 16 routed agents, DojOps provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
+In addition to the 17 routed agents, DojOps provides three specialized analyzers that are invoked directly (not via `AgentRouter`):
 
 | Analyzer       | Class               | Input                | Output Schema             | CLI Command           |
 | -------------- | ------------------- | -------------------- | ------------------------- | --------------------- |

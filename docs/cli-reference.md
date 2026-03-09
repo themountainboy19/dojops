@@ -30,24 +30,27 @@ Complete reference for the `dojops` command-line interface.
 
 ### Diagnostics & Analysis
 
-| Command                       | Description                                                            |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `dojops check`                | LLM-powered DevOps config quality check (score 0-100)                  |
-| `dojops check --output json`  | Output check report as JSON                                            |
-| `dojops check --fix`          | Auto-remediate HIGH/CRITICAL findings via LLM                          |
-| `dojops check provider`       | Test LLM provider connectivity and list models                         |
-| `dojops debug ci <log>`       | Diagnose CI/CD log failures (root cause, fixes)                        |
-| `dojops analyze diff --file`  | Analyze infrastructure diff (risk, cost, security)                     |
-| `dojops scan`                 | Security scan: vulnerabilities, deps, IaC, secrets                     |
-| `dojops scan --security`      | Run security scanners only (trivy, gitleaks)                           |
-| `dojops scan --deps`          | Run dependency audit only (npm, pip)                                   |
-| `dojops scan --iac`           | Run IaC scanners only (checkov, hadolint)                              |
-| `dojops scan --sbom`          | Generate SBOM (CycloneDX) with hash tracking                           |
-| `dojops scan --license`       | Run license compliance scanners (trivy-license)                        |
-| `dojops scan --fix`           | Generate and apply LLM-powered remediation                             |
-| `dojops scan --compare`       | Compare findings with previous scan report                             |
-| `dojops scan --target <dir>`  | Scan a different directory                                             |
-| `dojops scan --fail-on <sev>` | Set severity threshold for non-zero exit (CRITICAL, HIGH, MEDIUM, LOW) |
+| Command                            | Description                                                                                    |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `dojops check`                     | LLM-powered DevOps config quality check (score 0-100)                                          |
+| `dojops check --output json`       | Output check report as JSON                                                                    |
+| `dojops check --fix`               | Auto-remediate HIGH/CRITICAL findings via LLM                                                  |
+| `dojops check provider`            | Test LLM provider connectivity and list models                                                 |
+| `dojops debug ci <log>`            | Diagnose CI/CD log failures (root cause, fixes)                                                |
+| `dojops analyze diff --file`       | Analyze infrastructure diff (risk, cost, security)                                             |
+| `dojops scan`                      | Security scan: vulnerabilities, deps, IaC, secrets                                             |
+| `dojops scan --security`           | Run security scanners only (trivy, gitleaks)                                                   |
+| `dojops scan --deps`               | Run dependency audit only (npm, pip)                                                           |
+| `dojops scan --iac`                | Run IaC scanners only (checkov, hadolint)                                                      |
+| `dojops scan --sbom`               | Generate SBOM (CycloneDX) with hash tracking                                                   |
+| `dojops scan --license`            | Run license compliance scanners (trivy-license)                                                |
+| `dojops scan --fix`                | Generate and apply LLM-powered remediation                                                     |
+| `dojops scan --compare`            | Compare findings with previous scan report                                                     |
+| `dojops scan --target <dir>`       | Scan a different directory                                                                     |
+| `dojops scan --fail-on <sev>`      | Set severity threshold for non-zero exit (CRITICAL, HIGH, MEDIUM, LOW)                         |
+| `dojops review [files...]`         | Run DevSecOps review pipeline (auto-discovers DevOps files, runs validation tools, LLM review) |
+| `dojops review --no-auto-discover` | Skip auto-discovery, review only explicitly listed files                                       |
+| `dojops review --context7`         | Enable Context7 documentation augmentation for review                                          |
 
 ### Interactive
 
@@ -117,26 +120,26 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 
 ### Configuration & Server
 
-| Command                                       | Description                                                                           |
-| --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `dojops config`                               | Configure provider, model, tokens (interactive)                                       |
-| `dojops config show`                          | Display current configuration                                                         |
-| `dojops config profile create NAME`           | Save current config as a named profile                                                |
-| `dojops config profile use NAME`              | Switch to a named profile                                                             |
-| `dojops config profile list`                  | List all profiles                                                                     |
-| `dojops config get <key>`                     | Get a specific config value (tokens are masked)                                       |
-| `dojops config set <key> <value>`             | Set a config value (supports dot notation, e.g. `tokens.openai`)                      |
-| `dojops config delete <key>`                  | Delete a config key                                                                   |
-| `dojops config validate`                      | Validate config values and file permissions                                           |
-| `dojops auth login`                           | Authenticate with LLM provider                                                        |
-| `dojops auth status`                          | Show saved tokens and default provider                                                |
-| `dojops serve [--port=N]`                     | Start API server + web dashboard                                                      |
-| `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                          |
-| `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                                    |
-| `dojops serve credentials`                    | Generate API key for dashboard/API authentication                                     |
-| `dojops init`                                 | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security)       |
-| `dojops status`                               | System health diagnostics + project metrics (alias: `doctor`, `--fix` to auto-repair) |
-| `dojops upgrade`                              | Check for and install CLI updates (`--check` for check-only)                          |
+| Command                                       | Description                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dojops config`                               | Configure provider, model, tokens (interactive)                                                                                                   |
+| `dojops config show`                          | Display current configuration                                                                                                                     |
+| `dojops config profile create NAME`           | Save current config as a named profile                                                                                                            |
+| `dojops config profile use NAME`              | Switch to a named profile                                                                                                                         |
+| `dojops config profile list`                  | List all profiles                                                                                                                                 |
+| `dojops config get <key>`                     | Get a specific config value (tokens are masked)                                                                                                   |
+| `dojops config set <key> <value>`             | Set a config value (supports dot notation, e.g. `tokens.openai`)                                                                                  |
+| `dojops config delete <key>`                  | Delete a config key                                                                                                                               |
+| `dojops config validate`                      | Validate config values and file permissions                                                                                                       |
+| `dojops auth login`                           | Authenticate with LLM provider                                                                                                                    |
+| `dojops auth status`                          | Show saved tokens and default provider                                                                                                            |
+| `dojops serve [--port=N]`                     | Start API server + web dashboard                                                                                                                  |
+| `dojops serve --no-auth`                      | Start server without API key authentication (local dev only)                                                                                      |
+| `dojops serve --tls-cert=PATH --tls-key=PATH` | Enable HTTPS/TLS on the API server                                                                                                                |
+| `dojops serve credentials`                    | Generate API key for dashboard/API authentication                                                                                                 |
+| `dojops init`                                 | Initialize `.dojops/` + comprehensive repo scan (11 CI, IaC, scripts, security)                                                                   |
+| `dojops status`                               | System health diagnostics + project metrics (alias: `doctor`, `--fix` to auto-repair). Always shows installed tools regardless of project context |
+| `dojops upgrade`                              | Check for and install CLI updates (`--check` for check-only)                                                                                      |
 
 ### Scheduled Jobs
 
@@ -344,6 +347,22 @@ dojops scan --target /path/to/project
 
 # Fail CI on severity threshold
 dojops scan --fail-on MEDIUM
+```
+
+### DevSecOps Review
+
+```bash
+# Review all auto-discovered DevOps files in the project
+dojops review
+
+# Review specific files only
+dojops review Dockerfile docker-compose.yml
+
+# Skip auto-discovery, review only listed files
+dojops review --no-auto-discover Dockerfile
+
+# Enable Context7 docs for richer review
+dojops review --context7
 ```
 
 ### Interactive Chat

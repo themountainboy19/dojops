@@ -48,6 +48,8 @@ dojops --help
 dojops doctor
 ```
 
+> **Note:** DojOps automatically installs missing verification tools (e.g. `terraform`, `hadolint`, `kubectl`) on first use via the built-in toolchain. No manual installation of external DevOps binaries is required.
+
 ---
 
 ## Provider Setup

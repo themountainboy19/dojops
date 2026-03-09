@@ -191,6 +191,7 @@ Unified registry layer between consumers (Planner, Executor, CLI, API) and tool 
 - **Tool policy** — `.dojops/policy.yaml` supports `allowedTools` and `blockedTools` lists
 - **Audit enrichment** — Custom tool executions include `toolType`, `toolSource`, `toolVersion`, `toolHash`, and `systemPromptHash` in audit entries
 - **Tool isolation** — Verification commands restricted to a whitelist of 33 allowed binaries (terraform, kubectl, helm, ansible-lint, ansible-playbook, docker, hadolint, yamllint, jsonlint, shellcheck, tflint, kubeval, conftest, checkov, trivy, kube-score, polaris, nginx, promtool, systemd-analyze, make, actionlint, caddy, haproxy, nomad, podman, fluentd, opa, vault, circleci, npx, tsc, cfn-lint), `child_process` permission must be `"required"` for execution, path traversal (`..`) blocked in manifest file paths and detector paths
+- **OnBinaryMissing callback** — When a verification binary is not found, the `OnBinaryMissing` callback propagates from CLI through `tool-registry` and `runtime` to the binary verifier, triggering automatic installation via `dojops toolchain install` and retrying verification. This eliminates manual tool installation as a prerequisite
 - **Unified interface** — `ToolRegistry.getAll()` returns `DevOpsTool[]`, so Planner, Executor, and API remain unchanged
 
 ### 6. Execution Engine (`@dojops/executor`)

@@ -20,6 +20,7 @@ DojOps includes 13 built-in DevOps tools covering CI/CD, infrastructure-as-code,
 | GitLab CI      | YAML (raw)        | `.gitlab-ci.yml`                    | Yes      | Structure lint       |
 | Prometheus     | YAML (raw)        | `prometheus.yml`, `alert-rules.yml` | --       | --                   |
 | Systemd        | INI (raw)         | `{name}.service`                    | --       | --                   |
+| Jenkinsfile    | Groovy (raw)      | `Jenkinsfile`                       | Yes      | --                   |
 
 ---
 
@@ -111,7 +112,11 @@ Optional validation of generated output. Five tools implement verification:
 | GitHub Actions | Built-in structure lint       | Checks `on` trigger, `jobs`, `runs-on`, step `run`/`uses` |
 | GitLab CI      | Built-in structure lint       | Checks job `script`, `stages` array, stage references     |
 
-Verification runs by default in CLI commands. Use `--skip-verify` to disable. External binary checks gracefully skip if the binary is not installed. Built-in verifiers always run.
+Verification runs by default in CLI commands. Use `--skip-verify` to disable. Built-in verifiers always run.
+
+**Auto-install of missing binaries:** When an external verification binary (e.g. `terraform`, `hadolint`, `kubectl`) is not found on the system, DojOps automatically installs it via `dojops toolchain install` and retries verification. This eliminates the need to manually install verification tools before use. The `OnBinaryMissing` callback pattern propagates from the CLI through `tool-registry` and `runtime` to the binary verifier, triggering automatic installation on first encounter.
+
+**Dynamic filename resolution:** Verification commands support the `{entryFile}` placeholder, which resolves to the actual output filename at runtime. For example, a verification command `hadolint {entryFile}` will resolve to `hadolint Dockerfile` based on the generated file path.
 
 ### Existing Config Auto-Detection
 

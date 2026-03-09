@@ -146,7 +146,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Custom module system** — Extend DojOps with custom modules via declarative `tool.yaml` manifests + JSON Schema. Drop a module into `~/.dojops/modules/` or `.dojops/modules/` and it's automatically available to all commands. Scaffold new modules with `dojops modules init <name>`. Module isolation enforces verification command whitelisting (33 allowed binaries), `child_process` permission gating, and path traversal prevention
 - **Update existing configs** — Tools auto-detect existing config files, pass them to the LLM with "update/preserve" instructions, and create `.bak` backups before overwriting. Supports both auto-detection and explicit `existingContent` input
 - **Schema-validated** — Every tool input is validated against Zod schemas before execution. v1 tools also validate LLM output; v2 tools generate raw content directly
-- **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Use `--skip-verify` to disable
+- **Deep verification** — Verification runs by default through external validators (terraform validate, hadolint, kubectl dry-run) before writing files. Missing verification tools are auto-installed via the toolchain. Use `--skip-verify` to disable
 - **Idempotent YAML output** — YAML keys are sorted alphabetically (GitHub Actions uses conventional key ordering) for deterministic, diff-friendly output
 - **Structured output** — Provider-native JSON modes (OpenAI `response_format`, Anthropic prefill, Ollama `format`, Gemini `responseMimeType`)
 
@@ -172,11 +172,11 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 - **Hash-chained audit logs** — Tamper-evident JSONL audit trail with SHA-256 chain integrity verification via `dojops history verify`. JSONL format is compatible with SIEM ingestion (Splunk, ELK, Datadog)
 - **Execution locking** — PID-based lock files prevent concurrent mutations with automatic stale-lock cleanup
 - **Rich terminal UI** — Interactive prompts, spinners, styled panels, semantic log levels — powered by `@clack/prompts`
-- **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity)
+- **Doctor diagnostics** — `dojops doctor` shows system health plus project metrics summary (plans, success rate, scan count, audit chain integrity). Always shows installed tools regardless of project context
 
 ### Platform
 
-- **REST API** — 20 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
+- **REST API** — 21 endpoints exposing all capabilities over HTTP with Zod request validation, API v1 versioning (`/api/v1/` prefix with backward-compatible `/api/` alias)
 - **Web dashboard** — Single-page app with dark terminal aesthetic, 5 tabs (Overview, Security, Audit, Agents, History), toast notifications, responsive layout
 - **Metrics API** — 5 GET endpoints (`/api/metrics`, `/overview`, `/security`, `/audit`, `/tokens`) powered by `MetricsAggregator` reading `.dojops/` data on-demand
 - **Configuration profiles** — Named profiles for switching between providers/environments
@@ -254,6 +254,8 @@ Full architecture details in [docs/architecture.md](docs/architecture.md).
 | `dojops scan --license`      | Run license compliance scanners (trivy-license)       |
 | `dojops scan --fix`          | Generate and apply LLM-powered remediation            |
 | `dojops scan --compare`      | Compare findings with previous scan report            |
+| `dojops review [files...]`   | DevSecOps review: tool validation + LLM analysis      |
+| `dojops review --context7`   | Review with Context7 documentation augmentation       |
 
 #### Interactive
 
@@ -457,7 +459,7 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | Layer                   | Mechanism                                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Output enforcement**  | All LLM responses constrained to JSON schemas via provider-native modes                                                                           |
-| **Tool isolation**      | Verification command whitelist (16 binaries), `child_process` permission enforcement, path traversal prevention                                   |
+| **Tool isolation**      | Verification command whitelist (33 binaries), `child_process` permission enforcement, path traversal prevention                                   |
 | **Schema validation**   | Every tool input and LLM output validated against Zod schemas before execution                                                                    |
 | **Deep verification**   | External tool validation by default: `terraform validate`, `hadolint`, `kubectl --dry-run=client` — before file write. `--skip-verify` to disable |
 | **Policy engine**       | `ExecutionPolicy` controls write permissions, allowed/denied paths, env vars, timeouts, file size limits                                          |
@@ -475,8 +477,8 @@ DojOps implements defense-in-depth for AI-driven infrastructure changes:
 | GitHub Actions | YAML               | `.github/workflows/ci.yml`          | ---                  |
 | Terraform      | HCL                | `main.tf`, `variables.tf`           | `terraform validate` |
 | Kubernetes     | YAML               | K8s manifests                       | `kubectl --dry-run`  |
-| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | ---                  |
-| Ansible        | YAML               | `{name}.yml`                        | ---                  |
+| Helm           | YAML               | `Chart.yaml`, `values.yaml`         | `helm lint`          |
+| Ansible        | YAML               | `{name}.yml`                        | `ansible-playbook`   |
 | Docker Compose | YAML               | `docker-compose.yml`                | ---                  |
 | Dockerfile     | Dockerfile syntax  | `Dockerfile`, `.dockerignore`       | `hadolint`           |
 | Nginx          | Nginx conf         | `nginx.conf`                        | ---                  |
@@ -528,6 +530,7 @@ DojOps includes 17 built-in agents plus support for user-defined custom agents. 
 | `POST`   | `/api/debug-ci`          | Diagnose CI log failures                             |
 | `POST`   | `/api/diff`              | Analyze infrastructure diff                          |
 | `POST`   | `/api/scan`              | Run security scan (all, security, deps, iac, sbom)   |
+| `POST`   | `/api/review`            | DevSecOps review with tool validation + LLM analysis |
 | `POST`   | `/api/chat`              | Send chat message to a session                       |
 | `POST`   | `/api/chat/sessions`     | Create new chat session                              |
 | `GET`    | `/api/chat/sessions`     | List all chat sessions                               |
@@ -634,7 +637,7 @@ pnpm build
 ```bash
 pnpm build              # Build all packages via Turbo
 pnpm dev                # Dev mode (no caching)
-pnpm test               # Run all 2195 tests
+pnpm test               # Run all 2649 tests
 pnpm lint               # ESLint across all packages
 pnpm format             # Prettier write
 pnpm format:check       # Prettier check (CI)
@@ -670,18 +673,18 @@ packages/
 
 | Package                 | Tests    |
 | ----------------------- | -------- |
-| `@dojops/runtime`       | 589      |
-| `@dojops/core`          | 496      |
-| `@dojops/cli`           | 315      |
-| `@dojops/tool-registry` | 252      |
-| `@dojops/api`           | 236      |
+| `@dojops/runtime`       | 656      |
+| `@dojops/cli`           | 575      |
+| `@dojops/core`          | 541      |
+| `@dojops/tool-registry` | 277      |
+| `@dojops/api`           | 244      |
 | `@dojops/scanner`       | 110      |
-| `@dojops/executor`      | 67       |
-| `@dojops/planner`       | 39       |
+| `@dojops/executor`      | 81       |
+| `@dojops/sdk`           | 55       |
+| `@dojops/planner`       | 40       |
 | `@dojops/session`       | 38       |
-| `@dojops/context`       | 29       |
-| `@dojops/sdk`           | 24       |
-| **Total**               | **2195** |
+| `@dojops/context`       | 32       |
+| **Total**               | **2649** |
 
 ---
 
