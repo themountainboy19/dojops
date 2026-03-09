@@ -90,7 +90,16 @@ export const REVIEW_TOOL_MAP: ReviewToolSpec[] = [
     description: "Helm chart structure and template validation",
   },
   {
-    patterns: ["*.yaml", "*.yml"],
+    patterns: [
+      "k8s/*.yaml",
+      "k8s/*.yml",
+      "kubernetes/*.yaml",
+      "kubernetes/*.yml",
+      "manifests/*.yaml",
+      "manifests/*.yml",
+      "deploy/*.yaml",
+      "deploy/*.yml",
+    ],
     binary: "kubectl",
     args: ["apply", "--dry-run=client", "-f", "{file}"],
     description: "Kubernetes manifest dry-run validation",

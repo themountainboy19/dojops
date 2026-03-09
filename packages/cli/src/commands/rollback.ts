@@ -123,7 +123,7 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   if (!root)
     throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
 
-  const dryRun = hasFlag(args, "--dry-run");
+  const dryRun = ctx.globalOpts.dryRun;
   const { planId, filesToDelete, filesToRestore } = resolveRollbackTargets(root, args);
 
   if (filesToDelete.length === 0 && filesToRestore.length === 0) {

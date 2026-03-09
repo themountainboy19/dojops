@@ -413,9 +413,12 @@ async function chatExportCommand(args: string[], ctx: CLIContext): Promise<void>
     return;
   }
 
-  const sessionId = args[1];
   const format = extractFlagValue(args, "--format") ?? "markdown";
   const outputPath = extractFlagValue(args, "--output");
+  // Session ID is the first positional arg after "export" (skip flags)
+  const sessionId = args
+    .slice(1)
+    .find((a) => !a.startsWith("-") && a !== format && a !== outputPath);
 
   const toExport = sessionId
     ? sessions.filter((s) => s.id === sessionId || s.name === sessionId)

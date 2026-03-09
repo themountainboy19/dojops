@@ -247,7 +247,7 @@ function buildSafeExecutorForTool(
       requireApproval: !autoApprove,
       approvalMode: autoApprove ? "never" : "risk-based",
       autoApproveRiskLevel: "MEDIUM",
-      timeoutMs: ctx.globalOpts.timeout ?? 60_000,
+      timeoutMs: ctx.globalOpts.timeout ?? 120_000,
       skipVerification: false,
       enforceDevOpsAllowlist: !allowAllPaths,
       maxRepairAttempts,

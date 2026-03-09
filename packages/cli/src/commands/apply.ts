@@ -89,7 +89,7 @@ function parseApplyFlags(args: string[], ctx: CLIContext): ApplyFlags {
   const timeoutArg = extractFlagValue(args, "--timeout");
   const timeoutMs = timeoutArg
     ? Number.parseInt(timeoutArg, 10) * 1000
-    : (ctx.globalOpts.timeout ?? 60_000); // --timeout in seconds, or globalOpts.timeout in ms
+    : (ctx.globalOpts.timeout ?? 120_000); // --timeout in seconds, or globalOpts.timeout in ms
   if (timeoutArg && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,

@@ -29,14 +29,14 @@ async function routeVerifier(
   ext: string,
 ): Promise<VerificationResult> {
   if (ext === ".tf") {
-    return verifyTerraformContent(content);
+    return verifyTerraformContent(content, basename);
   }
   if (basename === "Dockerfile" || basename.startsWith("Dockerfile.")) {
     return verifyWithBinary({
       content,
-      filename: "Dockerfile",
+      filename: basename,
       config: {
-        command: "hadolint --format json Dockerfile",
+        command: `hadolint --format json ${basename}`,
         parser: "hadolint-json",
         timeout: 30_000,
         cwd: "output",
@@ -128,11 +128,14 @@ export async function verifyCommand(args: string[], _ctx?: CLIContext): Promise<
  * Terraform requires init + validate in sequence (two-step process).
  * We handle this directly rather than via verifyWithBinary which runs a single command.
  */
-async function verifyTerraformContent(hcl: string): Promise<VerificationResult> {
+async function verifyTerraformContent(
+  hcl: string,
+  filename = "main.tf",
+): Promise<VerificationResult> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "dojops-tf-"));
 
   try {
-    fs.writeFileSync(path.join(tmpDir, "main.tf"), hcl, "utf-8");
+    fs.writeFileSync(path.join(tmpDir, filename), hcl, "utf-8");
 
     // Step 1: terraform init
     try {
@@ -296,9 +299,9 @@ async function verifyYamlFile(content: string, basename: string): Promise<Verifi
   if (/^apiVersion:/m.test(content) && /^kind:/m.test(content)) {
     return verifyWithBinary({
       content,
-      filename: "manifest.yaml",
+      filename: basename,
       config: {
-        command: "kubectl apply --dry-run=client -f manifest.yaml",
+        command: `kubectl apply --dry-run=client -f ${basename}`,
         parser: "kubectl-stderr",
         timeout: 30_000,
         cwd: "output",
@@ -325,9 +328,9 @@ async function verifyYamlFile(content: string, basename: string): Promise<Verifi
   if (/^services:/m.test(content)) {
     return verifyWithBinary({
       content,
-      filename: "docker-compose.yml",
+      filename: basename,
       config: {
-        command: "docker compose -f docker-compose.yml config --quiet",
+        command: `docker compose -f ${basename} config --quiet`,
         parser: "docker-compose-config",
         timeout: 30_000,
         cwd: "output",
@@ -348,9 +351,9 @@ async function verifyYamlFile(content: string, basename: string): Promise<Verifi
   if (/^global:/m.test(content) && /scrape_configs:/m.test(content)) {
     return verifyWithBinary({
       content,
-      filename: "prometheus.yml",
+      filename: basename,
       config: {
-        command: "promtool check config prometheus.yml",
+        command: `promtool check config ${basename}`,
         parser: "promtool",
         timeout: 30_000,
         cwd: "output",
@@ -363,9 +366,9 @@ async function verifyYamlFile(content: string, basename: string): Promise<Verifi
   if (/hosts:/m.test(content) && /tasks:/m.test(content)) {
     return verifyWithBinary({
       content,
-      filename: "playbook.yml",
+      filename: basename,
       config: {
-        command: "ansible-playbook --syntax-check playbook.yml",
+        command: `ansible-playbook --syntax-check ${basename}`,
         parser: "ansible-syntax",
         timeout: 30_000,
         cwd: "output",

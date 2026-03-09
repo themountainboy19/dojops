@@ -583,7 +583,7 @@ export function validateGeneratedContent(
 
   if (format === "yaml") {
     try {
-      yaml.load(content);
+      yaml.loadAll(content);
     } catch (err) {
       errors.push(
         `Invalid YAML in ${filename}: ${err instanceof Error ? err.message : String(err)}`,
