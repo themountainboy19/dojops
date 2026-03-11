@@ -19,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Command-specific flag completions for `plan`, `apply`, `scan`, `serve`, `chat`, `auto`
   - 2-second timeout on dynamic completions to prevent shell hang
 
-## [2.0.0] - 2026-03-11
-
 ### Breaking Changes
 
 - **Removed `.dops v1` format support** — all modules must use `dops: v2` frontmatter
