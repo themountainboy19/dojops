@@ -21,7 +21,7 @@
 | `--border-primary`   | `#E5E7EB` | Card borders, dividers           |
 | `--border-secondary` | `#D1D5DB` | Input borders, stronger dividers |
 | `--text-primary`     | `#111827` | Headings, body text              |
-| `--text-secondary`   | `#6B7280` | Labels, captions, hints          |
+| `--text-secondary`   | `#4B5563` | Labels, captions, hints          |
 | `--text-tertiary`    | `#9CA3AF` | Placeholders, disabled           |
 
 ### 1.2 Dark Mode
@@ -40,14 +40,17 @@
 
 ### 1.3 Accent Colors
 
-| Token             | Light     | Dark      | Usage                                          |
-| ----------------- | --------- | --------- | ---------------------------------------------- |
-| `--accent`        | `#0EA5E9` | `#38BDF8` | Primary CTA, links, active states              |
-| `--accent-hover`  | `#0284C7` | `#0EA5E9` | Hover on accent elements                       |
-| `--accent-subtle` | `#F0F9FF` | `#0C2D48` | Accent tinted backgrounds (badges, highlights) |
-| `--accent-border` | `#BAE6FD` | `#1E5A7E` | Accent-tinted borders                          |
+| Token             | Light     | Dark      | Usage                                                    |
+| ----------------- | --------- | --------- | -------------------------------------------------------- |
+| `--accent`        | `#0EA5E9` | `#38BDF8` | Primary CTA buttons, icons, active states, UI components |
+| `--accent-text`   | `#0369A1` | `#7DD3FC` | Accent-colored text: links, active nav labels (AA-safe)  |
+| `--accent-hover`  | `#0284C7` | `#0EA5E9` | Hover on accent elements                                 |
+| `--accent-subtle` | `#F0F9FF` | `#0C2D48` | Accent tinted backgrounds (badges, highlights)           |
+| `--accent-border` | `#BAE6FD` | `#1E5A7E` | Accent-tinted borders                                    |
 
-Accent is a softer, warmer cyan (`#0EA5E9` — sky-500 range) that maintains brand recognition from the original `#00e5ff` neon cyan without the cyberpunk feel. Accessible on both light and dark backgrounds.
+Accent is a softer, warmer cyan (`#0EA5E9` — sky-500 range) that maintains brand recognition from the original `#00e5ff` neon cyan without the cyberpunk feel.
+
+`--accent` is for buttons, icons, and UI component borders (WCAG 1.4.11 — 3:1). `--accent-text` (`#0369A1` — sky-700) is for readable text on light backgrounds at 4.6:1 contrast. Always use `--accent-text` for links and labels.
 
 ### 1.4 Semantic Colors
 
@@ -60,6 +63,8 @@ Accent is a softer, warmer cyan (`#0EA5E9` — sky-500 range) that maintains bra
 
 ### 1.5 Shadow System
 
+Light mode:
+
 ```
 --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.04)
 --shadow-md:  0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06)
@@ -67,7 +72,14 @@ Accent is a softer, warmer cyan (`#0EA5E9` — sky-500 range) that maintains bra
 --shadow-xl:  0 4px 12px rgba(0, 0, 0, 0.05), 0 16px 40px rgba(0, 0, 0, 0.1)
 ```
 
-Dark mode shadows use slightly higher opacity (multiply by 1.5x) since subtle shadows vanish on dark backgrounds.
+Dark mode (higher opacity — subtle shadows vanish on dark backgrounds):
+
+```
+--shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.06)
+--shadow-md:  0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.09)
+--shadow-lg:  0 2px 6px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.12)
+--shadow-xl:  0 4px 12px rgba(0, 0, 0, 0.08), 0 16px 40px rgba(0, 0, 0, 0.15)
+```
 
 ---
 
@@ -99,6 +111,8 @@ Plus Jakarta Sans chosen for rounder letterforms that feel warm and approachable
 
 Body at 15px is the sweet spot for Plus Jakarta Sans — slightly larger than typical dashboards, matching the approachable goal. Console pages use `body-sm` for data density.
 
+Responsive scaling (mobile, below `sm` breakpoint): `display` scales to 32px, `h1` to 28px, `h2` to 20px. Use `clamp()` for fluid sizing — e.g. `font-size: clamp(2rem, 5vw, 3rem)` for `display`.
+
 ### 2.3 Spacing Scale
 
 4px base grid:
@@ -115,6 +129,8 @@ Body at 15px is the sweet spot for Plus Jakarta Sans — slightly larger than ty
 | 48px  | `--space-12` | Section spacing between major blocks        |
 | 64px  | `--space-16` | Page-level section separation               |
 | 96px  | `--space-24` | Hero/large section padding (marketing only) |
+
+Tokens skip `--space-7`, `--space-9` through `--space-11`, etc. intentionally — 4px grid lands on these specific values. For spacing needs between tokens, use the nearest lower token. Do not create one-off values outside this scale.
 
 ### 2.4 Border Radius
 
@@ -156,12 +172,12 @@ Sizes: `sm` (32px height, 12px horizontal padding), `md` (38px, 16px), `lg` (44p
 
 ### 3.3 Inputs
 
-- Height: 38px
+- Sizes: `sm` (32px), `md` (38px default) — matches button sizes for inline pairing. `lg` button (44px) is for standalone CTAs, not inline with inputs
 - Background: `--bg-card`
 - Border: 1px `--border-secondary`
 - Radius: `--radius-sm` (6px)
-- Focus: 2px `--accent` ring + `--accent-subtle` box-shadow
-- Placeholder: `--text-tertiary`
+- Focus: `outline: 2px solid var(--accent); outline-offset: 2px` (visible on both themes)
+- Placeholder: `--text-tertiary` (only when a visible label is present — placeholders must not be the sole descriptor)
 
 ### 3.4 Badges / Tags
 
@@ -182,7 +198,7 @@ Sizes: `sm` (32px height, 12px horizontal padding), `md` (38px, 16px), `lg` (44p
 - Background: `--bg-secondary`
 - Width: 240px, fixed
 - Nav items: 38px height, `--radius-md`
-- Active: `--accent-subtle` background + `--accent` text
+- Active: `--accent-subtle` background + `--accent-text` text
 - Hover: `--bg-card-hover`
 
 ### 3.7 Navigation — Navbar (marketing/hub)
@@ -199,7 +215,8 @@ Sizes: `sm` (32px height, 12px horizontal padding), `md` (38px, 16px), `lg` (44p
 - Background: `--bg-card`
 - Radius: `--radius-xl` (20px)
 - Shadow: `--shadow-xl`
-- Sizes: small (480px), medium (640px)
+- Sizes: small (`max-width: 480px`), medium (`max-width: 640px`), large (`max-width: 800px`). All use `width: 100%`
+- Mobile (below `sm` breakpoint): full-width with 16px horizontal margin
 
 ### 3.9 Toasts / Notifications
 
@@ -251,10 +268,12 @@ CSS variables switch via:
 }
 ```
 
+Flash-of-incorrect-theme prevention: All three sites use Next.js SSR/SSG. An inline (non-deferred) `<script>` must be placed in the root `<head>` (in `layout.tsx`) to synchronously read `localStorage` and apply `class="dark"` before paint. This prevents the light theme flashing for users with a saved dark preference.
+
 Toggle control placement:
 
 - **dojops.ai:** Navbar, visible toggle (sun/moon icon)
-- **dojops-hub:** Navbar or user dropdown
+- **dojops-hub:** Navbar (accessible to unauthenticated users)
 - **dojops-console:** Sidebar footer or header user menu
 
 ---
@@ -308,9 +327,74 @@ Utilitarian. Data density and clarity.
 
 ---
 
-## 7. Migration Notes
+## 7. Tailwind v4 Integration
 
-### 7.1 What Changes
+All three sites use Tailwind v4 with CSS-first configuration. Design tokens must be registered in the `@theme` block to be usable as utility classes.
+
+```css
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-card: var(--bg-card);
+  --color-bg-card-hover: var(--bg-card-hover);
+  --color-border-primary: var(--border-primary);
+  --color-border-secondary: var(--border-secondary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-border: var(--accent-border);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Shadows — reference the CSS variables */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+
+  /* Fonts */
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+```
+
+This enables utilities like `bg-bg-card`, `text-accent-text`, `rounded-lg`, `shadow-md`, `font-sans`. Dark mode switches via `@variant dark` which reads the `.dark` class.
+
+---
+
+## 8. Focus States
+
+All interactive elements use `:focus-visible` (not `:focus`) to avoid showing focus rings on mouse clicks.
+
+```css
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+```
+
+- **Buttons:** `outline-offset: 2px`. Ghost buttons on `--bg-secondary` backgrounds need this offset to stay visible
+- **Inputs:** Same ring, already specified in Section 3.3
+- **Sidebar nav items:** Same ring
+- **Modal close buttons:** Same ring
+- **Cards (if clickable):** Same ring, on the card element
+
+---
+
+## 9. Migration Notes
+
+### 9.1 What Changes
 
 - **Color palette:** Cyberpunk neon → warm light-first with soft cyan accent
 - **Backgrounds:** Pure black `#050508` → light `#FAFBFC` (default), deep slate `#0F1117` (dark)
@@ -322,7 +406,7 @@ Utilitarian. Data density and clarity.
 - **Animations:** Reduce from 18 keyframes to 5. Remove neon pulse, glow breathe, shimmer
 - **Dark mode:** Was only mode → becomes opt-in toggle, light is default
 
-### 7.2 What Stays
+### 9.2 What Stays
 
 - **Logo:** `/icons/dojops-3d-icon.png` (3D mini person) — unchanged
 - **Code font:** JetBrains Mono — unchanged
@@ -331,7 +415,7 @@ Utilitarian. Data density and clarity.
 - **Lucide icons** — unchanged
 - **Responsive breakpoints:** sm/md/lg/xl — unchanged
 
-### 7.3 Migration Order
+### 9.3 Migration Order
 
 1. **Shared tokens** — Create CSS variable file with light/dark tokens
 2. **dojops.ai** — Highest visibility, sets the new tone
@@ -342,12 +426,15 @@ Each site is a separate repo with its own `globals.css`, so migrations are indep
 
 ---
 
-## 8. Accessibility
+## 10. Accessibility
 
 - All text meets WCAG 2.1 AA contrast (4.5:1 body, 3:1 large text)
-- `--accent` on `--bg-card` light: contrast ratio 4.6:1 (passes AA)
-- `--accent` (dark variant `#38BDF8`) on `--bg-card` dark: contrast ratio 5.2:1 (passes AA)
-- Focus states: 2px accent ring, visible on both themes
+- `--text-primary` (#111827) on `--bg-primary` (#FAFBFC): 17.5:1 (passes AAA)
+- `--text-secondary` (#4B5563) on `--bg-primary` (#FAFBFC): 6.0:1 (passes AA)
+- `--accent` (#0EA5E9) on white: 2.6:1 — approved for UI components (WCAG 1.4.11, 3:1) and large text/icons only. Not for body text
+- `--accent-text` (#0369A1) on white: 4.6:1 — use for all accent-colored text (links, active labels)
+- `--text-tertiary` (#9CA3AF): 2.6:1 on white — approved only when a visible label is present (WCAG SC 1.4.3 exempts disabled states; placeholder text requires an associated label)
+- Focus states: `outline: 2px solid var(--accent); outline-offset: 2px` via `:focus-visible` on all interactive elements (see Section 8)
 - `prefers-reduced-motion`: all animations disabled
-- `prefers-color-scheme`: initial theme detection
+- `prefers-color-scheme`: initial theme detection, with inline script for flash prevention (see Section 5)
 - Interactive targets: minimum 32px (touch), 24px (pointer)
