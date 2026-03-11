@@ -1,4 +1,4 @@
-import { DevOpsTool, ToolOutput, VerificationResult } from "@dojops/sdk";
+import { DevOpsModule, ModuleOutput, VerificationResult } from "@dojops/sdk";
 import {
   ExecutionPolicy,
   ExecutionResult,
@@ -43,9 +43,9 @@ export interface SafeExecutorOptions {
 /** Options for the internal runExecution method. */
 interface RunExecutionContext {
   taskId: string;
-  tool: DevOpsTool;
+  tool: DevOpsModule;
   input: unknown;
-  generateOutput: ToolOutput;
+  generateOutput: ModuleOutput;
   approval: ApprovalDecision;
   verification: VerificationResult | undefined;
   startTime: number;
@@ -92,8 +92,8 @@ export class SafeExecutor {
   }
 
   private async runVerification(
-    tool: DevOpsTool,
-    generateOutput: ToolOutput,
+    tool: DevOpsModule,
+    generateOutput: ModuleOutput,
     meta?: Record<string, unknown>,
   ): Promise<
     | { ok: true; verification: VerificationResult | undefined }
@@ -170,8 +170,8 @@ export class SafeExecutor {
    */
   private async resolveApproval(
     taskId: string,
-    tool: DevOpsTool,
-    generateOutput: ToolOutput,
+    tool: DevOpsModule,
+    generateOutput: ModuleOutput,
     taskRisk?: RiskLevel,
   ): Promise<ApprovalDecision> {
     const mode = this.policy.approvalMode ?? "always";
@@ -201,7 +201,7 @@ export class SafeExecutor {
   }
 
   /** Elevate task risk if generated output targets sensitive paths. */
-  private elevateRiskByPaths(taskRisk: RiskLevel, generateOutput: ToolOutput): RiskLevel {
+  private elevateRiskByPaths(taskRisk: RiskLevel, generateOutput: ModuleOutput): RiskLevel {
     if (!generateOutput.data) return taskRisk;
     const paths = this.extractDeclaredPaths(generateOutput.data);
     if (paths.length === 0) return taskRisk;
@@ -294,11 +294,11 @@ export class SafeExecutor {
   /** Run the generate phase, returning the output or an early ExecutionResult on failure. */
   private async runGeneratePhase(
     taskId: string,
-    tool: DevOpsTool,
+    tool: DevOpsModule,
     input: unknown,
     startTime: number,
     meta?: Record<string, unknown>,
-  ): Promise<{ output: ToolOutput } | { result: ExecutionResult }> {
+  ): Promise<{ output: ModuleOutput } | { result: ExecutionResult }> {
     try {
       const output = await withTimeout(
         tool.generate(input as never),
@@ -336,8 +336,8 @@ export class SafeExecutor {
    */
   private async buildRepairFeedback(
     verifyResult: { verification: VerificationResult; error: string },
-    generateOutput: ToolOutput,
-    tool: DevOpsTool,
+    generateOutput: ModuleOutput,
+    tool: DevOpsModule,
     input: unknown,
   ): Promise<string> {
     const rawFeedback = verifyResult.verification.issues
@@ -376,7 +376,7 @@ export class SafeExecutor {
   }
 
   /** Check pre-execution policy on declared output paths. Returns violation message or undefined. */
-  private checkDeclaredPathPolicy(generateOutput: ToolOutput): string | undefined {
+  private checkDeclaredPathPolicy(generateOutput: ModuleOutput): string | undefined {
     if (!this.policy.allowWrite || !generateOutput.data) return undefined;
     const declaredPaths = this.extractDeclaredPaths(generateOutput.data);
     return this.checkFilePaths(declaredPaths);
@@ -404,16 +404,16 @@ export class SafeExecutor {
    */
   private async runRepairLoop(
     taskId: string,
-    tool: DevOpsTool,
+    tool: DevOpsModule,
     input: unknown,
-    initialOutput: ToolOutput,
+    initialOutput: ModuleOutput,
     initialVerify: Awaited<ReturnType<SafeExecutor["runVerification"]>>,
     startTime: number,
     meta?: Record<string, unknown>,
   ): Promise<
     | {
         repaired: true;
-        generateOutput: ToolOutput;
+        generateOutput: ModuleOutput;
         verifyResult: Awaited<ReturnType<SafeExecutor["runVerification"]>>;
       }
     | { repaired: false; earlyResult: ExecutionResult }
@@ -457,10 +457,10 @@ export class SafeExecutor {
 
   async executeTask(
     taskId: string,
-    tool: DevOpsTool,
+    tool: DevOpsModule,
     input: unknown,
     metadata?: Record<string, unknown>,
-    preGeneratedOutput?: ToolOutput,
+    preGeneratedOutput?: ModuleOutput,
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const meta = metadata;
@@ -475,7 +475,7 @@ export class SafeExecutor {
       });
     }
 
-    let generateOutput: ToolOutput;
+    let generateOutput: ModuleOutput;
     if (preGeneratedOutput) {
       generateOutput = preGeneratedOutput;
       this.accumulateTokenUsage(generateOutput.usage);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BaseTool, ToolOutput, VerificationResult, z } from "@dojops/sdk";
+import { BaseModule, ModuleOutput, VerificationResult, z } from "@dojops/sdk";
 import { SafeExecutor } from "../safe-executor";
 import type { CriticCallback } from "../safe-executor";
 import { AutoApproveHandler, AutoDenyHandler, CallbackApprovalHandler } from "../approval";
@@ -16,60 +16,60 @@ type MockInput = z.infer<typeof MockInputSchema>;
 // ---------------------------------------------------------------------------
 
 /** Standard tool with generate + execute */
-class MockTool extends BaseTool<MockInput> {
+class MockTool extends BaseModule<MockInput> {
   name = "mock-tool";
   description = "A mock tool";
   inputSchema = MockInputSchema;
 
-  async generate(input: MockInput): Promise<ToolOutput> {
+  async generate(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { result: input.value } };
   }
 
-  async execute(input: MockInput): Promise<ToolOutput> {
+  async execute(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { executed: input.value } };
   }
 }
 
 /** Tool without execute (generate-only) */
-class GenerateOnlyTool extends BaseTool<MockInput> {
+class GenerateOnlyTool extends BaseModule<MockInput> {
   name = "generate-only";
   description = "A tool without execute";
   inputSchema = MockInputSchema;
 
-  async generate(input: MockInput): Promise<ToolOutput> {
+  async generate(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { result: input.value } };
   }
 }
 
 /** Tool whose generate always fails */
-class FailingTool extends BaseTool<MockInput> {
+class FailingTool extends BaseModule<MockInput> {
   name = "failing-tool";
   description = "Always fails generate";
   inputSchema = MockInputSchema;
 
-  async generate(): Promise<ToolOutput> {
+  async generate(): Promise<ModuleOutput> {
     return { success: false, error: "generation failed" };
   }
 }
 
 /** Tool whose generate exceeds timeout */
-class SlowTool extends BaseTool<MockInput> {
+class SlowTool extends BaseModule<MockInput> {
   name = "slow-tool";
   description = "Exceeds timeout";
   inputSchema = MockInputSchema;
 
-  async generate(): Promise<ToolOutput> {
+  async generate(): Promise<ModuleOutput> {
     await new Promise((resolve) => setTimeout(resolve, 500));
     return { success: true, data: {} };
   }
 }
 
 /** Tool that returns token usage */
-class UsageTrackingTool extends BaseTool<MockInput> {
+class UsageTrackingTool extends BaseModule<MockInput> {
   name = "usage-tool";
   description = "Returns token usage";
   inputSchema = MockInputSchema;
-  async generate(input: MockInput): Promise<ToolOutput> {
+  async generate(input: MockInput): Promise<ModuleOutput> {
     return {
       success: true,
       data: { result: input.value },
@@ -81,14 +81,14 @@ class UsageTrackingTool extends BaseTool<MockInput> {
 // ---------------------------------------------------------------------------
 // Verifiable tool base — shared generate + execute, configurable verify
 // ---------------------------------------------------------------------------
-abstract class VerifiableBase extends BaseTool<MockInput> {
+abstract class VerifiableBase extends BaseModule<MockInput> {
   inputSchema = MockInputSchema;
 
-  async generate(input: MockInput): Promise<ToolOutput> {
+  async generate(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { result: input.value } };
   }
 
-  async execute(input: MockInput): Promise<ToolOutput> {
+  async execute(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { executed: input.value } };
   }
 }
@@ -137,10 +137,10 @@ class ThrowingVerifyTool extends VerifiableBase {
 // ---------------------------------------------------------------------------
 // Execute-variant tools — shared generate, configurable execute
 // ---------------------------------------------------------------------------
-abstract class ExecuteVariantBase extends BaseTool<MockInput> {
+abstract class ExecuteVariantBase extends BaseModule<MockInput> {
   inputSchema = MockInputSchema;
 
-  async generate(input: MockInput): Promise<ToolOutput> {
+  async generate(input: MockInput): Promise<ModuleOutput> {
     return { success: true, data: { result: input.value } };
   }
 }
@@ -149,7 +149,7 @@ class SlowExecuteTool extends ExecuteVariantBase {
   name = "slow-execute-tool";
   description = "Execute hangs";
 
-  async execute(): Promise<ToolOutput> {
+  async execute(): Promise<ModuleOutput> {
     await new Promise((r) => setTimeout(r, 5000));
     return { success: true, data: {} };
   }
@@ -159,7 +159,7 @@ class FailingExecuteTool extends ExecuteVariantBase {
   name = "failing-execute-tool";
   description = "Execute fails";
 
-  async execute(): Promise<ToolOutput> {
+  async execute(): Promise<ModuleOutput> {
     return { success: false, error: "disk full" };
   }
 }
@@ -168,7 +168,7 @@ class FileTrackingTool extends ExecuteVariantBase {
   name = "file-tracking-tool";
   description = "Writes files";
 
-  async execute(): Promise<ToolOutput> {
+  async execute(): Promise<ModuleOutput> {
     return {
       success: true,
       data: {},
@@ -186,7 +186,7 @@ function createFileWriteTool(name: string, filesWritten: string[], filesModified
     override name = name;
     description = `Writes to files: ${filesWritten.join(", ")}`;
 
-    async execute(): Promise<ToolOutput> {
+    async execute(): Promise<ModuleOutput> {
       return { success: true, data: {}, filesWritten, filesModified };
     }
   })();
@@ -615,7 +615,7 @@ describe("SafeExecutor", () => {
         name = "retryable-tool";
         description = "Fails verify first, passes second";
 
-        async generate(input: MockInput): Promise<ToolOutput> {
+        async generate(input: MockInput): Promise<ModuleOutput> {
           callCount++;
           return { success: true, data: { result: input.value, attempt: callCount } };
         }
@@ -682,7 +682,7 @@ describe("SafeExecutor", () => {
         name = "counting-tool";
         description = "Counts generates";
 
-        async generate(input: MockInput): Promise<ToolOutput> {
+        async generate(input: MockInput): Promise<ModuleOutput> {
           generateCount++;
           return { success: true, data: { result: input.value } };
         }
@@ -809,14 +809,14 @@ describe("SafeExecutor", () => {
       });
 
       // Tool that declares .env as output path (needs execute to trigger approval)
-      class EnvOutputTool extends BaseTool<MockInput> {
+      class EnvOutputTool extends BaseModule<MockInput> {
         name = "env-output-tool";
         description = "Writes .env file";
         inputSchema = MockInputSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return { success: true, data: { filePath: ".env.production" } };
         }
-        async execute(): Promise<ToolOutput> {
+        async execute(): Promise<ModuleOutput> {
           return { success: true, data: {} };
         }
       }
@@ -843,14 +843,14 @@ describe("SafeExecutor", () => {
         approvalHandler: handler,
       });
 
-      class SshOutputTool extends BaseTool<MockInput> {
+      class SshOutputTool extends BaseModule<MockInput> {
         name = "ssh-output-tool";
         description = "Writes SSH key";
         inputSchema = MockInputSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return { success: true, data: { filePath: ".ssh/id_rsa" } };
         }
-        async execute(): Promise<ToolOutput> {
+        async execute(): Promise<ModuleOutput> {
           return { success: true, data: {} };
         }
       }
@@ -877,17 +877,17 @@ describe("SafeExecutor", () => {
         approvalHandler: handler,
       });
 
-      class SafeOutputTool extends BaseTool<MockInput> {
+      class SafeOutputTool extends BaseModule<MockInput> {
         name = "safe-output-tool";
         description = "Writes safe file";
         inputSchema = MockInputSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return {
             success: true,
             data: { filePath: "Dockerfile", outputPath: "docker-compose.yml" },
           };
         }
-        async execute(): Promise<ToolOutput> {
+        async execute(): Promise<ModuleOutput> {
           return { success: true, data: {} };
         }
       }
@@ -913,11 +913,11 @@ describe("SafeExecutor", () => {
         approvalHandler: handler,
       });
 
-      class MultiFileOutputTool extends BaseTool<MockInput> {
+      class MultiFileOutputTool extends BaseModule<MockInput> {
         name = "multi-file-output-tool";
         description = "Writes multiple files";
         inputSchema = MockInputSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return {
             success: true,
             data: {
@@ -928,7 +928,7 @@ describe("SafeExecutor", () => {
             },
           };
         }
-        async execute(): Promise<ToolOutput> {
+        async execute(): Promise<ModuleOutput> {
           return { success: true, data: {} };
         }
       }
@@ -973,7 +973,7 @@ describe("SafeExecutor", () => {
     function repairableGenerate(
       input: MockInput & { _verificationFeedback?: string },
       state: { generateCount: number; lastFeedback: string | undefined },
-    ): ToolOutput {
+    ): ModuleOutput {
       state.generateCount++;
       state.lastFeedback = input._verificationFeedback;
       if (state.generateCount >= 2) {
@@ -985,12 +985,14 @@ describe("SafeExecutor", () => {
     it("uses critic feedback in repair loop", async () => {
       const state = { generateCount: 0, lastFeedback: undefined as string | undefined };
 
-      class RepairableTool extends BaseTool<MockInput> {
+      class RepairableTool extends BaseModule<MockInput> {
         name = "repairable";
         description = "Tool that repairs via critic";
         inputSchema = MockInputSchema;
 
-        async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
+        async generate(
+          input: MockInput & { _verificationFeedback?: string },
+        ): Promise<ModuleOutput> {
           return repairableGenerate(input, state);
         }
 
@@ -1036,12 +1038,14 @@ describe("SafeExecutor", () => {
     it("falls back to raw feedback when critic throws", async () => {
       const state = { generateCount: 0, lastFeedback: undefined as string | undefined };
 
-      class RepairableTool2 extends BaseTool<MockInput> {
+      class RepairableTool2 extends BaseModule<MockInput> {
         name = "repairable2";
         description = "Tool with failing critic";
         inputSchema = MockInputSchema;
 
-        async generate(input: MockInput & { _verificationFeedback?: string }): Promise<ToolOutput> {
+        async generate(
+          input: MockInput & { _verificationFeedback?: string },
+        ): Promise<ModuleOutput> {
           return repairableGenerate(input, state);
         }
 

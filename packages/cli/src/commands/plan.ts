@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, TaskGraph } from "@dojops/planner";
-import { createToolRegistry, ToolRegistry } from "@dojops/module-registry";
+import { createModuleRegistry, ModuleRegistry } from "@dojops/module-registry";
 import { scanRepo } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags, extractFlagValue } from "../parser";
@@ -27,9 +27,9 @@ import {
 } from "../state";
 
 /** Enrich each task with tool metadata from the registry. */
-function enrichTasksWithMetadata(graph: TaskGraph, registry: ToolRegistry): void {
+function enrichTasksWithMetadata(graph: TaskGraph, registry: ModuleRegistry): void {
   for (const task of graph.tasks) {
-    const meta = registry.getToolMetadata(task.tool);
+    const meta = registry.getModuleMetadata(task.tool);
     if (!meta) continue;
     task.toolType = meta.toolType;
     if (meta.toolType === "custom") {
@@ -55,7 +55,7 @@ function displayTaskGraph(graph: TaskGraph): void {
 function buildPlanState(
   planId: string,
   graph: TaskGraph,
-  registry: ToolRegistry,
+  registry: ModuleRegistry,
   ctx: CLIContext,
   providerName: string,
   skipVerify: boolean,
@@ -91,7 +91,7 @@ function buildPlanState(
         .slice(0, 16),
       toolVersions: Object.fromEntries(
         graph.tasks.map((t) => {
-          const meta = registry.getToolMetadata(t.tool);
+          const meta = registry.getModuleMetadata(t.tool);
           return [t.tool, meta?.toolVersion ?? "built-in"];
         }),
       ),
@@ -142,10 +142,10 @@ function parsePlanArgs(
 
 /** Filter modules to a single module if --module flag is set. */
 function applyToolFilter(
-  tools: ReturnType<ToolRegistry["getAll"]>,
+  tools: ReturnType<ModuleRegistry["getAll"]>,
   toolName: string | undefined,
   isJson: boolean,
-): ReturnType<ToolRegistry["getAll"]> {
+): ReturnType<ModuleRegistry["getAll"]> {
   if (!toolName) return tools;
   const match = tools.find((t) => t.name === toolName);
   if (!match) {
@@ -163,7 +163,7 @@ function applyToolFilter(
 async function runDecomposition(
   prompt: string,
   provider: ReturnType<CLIContext["getProvider"]>,
-  tools: ReturnType<ToolRegistry["getAll"]>,
+  tools: ReturnType<ModuleRegistry["getAll"]>,
   repoContext: ReturnType<typeof loadContext> | null,
   ctx: CLIContext,
   isJson: boolean,
@@ -198,7 +198,7 @@ async function runDecomposition(
 /** Save the plan and update session state. Returns the plan ID. */
 function persistPlan(
   graph: TaskGraph,
-  registry: ToolRegistry,
+  registry: ModuleRegistry,
   ctx: CLIContext,
   providerName: string,
   skipVerify: boolean,
@@ -288,7 +288,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   runPrePlanHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
   const provider = ctx.getProvider();
-  const registry = createToolRegistry(provider, projectRoot ?? undefined);
+  const registry = createModuleRegistry(provider, projectRoot ?? undefined);
   const repoContext = loadRepoContext(projectRoot);
   const isJson = ctx.globalOpts.output === "json";
 

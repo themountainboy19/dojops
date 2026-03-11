@@ -1,4 +1,4 @@
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 import { TaskGraph, TaskNode, TaskResult, TaskStatus, PlannerResult } from "./types";
 
 export interface PlannerLogger {
@@ -150,11 +150,11 @@ export interface PlannerExecutorOptions {
 }
 
 export class PlannerExecutor {
-  private readonly toolMap: Map<string, DevOpsTool>;
+  private readonly toolMap: Map<string, DevOpsModule>;
   private readonly generateTimeoutMs: number | undefined;
 
   constructor(
-    tools: DevOpsTool[],
+    tools: DevOpsModule[],
     private readonly logger: PlannerLogger = noopLogger,
     options?: PlannerExecutorOptions,
   ) {
@@ -208,7 +208,7 @@ export class PlannerExecutor {
 
   private async runToolForTask(
     task: TaskNode,
-    tool: DevOpsTool,
+    tool: DevOpsModule,
     results: Map<string, TaskResult>,
     failed: Set<string>,
   ): Promise<void> {

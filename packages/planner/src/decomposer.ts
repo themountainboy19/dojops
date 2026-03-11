@@ -1,6 +1,6 @@
 import { LLMProvider, parseAndValidate } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 import { TaskGraph, TaskGraphSchema } from "./types";
 import { zodSchemaToText } from "./schema-to-text";
 
@@ -83,7 +83,7 @@ export function buildContextSection(ctx: RepoContext): string {
 export async function decompose(
   goal: string,
   provider: LLMProvider,
-  tools: DevOpsTool[],
+  tools: DevOpsModule[],
   options?: DecomposeOptions,
 ): Promise<TaskGraph> {
   // Build tool descriptions, trimming to stay within ~8000 tokens (32000 chars).

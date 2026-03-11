@@ -6,7 +6,7 @@ import os from "node:os";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { createProvider, createRouter, createDebugger, createDiffAnalyzer } from "@dojops/api";
-import { createToolRegistry } from "@dojops/module-registry";
+import { createModuleRegistry } from "@dojops/module-registry";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
 import { CLIContext } from "../types";
 import { writeFileOwnerOnly } from "../secure-fs";
@@ -207,7 +207,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
   const { docAugmenter, context7Provider } = await loadContext7Providers();
 
   const projectRoot = findProjectRoot() ?? undefined;
-  const registry = createToolRegistry(provider, projectRoot, {
+  const registry = createModuleRegistry(provider, projectRoot, {
     docAugmenter,
     context7Provider,
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),

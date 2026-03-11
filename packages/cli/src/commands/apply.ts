@@ -7,7 +7,7 @@ import { DeterministicProvider } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry } from "@dojops/module-registry";
+import { createModuleRegistry } from "@dojops/module-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
@@ -47,7 +47,7 @@ import { createAutoInstallHandler } from "../toolchain-sandbox";
 // readExistingToolFile is no longer used here — existingContent is detected
 // lazily at execution time by each tool's runtime (detectContent in DopsRuntimeV2).
 
-type ToolEntry = ReturnType<ReturnType<typeof createToolRegistry>["getAll"]>[number];
+type ToolEntry = ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>[number];
 
 interface ApplyFlags {
   autoApprove: boolean;
@@ -326,7 +326,7 @@ async function executeDryRun(
 
   try {
     const provider = ctx.getProvider();
-    const registry = createToolRegistry(provider, root, {
+    const registry = createModuleRegistry(provider, root, {
       onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
     });
     const tools = registry.getAll();
@@ -465,7 +465,7 @@ function handleReplayValidation(
   plan: PlanState,
   provider: { name: string },
   model: string | undefined,
-  registry: ReturnType<typeof createToolRegistry>,
+  registry: ReturnType<typeof createModuleRegistry>,
   force: boolean,
   root: string,
 ): void {
@@ -494,7 +494,7 @@ function handleReplayValidation(
 
 async function handleToolIntegrityCheck(
   plan: PlanState,
-  tools: ReturnType<ReturnType<typeof createToolRegistry>["getAll"]>,
+  tools: ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>,
   autoApprove: boolean,
   root: string,
 ): Promise<void> {
@@ -536,7 +536,7 @@ function buildTaskGraph(plan: PlanState) {
 }
 
 function createExecutorWithCallbacks(
-  tools: ReturnType<ReturnType<typeof createToolRegistry>["getAll"]>,
+  tools: ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>,
   graph: ReturnType<typeof buildTaskGraph>,
   ctx: CLIContext,
   jsonOutput: boolean,
@@ -1114,7 +1114,7 @@ async function executeApplyPlan(
   if (flags.replay) {
     provider = new DeterministicProvider(provider);
   }
-  const registry = createToolRegistry(provider, root, {
+  const registry = createModuleRegistry(provider, root, {
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
   });
   const tools = registry.getAll();

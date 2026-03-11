@@ -3,7 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as yaml from "js-yaml";
 import { LLMProvider } from "@dojops/core";
-import type { DevOpsTool, ToolOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
+import type {
+  DevOpsModule,
+  ModuleOutput,
+  VerificationResult,
+  VerificationIssue,
+} from "@dojops/sdk";
 import { z } from "zod";
 import { DopsExecution, DopsModule, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
 import { compilePromptV2, PromptContextV2 } from "./prompt-compiler";
@@ -66,7 +71,7 @@ function validateInput(schema: z.ZodType, input: unknown): { valid: boolean; err
   return { valid: false, error: result.error.message };
 }
 
-function failedOutput(err: unknown): ToolOutput {
+function failedOutput(err: unknown): ModuleOutput {
   return { success: false, error: err instanceof Error ? err.message : String(err) };
 }
 
@@ -526,7 +531,7 @@ function mergePeerFiles(
  * LLM generates raw file content instead of JSON objects.
  * Context7 libraries are declared in frontmatter and fetched at runtime.
  */
-export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
+export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: z.ZodType;
@@ -563,7 +568,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     return validateInput(this.inputSchema, input);
   }
 
-  async generate(input: Record<string, unknown>): Promise<ToolOutput> {
+  async generate(input: Record<string, unknown>): Promise<ModuleOutput> {
     try {
       // 1. Detect existing content
       const basePath = this.options.basePath ?? process.cwd();
@@ -845,12 +850,12 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
     );
   }
 
-  async execute(input: Record<string, unknown>): Promise<ToolOutput> {
+  async execute(input: Record<string, unknown>): Promise<ModuleOutput> {
     // Default outputPath to module name when file specs reference {outputPath}
     const effectiveInput = this.applyOutputPathDefault(input);
 
     // Use pre-generated output from SafeExecutor when available (avoids redundant LLM call)
-    const preGen = input._generatedOutput as ToolOutput | undefined;
+    const preGen = input._generatedOutput as ModuleOutput | undefined;
     const genResult =
       preGen?.success && preGen.data !== undefined ? preGen : await this.generate(effectiveInput);
     if (!genResult.success || !genResult.data) return genResult;
@@ -885,9 +890,9 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
 
   /**
    * Validate generated output before writing files.
-   * Returns a ToolOutput error if validation fails, or null if validation passes.
+   * Returns a ModuleOutput error if validation fails, or null if validation passes.
    */
-  private validateGeneratedOutput(generated: string): ToolOutput | null {
+  private validateGeneratedOutput(generated: string): ModuleOutput | null {
     try {
       if (this.isMultiFileOutput()) {
         return this.validateMultiFileOutput(generated);
@@ -899,7 +904,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   /** Validate multi-file JSON output: check paths and non-empty content. */
-  private validateMultiFileOutput(generated: string): ToolOutput | null {
+  private validateMultiFileOutput(generated: string): ModuleOutput | null {
     const fileContents = parseMultiFileOutput(generated);
 
     const pathErrors = validateGeneratedPaths(Object.keys(fileContents));
@@ -918,7 +923,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
   }
 
   /** Validate single-file output against declared format. */
-  private validateSingleFileOutput(generated: string): ToolOutput | null {
+  private validateSingleFileOutput(generated: string): ModuleOutput | null {
     const fileFormat = this.module.frontmatter.context.fileFormat;
     const contentErrors = validateGeneratedContent(generated, fileFormat, this.name);
     if (contentErrors.length > 0) {
@@ -931,7 +936,7 @@ export class DopsRuntimeV2 implements DevOpsTool<Record<string, unknown>> {
    * Handle validation errors: propagate path/content validation failures,
    * silently ignore parse failures (handled later by writeFileSpecs).
    */
-  private handleValidationError(validationErr: unknown): ToolOutput | null {
+  private handleValidationError(validationErr: unknown): ModuleOutput | null {
     const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
     const isValidationFailure =
       msg.includes("Path validation") || msg.includes("Content validation");

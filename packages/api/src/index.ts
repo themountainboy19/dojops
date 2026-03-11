@@ -25,7 +25,7 @@ export type {
 export {
   createProvider,
   createTools,
-  createToolRegistry,
+  createModuleRegistry,
   createRouter,
   createDebugger,
   createDiffAnalyzer,
@@ -35,7 +35,7 @@ export { runReviewPipeline } from "./routes/review";
 export type { ReviewPipelineResult } from "./routes/review";
 export { NoopProvider } from "./noop-provider";
 export type { ProviderOptions, CreateRouterResult } from "./factory";
-export type { ToolRegistry } from "./factory";
+export type { ModuleRegistry } from "./factory";
 export { MetricsAggregator } from "./metrics";
 export type {
   OverviewMetrics,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BaseTool, ToolOutput, z } from "@dojops/sdk";
+import { BaseModule, ModuleOutput, z } from "@dojops/sdk";
 import { PlannerExecutor, PlannerLogger } from "../executor";
 import { TaskGraph } from "../types";
 
@@ -13,31 +13,31 @@ const PassthroughSchema = z.object({}).passthrough();
 // Mock tools
 // ---------------------------------------------------------------------------
 
-class SuccessTool extends BaseTool<Record<string, unknown>> {
+class SuccessTool extends BaseModule<Record<string, unknown>> {
   name = "success-tool";
   description = "Always succeeds";
   inputSchema = PassthroughSchema;
-  async generate(input: Record<string, unknown>): Promise<ToolOutput> {
+  async generate(input: Record<string, unknown>): Promise<ModuleOutput> {
     return { success: true, data: { result: "ok", ...input } };
   }
 }
 
-class FailTool extends BaseTool<Record<string, unknown>> {
+class FailTool extends BaseModule<Record<string, unknown>> {
   name = "fail-tool";
   description = "Always fails";
   inputSchema = PassthroughSchema;
-  async generate(): Promise<ToolOutput> {
+  async generate(): Promise<ModuleOutput> {
     return { success: false, error: "intentional failure" };
   }
 }
 
 const timestamps: { id: string; start: number; end: number }[] = [];
 
-class TimingTool extends BaseTool<Record<string, unknown>> {
+class TimingTool extends BaseModule<Record<string, unknown>> {
   name = "timing-tool";
   description = "Records execution timestamps";
   inputSchema = PassthroughSchema;
-  async generate(input: Record<string, unknown>): Promise<ToolOutput> {
+  async generate(input: Record<string, unknown>): Promise<ModuleOutput> {
     const id = (input.taskId as string) ?? "unknown";
     const start = Date.now();
     await new Promise((r) => setTimeout(r, 50));
@@ -49,11 +49,11 @@ class TimingTool extends BaseTool<Record<string, unknown>> {
 
 const StrictInputSchema = z.object({ name: z.string().min(1) });
 
-class StrictTool extends BaseTool<{ name: string }> {
+class StrictTool extends BaseModule<{ name: string }> {
   name = "strict-tool";
   description = "Requires a non-empty name field";
   inputSchema = StrictInputSchema;
-  async generate(input: { name: string }): Promise<ToolOutput> {
+  async generate(input: { name: string }): Promise<ModuleOutput> {
     return { success: true, data: { greeting: `hello ${input.name}` } };
   }
 }
@@ -337,11 +337,11 @@ describe("PlannerExecutor", () => {
 
     it("sanitizes string output from $ref resolution", async () => {
       // Create a tool that returns a string with control characters
-      class ControlCharTool extends BaseTool<Record<string, unknown>> {
+      class ControlCharTool extends BaseModule<Record<string, unknown>> {
         name = "control-char-tool";
         description = "Returns output with control characters";
         inputSchema = PassthroughSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return {
             success: true,
             data: { content: "hello\x00\x07world\u200Bfoo\uFEFFbar" },
@@ -365,11 +365,11 @@ describe("PlannerExecutor", () => {
     });
 
     it("resolves $ref to null when referenced task output contains null values", async () => {
-      class NullOutputTool extends BaseTool<Record<string, unknown>> {
+      class NullOutputTool extends BaseModule<Record<string, unknown>> {
         name = "null-output-tool";
         description = "Returns null in output data";
         inputSchema = PassthroughSchema;
-        async generate(): Promise<ToolOutput> {
+        async generate(): Promise<ModuleOutput> {
           return { success: true, data: null };
         }
       }

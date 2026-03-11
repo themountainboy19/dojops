@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { LLMProvider } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 import { decompose, PlannerExecutor, TaskGraph, PlannerResult } from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import type { CriticCallback } from "@dojops/executor";
@@ -52,7 +52,7 @@ function classifyTaskRiskBasic(
 async function autoApproveExecute(
   graph: TaskGraph,
   planResult: PlannerResult,
-  tools: DevOpsTool[],
+  tools: DevOpsModule[],
   signal: AbortSignal,
   provider: LLMProvider,
 ): Promise<void> {
@@ -88,7 +88,7 @@ async function autoApproveExecute(
 /** Execute the plan with an abort-controller timeout and optional auto-approve. */
 async function executePlanWithTimeout(
   graph: TaskGraph,
-  tools: DevOpsTool[],
+  tools: DevOpsModule[],
   autoApprove: boolean,
   provider: LLMProvider,
 ): Promise<PlannerResult> {
@@ -119,7 +119,7 @@ async function executePlanWithTimeout(
 
 export function createPlanRouter(
   provider: LLMProvider,
-  tools: DevOpsTool[],
+  tools: DevOpsModule[],
   store: HistoryStore,
 ): Router {
   const router = Router();

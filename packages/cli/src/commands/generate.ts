@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput, scanRepo } from "@dojops/core";
 import { isDevOpsFile, SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createToolRegistry, discoverUserDopsFiles } from "@dojops/module-registry";
+import { createModuleRegistry, discoverUserDopsFiles } from "@dojops/module-registry";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -199,9 +199,9 @@ interface ToolDirectContext {
 }
 
 function resolveToolOrThrow(
-  registry: ReturnType<typeof createToolRegistry>,
+  registry: ReturnType<typeof createModuleRegistry>,
   toolName: string,
-): NonNullable<ReturnType<ReturnType<typeof createToolRegistry>["get"]>> {
+): NonNullable<ReturnType<ReturnType<typeof createModuleRegistry>["get"]>> {
   const tool = registry.get(toolName);
   if (tool) return tool;
 
@@ -338,7 +338,7 @@ async function handleToolDirect(
   toolName: string,
   toolCtx: ToolDirectContext,
 ): Promise<void> {
-  const registry = createToolRegistry(toolCtx.provider, toolCtx.projectRoot, {
+  const registry = createModuleRegistry(toolCtx.provider, toolCtx.projectRoot, {
     docAugmenter: toolCtx.docAugmenter,
     context7Provider: toolCtx.context7Provider,
     projectContext: toolCtx.projectContextStr,
@@ -687,7 +687,7 @@ function tryToolDirectPath(
   if (!toolName) return null;
 
   const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
-  const registry = createToolRegistry(provider, projectRoot, {
+  const registry = createModuleRegistry(provider, projectRoot, {
     docAugmenter,
     context7Provider,
     projectContext: projectContextStr,

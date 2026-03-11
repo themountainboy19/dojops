@@ -15,9 +15,9 @@ import {
   withRetry,
 } from "@dojops/core";
 import { NoopProvider } from "./noop-provider";
-import { DevOpsTool } from "@dojops/sdk";
-export { createToolRegistry, ToolRegistry } from "@dojops/module-registry";
-import { createToolRegistry, discoverCustomAgents } from "@dojops/module-registry";
+import { DevOpsModule } from "@dojops/sdk";
+export { createModuleRegistry, ModuleRegistry } from "@dojops/module-registry";
+import { createModuleRegistry, discoverCustomAgents } from "@dojops/module-registry";
 
 export interface ProviderOptions {
   provider?: string;
@@ -125,8 +125,8 @@ export function createTools(
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
   context7Provider?: DocProvider,
   projectContext?: string,
-): DevOpsTool[] {
-  return createToolRegistry(provider, projectPath, {
+): DevOpsModule[] {
+  return createModuleRegistry(provider, projectPath, {
     docAugmenter,
     context7Provider,
     projectContext,

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock discoverUserDopsFiles from @dojops/module-registry
 const mockDiscoverUserDopsFiles = vi.fn();
 vi.mock("@dojops/module-registry", () => ({
-  createToolRegistry: vi.fn(),
+  createModuleRegistry: vi.fn(),
   discoverUserDopsFiles: (...args: unknown[]) => mockDiscoverUserDopsFiles(...args),
 }));
 

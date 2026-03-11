@@ -1,4 +1,4 @@
-import { ToolOutput } from "@dojops/sdk";
+import { ModuleOutput } from "@dojops/sdk";
 import { ApprovalDecision, ApprovalRequest, ExecutionPreview } from "./types";
 
 export interface ApprovalHandler {
@@ -25,7 +25,7 @@ export class CallbackApprovalHandler implements ApprovalHandler {
   }
 }
 
-export function buildPreview(toolOutput: ToolOutput, toolName: string): ExecutionPreview {
+export function buildPreview(toolOutput: ModuleOutput, toolName: string): ExecutionPreview {
   const filesCreated: string[] = [];
   const summaryParts: string[] = [`Tool "${toolName}" wants to execute.`];
 

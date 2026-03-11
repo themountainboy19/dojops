@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
 import path from "node:path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsTool } from "@dojops/sdk";
+import { DevOpsModule } from "@dojops/sdk";
 import { HistoryStore } from "./store";
 import { errorHandler, authMiddleware, requestIdMiddleware, requestLogger } from "./middleware";
 import {
@@ -25,7 +25,7 @@ import { TokenTracker } from "./token-tracker";
 
 export interface AppDependencies {
   provider: LLMProvider;
-  tools: DevOpsTool[];
+  tools: DevOpsModule[];
   router: AgentRouter;
   debugger: CIDebugger;
   diffAnalyzer: InfraDiffAnalyzer;
