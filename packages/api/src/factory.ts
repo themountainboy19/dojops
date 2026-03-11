@@ -110,8 +110,8 @@ interface DocProvider {
 }
 
 /**
- * Creates all DevOps tools. Uses tool-registry to instantiate all 13 built-in tools
- * plus any discovered plugin tools.
+ * Creates all DevOps modules. Uses module-registry to instantiate all 13 built-in modules
+ * plus any discovered custom modules.
  *
  * @param provider - LLM provider for tool generation
  * @param projectPath - Optional project path for plugin discovery

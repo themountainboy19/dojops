@@ -1,6 +1,6 @@
 {
   "name": "@dojops/session",
-  "version": "1.0.9",
+  "version": "2.0.0",
   "description": "Interactive AI chat session management for DojOps",
   "license": "MIT",
   "repository": {

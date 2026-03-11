@@ -715,7 +715,7 @@ export function verifyTool(tool: SystemTool, ctx?: ToolchainContext): string | u
 
 /**
  * Create an OnBinaryMissing handler that auto-installs tools via the toolchain.
- * Returns a callback suitable for passing to DopsRuntimeV2 / tool-registry options.
+ * Returns a callback suitable for passing to DopsRuntimeV2 / module-registry options.
  */
 export function createAutoInstallHandler(
   log?: (message: string) => void,

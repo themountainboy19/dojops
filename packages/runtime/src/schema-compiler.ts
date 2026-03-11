@@ -58,7 +58,7 @@ function safeRegex(pattern: string): RegExp {
   }
 }
 
-// ── JSON Schema Object (extended from tool-registry) ─
+// ── JSON Schema Object (extended from module-registry) ─
 
 export interface JSONSchemaObject {
   type?: string;

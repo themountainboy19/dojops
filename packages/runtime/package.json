@@ -1,6 +1,6 @@
 {
   "name": "@dojops/runtime",
-  "version": "1.0.9",
+  "version": "2.0.0",
   "description": "Unified DOPS tool runtime engine for DojOps",
   "license": "MIT",
   "repository": {

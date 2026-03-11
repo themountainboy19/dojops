@@ -1,6 +1,6 @@
 {
   "name": "@dojops/core",
-  "version": "1.0.9",
+  "version": "2.0.0",
   "description": "LLM providers, multi-agent routing, CI debugger, and infra diff analysis for DojOps",
   "license": "MIT",
   "repository": {
