@@ -60,6 +60,9 @@
 # npm (recommended)
 npm i -g @dojops/cli
 
+# Homebrew (macOS / Linux)
+brew tap dojops/tap && brew install dojops
+
 # Shell script
 curl -fsSL https://raw.githubusercontent.com/dojops/dojops/main/install.sh | sh
 

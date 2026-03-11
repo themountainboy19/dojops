@@ -35,6 +35,28 @@ npm uninstall -g @dojops/cli
 
 ---
 
+### Homebrew (macOS / Linux)
+
+Install via the official [Homebrew tap](https://github.com/dojops/homebrew-tap):
+
+```bash
+brew tap dojops/tap && brew install dojops
+```
+
+**Upgrade:**
+
+```bash
+brew upgrade dojops
+```
+
+**Uninstall:**
+
+```bash
+brew uninstall dojops
+```
+
+---
+
 ### Shell Script
 
 POSIX-compliant installer that verifies prerequisites and runs `npm install -g`.
