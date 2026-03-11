@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export { z } from "zod";
 
-export interface ToolOutput {
+export interface ModuleOutput {
   success: boolean;
   data?: unknown;
   error?: string;
@@ -26,17 +26,17 @@ export interface VerificationResult {
   rawOutput?: string;
 }
 
-export interface DevOpsTool<TInput = unknown> {
+export interface DevOpsModule<TInput = unknown> {
   name: string;
   description: string;
   inputSchema: z.ZodType;
   validate(input: unknown): { valid: boolean; error?: string };
-  generate(input: TInput): Promise<ToolOutput>;
-  execute?(input: TInput): Promise<ToolOutput>;
+  generate(input: TInput): Promise<ModuleOutput>;
+  execute?(input: TInput): Promise<ModuleOutput>;
   verify?(data: unknown): Promise<VerificationResult>;
 }
 
-export abstract class BaseTool<TInput> implements DevOpsTool<TInput> {
+export abstract class BaseModule<TInput> implements DevOpsModule<TInput> {
   abstract name: string;
   abstract description: string;
   abstract inputSchema: z.ZodType;
@@ -49,5 +49,5 @@ export abstract class BaseTool<TInput> implements DevOpsTool<TInput> {
     return { valid: false, error: result.error.message };
   }
 
-  abstract generate(input: TInput): Promise<ToolOutput>;
+  abstract generate(input: TInput): Promise<ModuleOutput>;
 }
