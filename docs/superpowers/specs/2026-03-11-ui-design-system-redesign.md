@@ -176,7 +176,7 @@ Sizes: `sm` (32px height, 12px horizontal padding), `md` (38px, 16px), `lg` (44p
 - Background: `--bg-card`
 - Border: 1px `--border-secondary`
 - Radius: `--radius-sm` (6px)
-- Focus: `outline: 2px solid var(--accent); outline-offset: 2px` (visible on both themes)
+- Focus: `outline: 2px solid var(--accent-hover); outline-offset: 2px` (see Section 8 for full spec)
 - Placeholder: `--text-tertiary` (only when a visible label is present — placeholders must not be the sole descriptor)
 
 ### 3.4 Badges / Tags
@@ -334,8 +334,9 @@ All three sites use Tailwind v4 with CSS-first configuration. Design tokens must
 ```css
 @import "tailwindcss";
 
-@theme {
-  /* Colors */
+@theme inline {
+  /* Colors — `inline` ensures utilities emit var() references resolved at
+     paint time, so dark mode switching via .dark class works correctly. */
   --color-bg-primary: var(--bg-primary);
   --color-bg-secondary: var(--bg-secondary);
   --color-bg-card: var(--bg-card);
@@ -379,8 +380,11 @@ All interactive elements use `:focus-visible` (not `:focus`) to avoid showing fo
 
 ```css
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-hover); /* light: #0284C7, 3.4:1 on white — meets 1.4.11 */
   outline-offset: 2px;
+}
+.dark :focus-visible {
+  outline-color: var(--accent); /* dark: #38BDF8, passes on dark backgrounds */
 }
 ```
 
@@ -435,7 +439,7 @@ Each site is a separate repo with its own `globals.css`, so migrations are indep
 - `--accent-text` (#0369A1) on white: 4.6:1 — use for all accent-colored text (links, active labels)
 - `--accent-text` dark (#7DD3FC) on `--bg-primary` dark (#0F1117): 9.6:1 (passes AAA)
 - `--text-tertiary` (#9CA3AF): 2.6:1 on white — approved only when a visible label is present (WCAG SC 1.4.3 exempts disabled states; placeholder text requires an associated label)
-- Focus states: `outline: 2px solid var(--accent); outline-offset: 2px` via `:focus-visible` on all interactive elements (see Section 8)
+- Focus states: `outline: 2px solid var(--accent-hover); outline-offset: 2px` via `:focus-visible`; dark mode uses `--accent` (see Section 8)
 - `prefers-reduced-motion`: all animations disabled
 - `prefers-color-scheme`: initial theme detection, with inline script for flash prevention (see Section 5)
 - Interactive targets: minimum 32px (touch), 24px (pointer)
