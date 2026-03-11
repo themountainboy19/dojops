@@ -72,6 +72,14 @@ docker run --rm -it ghcr.io/dojops/dojops "Create a Terraform config for S3"
 
 See [docs/installation.md](docs/installation.md) for detailed instructions, upgrade/uninstall, and troubleshooting.
 
+### Shell Completion
+
+```bash
+dojops completion install   # auto-detects your shell
+```
+
+Or generate manually: `dojops completion bash|zsh|fish`
+
 ### Configure & Run
 
 ```bash

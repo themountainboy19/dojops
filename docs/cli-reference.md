@@ -152,6 +152,32 @@ Chat supports slash commands: `/exit`, `/agent <name>`, `/plan <goal>`, `/apply`
 | `dojops cron list`                       | List all scheduled jobs                             |
 | `dojops cron remove <job-id>`            | Remove a scheduled job                              |
 
+### Shell Completion
+
+| Command                             | Description                            |
+| ----------------------------------- | -------------------------------------- |
+| `dojops completion bash`            | Print bash completion script           |
+| `dojops completion zsh`             | Print zsh completion script            |
+| `dojops completion fish`            | Print fish completion script           |
+| `dojops completion install`         | Auto-detect shell, install completions |
+| `dojops completion install <shell>` | Install for specific shell             |
+
+**Quick setup:**
+
+```bash
+# Bash
+dojops completion install bash
+# or manually: dojops completion bash > ~/.bash_completion.d/dojops
+
+# Zsh
+dojops completion install zsh
+# or manually: dojops completion zsh > ~/.zsh/completions/_dojops
+
+# Fish
+dojops completion install fish
+# or manually: dojops completion fish > ~/.config/fish/completions/dojops.fish
+```
+
 ---
 
 ## Global Options
