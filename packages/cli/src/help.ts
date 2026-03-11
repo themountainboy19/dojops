@@ -1013,6 +1013,23 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
+    case "completion":
+      console.log(`\n${pc.bold("dojops completion")} — Generate shell completion scripts`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops completion <bash|zsh|fish>`);
+      console.log(`  ${pc.dim("$")} dojops completion install [bash|zsh|fish]`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("bash")}       Print bash completion script to stdout`);
+      console.log(`  ${pc.cyan("zsh")}        Print zsh completion script to stdout`);
+      console.log(`  ${pc.cyan("fish")}       Print fish completion script to stdout`);
+      console.log(`  ${pc.cyan("install")}    Auto-detect shell and install completions`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(`  ${pc.dim("$")} dojops completion install`);
+      console.log(`  ${pc.dim("$")} dojops completion bash > ~/.bash_completion.d/dojops`);
+      console.log(`  ${pc.dim("$")} dojops completion zsh > ~/.zsh/completions/_dojops`);
+      console.log();
+      break;
+
     default:
       printHelp();
   }

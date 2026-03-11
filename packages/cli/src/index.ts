@@ -290,6 +290,7 @@ const NESTED_COMMAND_PARENTS = new Set([
   "toolchain",
   "inspect",
   "scan",
+  "completion",
 ]);
 
 /** Route the resolved command or fall back to generate. */
