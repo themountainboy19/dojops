@@ -6,7 +6,7 @@ export function cliApprovalHandler(): CallbackApprovalHandler {
   return new CallbackApprovalHandler(async (request: ApprovalRequest) => {
     const body = [
       `${pc.bold("Task:")}    ${request.taskId}`,
-      `${pc.bold("Tool:")}    ${request.toolName}`,
+      `${pc.bold("Module:")}  ${request.toolName}`,
       `${pc.bold("Summary:")} ${request.preview.summary}`,
       ...(request.preview.filesCreated.length > 0
         ? [`${pc.bold("Creates:")} ${request.preview.filesCreated.join(", ")}`]

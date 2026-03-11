@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createToolRegistry } from "@dojops/module-registry";
+import { createModuleRegistry } from "@dojops/module-registry";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -31,7 +31,7 @@ function validateTask(
 ): string[] {
   const errors: string[] = [];
   if (!task.id) errors.push("Missing task ID");
-  if (!task.tool) errors.push("Missing tool name");
+  if (!task.tool) errors.push("Missing module name");
   if (!task.description) errors.push("Missing description");
   for (const dep of task.dependsOn) {
     if (!taskIds.has(dep)) errors.push(`Dependency "${dep}" not found in plan`);
@@ -42,7 +42,7 @@ function validateTask(
 /** Warn about modules not found in the registry. */
 function warnUnknownTools(
   tasks: Array<{ tool: string }>,
-  registry: ReturnType<typeof createToolRegistry>,
+  registry: ReturnType<typeof createModuleRegistry>,
 ): void {
   const unknownTools = tasks.filter((t) => t.tool && !registry.has(t.tool)).map((t) => t.tool);
   if (unknownTools.length === 0) return;
@@ -60,7 +60,7 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const plan = resolvePlan(root, args);
-  const registry = createToolRegistry(ctx.getProvider(), root);
+  const registry = createModuleRegistry(ctx.getProvider(), root);
   warnUnknownTools(plan.tasks, registry);
 
   if (ctx.globalOpts.output === "json") {

@@ -64,7 +64,7 @@ async function selectModuleScope(
 }
 
 /**
- * Converts a hyphenated tool name to title case (e.g., "redis-config" → "Redis Config").
+ * Converts a hyphenated module name to title case (e.g., "redis-config" → "Redis Config").
  */
 function titleCase(name: string): string {
   return name
@@ -115,7 +115,7 @@ function throwHubError(err: unknown): never {
 }
 
 /**
- * `dojops tools list` — discovers and lists user .dops modules.
+ * `dojops modules list` — discovers and lists user .dops modules.
  */
 export const toolsListCommand: CommandHandler = async (_args, ctx) => {
   const projectRoot = findProjectRoot() ?? undefined;
@@ -205,7 +205,7 @@ function findDopsFileByName(toolPath: string): string | null {
 }
 
 /**
- * `dojops tools validate <name-or-path>` — validates a .dops module file.
+ * `dojops modules validate <name-or-path>` — validates a .dops module file.
  */
 export const toolsValidateCommand: CommandHandler = async (args) => {
   const toolPath = args[0];
@@ -272,7 +272,7 @@ function validateDopsFile(filePath: string): void {
 }
 
 /**
- * `dojops tools init <name>` — scaffolds a v2 .dops file in .dojops/modules/
+ * `dojops modules init <name>` — scaffolds a v2 .dops file in .dojops/modules/
  * Uses AI to generate best practices and prompts when a provider is configured.
  */
 type FileFormatType = "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
@@ -713,12 +713,12 @@ function resolveDopsPath(target: string): string {
 }
 
 /**
- * `dojops tools publish [path]` — publishes a .dops file to the DojOps Hub.
+ * `dojops modules publish [path]` — publishes a .dops file to the DojOps Hub.
  *
  * Usage:
- *   dojops tools publish <file.dops>           # publish a specific file
- *   dojops tools publish <file.dops> --changelog "Initial release"
- *   dojops tools publish <name>                 # find by name in .dojops/tools/
+ *   dojops modules publish <file.dops>           # publish a specific file
+ *   dojops modules publish <file.dops> --changelog "Initial release"
+ *   dojops modules publish <name>                 # find by name in .dojops/tools/
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  *      DOJOPS_HUB_TOKEN (auth token — obtained from hub session)
@@ -867,12 +867,12 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
 };
 
 /**
- * `dojops tools install <name>` — downloads a .dops tool from the DojOps Hub.
+ * `dojops modules install <name>` — downloads a .dops module from the DojOps Hub.
  *
  * Usage:
- *   dojops tools install <name>                  # install latest version
- *   dojops tools install <name> --version 1.0.0  # install specific version
- *   dojops tools install <name> --global         # install to ~/.dojops/tools/
+ *   dojops modules install <name>                  # install latest version
+ *   dojops modules install <name> --version 1.0.0  # install specific version
+ *   dojops modules install <name> --global         # install to ~/.dojops/tools/
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
@@ -1096,12 +1096,12 @@ function displaySearchResults(packages: SearchPackage[], query: string, isJson: 
 }
 
 /**
- * `dojops tools search <query>` — searches the DojOps Hub for tools.
+ * `dojops modules search <query>` — searches the DojOps Hub for modules.
  *
  * Usage:
- *   dojops tools search docker           # search for docker-related tools
- *   dojops tools search terraform --limit 5
- *   dojops tools search k8s --output json
+ *   dojops modules search docker           # search for docker-related modules
+ *   dojops modules search terraform --limit 5
+ *   dojops modules search k8s --output json
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */

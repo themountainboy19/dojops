@@ -116,14 +116,20 @@ registerSubcommand("modules", "install", toolsInstallCommand);
 registerSubcommand("modules", "search", toolsSearchCommand);
 registerSubcommand("modules", "dev", toolsDevCommand);
 
-// Backward compat: "tools" alias → modules
-registerSubcommand("tools", "list", toolsListCommand);
-registerSubcommand("tools", "init", toolsInitCommand);
-registerSubcommand("tools", "validate", toolsValidateCommand);
-registerSubcommand("tools", "publish", toolsPublishCommand);
-registerSubcommand("tools", "install", toolsInstallCommand);
-registerSubcommand("tools", "search", toolsSearchCommand);
-registerSubcommand("tools", "dev", toolsDevCommand);
+// Backward compat: "tools" alias → modules (with deprecation warning)
+function withToolsDeprecation(handler: typeof toolsListCommand): typeof toolsListCommand {
+  return async (args, ctx) => {
+    console.warn(pc.yellow('⚠ "dojops tools" is deprecated. Use "dojops modules" instead.'));
+    return handler(args, ctx);
+  };
+}
+registerSubcommand("tools", "list", withToolsDeprecation(toolsListCommand));
+registerSubcommand("tools", "init", withToolsDeprecation(toolsInitCommand));
+registerSubcommand("tools", "validate", withToolsDeprecation(toolsValidateCommand));
+registerSubcommand("tools", "publish", withToolsDeprecation(toolsPublishCommand));
+registerSubcommand("tools", "install", withToolsDeprecation(toolsInstallCommand));
+registerSubcommand("tools", "search", withToolsDeprecation(toolsSearchCommand));
+registerSubcommand("tools", "dev", withToolsDeprecation(toolsDevCommand));
 
 // Nested: toolchain <sub> (system binaries)
 registerSubcommand("toolchain", "list", toolchainListCommand);

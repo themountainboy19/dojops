@@ -1,4 +1,4 @@
-import { ToolRegistry } from "@dojops/module-registry";
+import { ModuleRegistry } from "@dojops/module-registry";
 import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {
@@ -48,15 +48,15 @@ function checkContextMismatches(
   }
 }
 
-/** Check custom tool system prompt hashes for mismatches. */
+/** Check custom module system prompt hashes for mismatches. */
 function checkToolPromptHashes(
   tasks: PlanState["tasks"],
-  registry: ToolRegistry,
+  registry: ModuleRegistry,
   mismatches: ReplayMismatch[],
 ): void {
   for (const task of tasks) {
     if (task.toolType !== "custom" || !task.systemPromptHash) continue;
-    const metadata = registry.getToolMetadata(task.tool);
+    const metadata = registry.getModuleMetadata(task.tool);
     if (metadata?.toolType !== "custom" || !metadata.systemPromptHash) continue;
     if (task.systemPromptHash !== metadata.systemPromptHash) {
       mismatches.push({
@@ -73,7 +73,7 @@ export function validateReplayIntegrity(
   plan: PlanState,
   currentProvider: string,
   currentModel: string | undefined,
-  registry: ToolRegistry,
+  registry: ModuleRegistry,
 ): ReplayValidationResult {
   const mismatches: ReplayMismatch[] = [];
 
@@ -89,8 +89,8 @@ export function validateReplayIntegrity(
 }
 
 /**
- * Checks tool integrity for resume operations.
- * Verifies that tools referenced by tasks still exist.
+ * Checks module integrity for resume operations.
+ * Verifies that modules referenced by tasks still exist.
  */
 export function checkToolIntegrity(
   planTasks: PlanState["tasks"],
