@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-03-11
+
+### Added
+
+- **Shell Auto-Completion**: Tab completion for Bash, Zsh, and Fish shells. Covers all 31 commands, subcommands, global/command-specific flags, and dynamic value completions for `--provider`, `--agent`, and `--module`/`--tool` flags
+  - `dojops completion bash|zsh|fish` — print completion script to stdout
+  - `dojops completion install [shell]` — auto-detect shell and install to standard location
+  - Hidden `--get-completions <type>` flag for dynamic provider/agent/module lookups at tab-completion time
+  - 3-level nesting support (`config profile create|use|delete|list`)
+  - Command-specific flag completions for `plan`, `apply`, `scan`, `serve`, `chat`, `auto`
+  - 2-second timeout on dynamic completions to prevent shell hang
+
 ## [2.0.0] - 2026-03-11
 
 ### Breaking Changes
