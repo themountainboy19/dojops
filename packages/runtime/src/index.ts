@@ -1,4 +1,4 @@
-// Spec types (v1)
+// Spec types (v1 — kept temporarily for parser.ts compatibility, will be removed in Task 3)
 export {
   DopsModule,
   DopsFrontmatter,
@@ -64,9 +64,6 @@ export {
   JSONSchemaObject,
 } from "./schema-compiler";
 
-// Prompt compiler (v1)
-export { compilePrompt, PromptContext } from "./prompt-compiler";
-
 // Prompt compiler (v2)
 export { compilePromptV2, PromptContextV2 } from "./prompt-compiler";
 
@@ -103,14 +100,12 @@ export { runReviewTool, runReviewTools } from "./review-tool-runner";
 // Parsers
 export { getParser, getAvailableParsers, SeverityMapping } from "./parsers/index";
 
-// Runtime v1 (core class)
-export { DopsRuntime, DopsRuntimeOptions, ToolMetadata } from "./runtime";
-
 // Runtime v2
 export {
   DopsRuntimeV2,
   DopsRuntimeV2Options,
   DocProvider,
+  ToolMetadata,
   stripCodeFences,
   parseRawContent,
   parseMultiFileOutput,

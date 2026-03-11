@@ -4,13 +4,6 @@ import * as fs from "node:fs";
 // Mock dependencies before imports
 vi.mock("fs");
 vi.mock("@dojops/runtime", () => {
-  const DopsRuntime = vi.fn().mockImplementation(function (
-    this: Record<string, unknown>,
-    module: { frontmatter?: { meta?: { name?: string } } },
-  ) {
-    this.name = module?.frontmatter?.meta?.name ?? "mock-runtime";
-    this.generate = vi.fn();
-  });
   const DopsRuntimeV2 = vi.fn().mockImplementation(function (
     this: Record<string, unknown>,
     module: { frontmatter?: { meta?: { name?: string } } },
@@ -19,13 +12,12 @@ vi.mock("@dojops/runtime", () => {
     this.generate = vi.fn();
   });
   return {
-    DopsRuntime,
     DopsRuntimeV2,
     parseDopsFile: vi.fn(),
     parseDopsFileAny: vi.fn(),
     validateDopsModule: vi.fn(),
     validateDopsModuleAny: vi.fn(),
-    isV2Module: vi.fn().mockReturnValue(false),
+    isV2Module: vi.fn().mockReturnValue(true),
     DocProvider: undefined,
   };
 });
@@ -53,10 +45,12 @@ const mockProvider: LLMProvider = {
 
 const defaultParsedModule = {
   frontmatter: {
-    dops: "v1",
+    dopsVersion: 2,
     meta: { name: "test-tool", version: "1.0.0", description: "Test" },
+    context: { technology: "test", fileFormat: "yaml", outputGuidance: "", bestPractices: [] },
   },
-  prompt: "test prompt",
+  sections: { prompt: "test prompt", keywords: "test" },
+  raw: "test",
 };
 
 function resetParseMock() {
@@ -144,10 +138,12 @@ describe("loadUserDopsModules", () => {
     vi.mocked(discoverUserDopsFiles).mockReturnValue([entry]);
     vi.mocked(parseDopsFileAny).mockReturnValue({
       frontmatter: {
-        dops: "v1",
+        dopsVersion: 2,
         meta: { name: "my-tool", version: "1.0.0", description: "Test" },
+        context: { technology: "test", fileFormat: "yaml", outputGuidance: "", bestPractices: [] },
       },
-      prompt: "test",
+      sections: { prompt: "test", keywords: "test" },
+      raw: "test",
     } as ReturnType<typeof parseDopsFileAny>);
     vi.mocked(validateDopsModuleAny).mockReturnValue({ valid: true });
 
@@ -161,10 +157,12 @@ describe("loadUserDopsModules", () => {
     vi.mocked(discoverUserDopsFiles).mockReturnValue([entry]);
     vi.mocked(parseDopsFileAny).mockReturnValue({
       frontmatter: {
-        dops: "v1",
+        dopsVersion: 2,
         meta: { name: "bad", version: "1.0.0", description: "Bad" },
+        context: { technology: "test", fileFormat: "yaml", outputGuidance: "", bestPractices: [] },
       },
-      prompt: "test",
+      sections: { prompt: "test", keywords: "test" },
+      raw: "test",
     } as ReturnType<typeof parseDopsFileAny>);
     vi.mocked(validateDopsModuleAny).mockReturnValue({
       valid: false,

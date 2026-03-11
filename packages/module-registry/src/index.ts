@@ -1,7 +1,6 @@
 import { LLMProvider } from "@dojops/core";
 import { DevOpsTool } from "@dojops/sdk";
 import {
-  DopsRuntime,
   DopsRuntimeV2,
   parseDopsFileAny,
   validateDopsModuleAny,
@@ -43,7 +42,7 @@ export interface CreateToolRegistryOptions {
 
 /**
  * Load built-in .dops modules from @dojops/runtime/modules/.
- * Returns DevOpsTool instances (DopsRuntime for v1, DopsRuntimeV2 for v2) for each valid module.
+ * Returns DopsRuntimeV2 instances for each valid v2 module.
  */
 export function loadBuiltInDopsModules(
   provider: LLMProvider,
@@ -61,23 +60,15 @@ export function loadBuiltInDopsModules(
       try {
         const module = parseDopsFileAny(path.join(modulesDir, file));
         const validation = validateDopsModuleAny(module);
-        if (validation.valid) {
-          if (isV2Module(module)) {
-            tools.push(
-              new DopsRuntimeV2(module, provider, {
-                docAugmenter: options?.docAugmenter,
-                context7Provider: options?.context7Provider,
-                projectContext: options?.projectContext,
-                onBinaryMissing: options?.onBinaryMissing,
-              }),
-            );
-          } else {
-            tools.push(
-              new DopsRuntime(module, provider, {
-                docAugmenter: options?.docAugmenter,
-              }),
-            );
-          }
+        if (validation.valid && isV2Module(module)) {
+          tools.push(
+            new DopsRuntimeV2(module, provider, {
+              docAugmenter: options?.docAugmenter,
+              context7Provider: options?.context7Provider,
+              projectContext: options?.projectContext,
+              onBinaryMissing: options?.onBinaryMissing,
+            }),
+          );
         }
       } catch {
         // Skip invalid modules silently
@@ -92,7 +83,7 @@ export function loadBuiltInDopsModules(
 
 /**
  * Load user .dops files from global/project directories.
- * Supports both v1 and v2 .dops formats.
+ * Only v2 .dops modules are supported.
  */
 export function loadUserDopsModules(
   provider: LLMProvider,
@@ -107,26 +98,20 @@ export function loadUserDopsModules(
     try {
       const module = parseDopsFileAny(entry.filePath);
       const validation = validateDopsModuleAny(module);
-      if (validation.valid) {
-        if (isV2Module(module)) {
-          tools.push(
-            new DopsRuntimeV2(module, provider, {
-              docAugmenter: options?.docAugmenter,
-              context7Provider: options?.context7Provider,
-              projectContext: options?.projectContext,
-            }),
-          );
-        } else {
-          tools.push(
-            new DopsRuntime(module, provider, {
-              docAugmenter: options?.docAugmenter,
-            }),
-          );
-        }
-      } else {
+      if (validation.valid && isV2Module(module)) {
+        tools.push(
+          new DopsRuntimeV2(module, provider, {
+            docAugmenter: options?.docAugmenter,
+            context7Provider: options?.context7Provider,
+            projectContext: options?.projectContext,
+          }),
+        );
+      } else if (!validation.valid) {
         warnings.push(
           `Invalid .dops file ${entry.filePath}: ${(validation.errors ?? []).join(", ")}`,
         );
+      } else {
+        warnings.push(`Skipping v1 .dops file ${entry.filePath}: only v2 modules are supported`);
       }
     } catch (err) {
       warnings.push(
