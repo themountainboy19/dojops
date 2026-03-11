@@ -357,11 +357,11 @@ All three sites use Tailwind v4 with CSS-first configuration. Design tokens must
   --radius-lg: 14px;
   --radius-xl: 20px;
 
-  /* Shadows — reference the CSS variables */
-  --shadow-sm: var(--shadow-sm);
-  --shadow-md: var(--shadow-md);
-  --shadow-lg: var(--shadow-lg);
-  --shadow-xl: var(--shadow-xl);
+  /* Shadows — use Tailwind's built-in shadow scale.
+     Custom shadow tokens from Section 1.5 live in :root / .dark
+     and are used via shadow-[var(--shadow-sm)] when needed.
+     Do NOT re-declare them here — @theme resolves at build time
+     and cannot forward-reference runtime CSS variables. */
 
   /* Fonts */
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
@@ -431,8 +431,9 @@ Each site is a separate repo with its own `globals.css`, so migrations are indep
 - All text meets WCAG 2.1 AA contrast (4.5:1 body, 3:1 large text)
 - `--text-primary` (#111827) on `--bg-primary` (#FAFBFC): 17.5:1 (passes AAA)
 - `--text-secondary` (#4B5563) on `--bg-primary` (#FAFBFC): 6.0:1 (passes AA)
-- `--accent` (#0EA5E9) on white: 2.6:1 — approved for UI components (WCAG 1.4.11, 3:1) and large text/icons only. Not for body text
+- `--accent` (#0EA5E9) on white: 2.6:1 — approved for filled buttons (solid bg provides context), icons, and decorative elements only. Does not meet 3:1 for UI component boundaries; use `--accent-hover` (#0284C7) for borders where 3:1 is required. Not for body text
 - `--accent-text` (#0369A1) on white: 4.6:1 — use for all accent-colored text (links, active labels)
+- `--accent-text` dark (#7DD3FC) on `--bg-primary` dark (#0F1117): 9.6:1 (passes AAA)
 - `--text-tertiary` (#9CA3AF): 2.6:1 on white — approved only when a visible label is present (WCAG SC 1.4.3 exempts disabled states; placeholder text requires an associated label)
 - Focus states: `outline: 2px solid var(--accent); outline-offset: 2px` via `:focus-visible` on all interactive elements (see Section 8)
 - `prefers-reduced-motion`: all animations disabled
