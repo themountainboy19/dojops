@@ -470,9 +470,7 @@ describe("ALLOWED_VERIFICATION_BINARIES whitelist sync", () => {
     expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(expected.length);
   });
 
-  it("has exactly 33 binaries (must stay in sync with custom-tool.ts)", () => {
-    // If this count changes, update ALLOWED_VERIFICATION_BINARIES in
-    // packages/tool-registry/src/custom-tool.ts to match.
+  it("has exactly 33 binaries", () => {
     expect(ALLOWED_VERIFICATION_BINARIES.size).toBe(33);
   });
 });

@@ -5,10 +5,9 @@ import * as crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { z } from "zod";
-import { discoverTools, discoverUserDopsFiles, validateManifest } from "@dojops/module-registry";
+import { discoverUserDopsFiles } from "@dojops/module-registry";
 import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
 import { parseAndValidate } from "@dojops/core";
-import * as yaml from "js-yaml";
 import { CommandHandler, CLIContext } from "../types";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
 import { extractFlagValue, hasFlag } from "../parser";
@@ -116,13 +115,10 @@ function throwHubError(err: unknown): never {
 }
 
 /**
- * `dojops tools list` — discovers and lists custom tools (manifest-based + .dops files).
+ * `dojops tools list` — discovers and lists user .dops modules.
  */
 export const toolsListCommand: CommandHandler = async (_args, ctx) => {
   const projectRoot = findProjectRoot() ?? undefined;
-
-  // Discover legacy tools (tool.yaml manifests)
-  const legacyTools = discoverTools(projectRoot);
 
   // Discover .dops files
   const dopsFiles = discoverUserDopsFiles(projectRoot);
@@ -132,7 +128,6 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
     description: string;
     location: string;
     filePath: string;
-    format: "dops";
   }> = [];
 
   for (const entry of dopsFiles) {
@@ -144,73 +139,48 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
         description: module.frontmatter.meta.description,
         location: entry.location,
         filePath: entry.filePath,
-        format: "dops",
       });
     } catch {
       // Skip invalid .dops files in list
     }
   }
 
-  const totalCount = legacyTools.length + dopsEntries.length;
-
-  if (totalCount === 0) {
+  if (dopsEntries.length === 0) {
     if (ctx.globalOpts.output === "json") {
       console.log("[]");
       return;
     }
     p.log.info("No custom modules discovered.");
-    p.log.info(pc.dim("Place modules in ~/.dojops/modules/<name>/ or .dojops/modules/<name>.dops"));
+    p.log.info(pc.dim("Place modules in ~/.dojops/modules/ or .dojops/modules/<name>.dops"));
     return;
   }
 
   if (ctx.globalOpts.output === "json") {
-    const data = [
-      ...legacyTools.map((t) => ({
-        name: t.manifest.name,
-        version: t.manifest.version,
-        description: t.manifest.description,
-        location: t.source.location,
-        path: t.toolDir,
-        tags: t.manifest.tags ?? [],
-        hash: t.source.toolHash,
-        format: "legacy" as const,
-      })),
-      ...dopsEntries.map((d) => ({
-        name: d.name,
-        version: d.version,
-        description: d.description,
-        location: d.location,
-        path: d.filePath,
-        tags: [],
-        hash: "",
-        format: d.format,
-      })),
-    ];
+    const data = dopsEntries.map((d) => ({
+      name: d.name,
+      version: d.version,
+      description: d.description,
+      location: d.location,
+      path: d.filePath,
+      tags: [],
+      hash: "",
+      format: "dops",
+    }));
     console.log(JSON.stringify(data, null, 2));
     return;
   }
 
   const lines: string[] = [];
 
-  for (const t of legacyTools) {
-    const loc = t.source.location === "project" ? pc.green("project") : pc.blue("global");
-    const fmt = pc.dim("legacy");
-    const legacyVersion = pc.dim(`v${t.manifest.version}`);
-    lines.push(
-      `  ${pc.cyan(t.manifest.name.padEnd(20))} ${legacyVersion.padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(t.manifest.description)}`,
-    );
-  }
-
   for (const d of dopsEntries) {
     const loc = d.location === "project" ? pc.green("project") : pc.blue("global");
-    const fmt = pc.yellow("dops");
     const dopsVersion = pc.dim(`v${d.version}`);
     lines.push(
-      `  ${pc.cyan(d.name.padEnd(20))} ${dopsVersion.padEnd(20)} ${fmt.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(d.description)}`,
+      `  ${pc.cyan(d.name.padEnd(20))} ${dopsVersion.padEnd(20)} ${loc.padEnd(20)} ${pc.dim(d.description)}`,
     );
   }
 
-  p.note(lines.join("\n"), `Modules (${totalCount})`);
+  p.note(lines.join("\n"), `Modules (${dopsEntries.length})`);
 };
 
 /** Returns the home directory for global .dojops lookups. */
@@ -234,75 +204,8 @@ function findDopsFileByName(toolPath: string): string | null {
   return null;
 }
 
-/** Check if a directory contains a tool.yaml or plugin.yaml. */
-function hasManifest(dir: string): boolean {
-  return fs.existsSync(path.join(dir, "tool.yaml")) || fs.existsSync(path.join(dir, "plugin.yaml"));
-}
-
-/** Resolve legacy tool directory by name from standard locations. */
-function resolveLegacyToolDir(toolPath: string): string {
-  const projectRoot = findProjectRoot();
-  const projectToolDir = projectRoot
-    ? path.join(projectRoot, ".dojops", "tools", toolPath)
-    : path.resolve(".dojops", "tools", toolPath);
-  const globalToolDir = path.join(getHomeDir(), ".dojops", "tools", toolPath);
-
-  if (hasManifest(projectToolDir)) return projectToolDir;
-  if (hasManifest(globalToolDir)) return globalToolDir;
-
-  const projectPluginDir = projectRoot
-    ? path.join(projectRoot, ".dojops", "plugins", toolPath)
-    : path.resolve(".dojops", "plugins", toolPath);
-  const globalPluginDir = path.join(getHomeDir(), ".dojops", "plugins", toolPath);
-
-  if (hasManifest(projectPluginDir)) return projectPluginDir;
-  if (hasManifest(globalPluginDir)) return globalPluginDir;
-
-  return projectToolDir;
-}
-
-/** Validate a legacy tool.yaml manifest at the given directory. */
-function validateLegacyManifest(resolvedDir: string, toolPath: string): void {
-  let manifestPath = path.join(resolvedDir, "tool.yaml");
-  if (!fs.existsSync(manifestPath)) {
-    manifestPath = path.join(resolvedDir, "plugin.yaml");
-  }
-  if (!fs.existsSync(manifestPath)) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `No tool.yaml or .dops file found for "${toolPath}"`,
-    );
-  }
-
-  try {
-    const content = fs.readFileSync(manifestPath, "utf-8");
-    const data = yaml.load(content);
-    const result = validateManifest(data);
-
-    if (result.valid) {
-      p.log.success(
-        `Module manifest is valid: ${result.manifest!.name} v${result.manifest!.version}`,
-      );
-      const inputSchemaPath = path.join(resolvedDir, result.manifest!.inputSchema);
-      if (fs.existsSync(inputSchemaPath)) {
-        p.log.success("Input schema file exists.");
-      } else {
-        p.log.warn(`Input schema file not found: ${inputSchemaPath}`);
-      }
-    } else {
-      throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid module manifest: ${result.error}`);
-    }
-  } catch (err) {
-    if (err instanceof CLIError) throw err;
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Failed to parse module manifest: ${toErrorMessage(err)}`,
-    );
-  }
-}
-
 /**
- * `dojops tools validate <name-or-path>` — validates a tool manifest or .dops file.
+ * `dojops tools validate <name-or-path>` — validates a .dops module file.
  */
 export const toolsValidateCommand: CommandHandler = async (args) => {
   const toolPath = args[0];
@@ -323,12 +226,10 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
     if (found) return validateDopsFile(found);
   }
 
-  // Fall back to legacy tool.yaml validation
-  const isPlainName =
-    !toolPath.includes("/") && !toolPath.includes("\\") && !toolPath.includes(".");
-  const resolvedDir = isPlainName ? resolveLegacyToolDir(toolPath) : path.resolve(toolPath);
-
-  validateLegacyManifest(resolvedDir, toolPath);
+  throw new CLIError(
+    ExitCode.VALIDATION_ERROR,
+    `No .dops file found for "${toolPath}". Provide a path to a .dops file or a module name.`,
+  );
 };
 
 function validateDopsFile(filePath: string): void {
@@ -373,7 +274,6 @@ function validateDopsFile(filePath: string): void {
 /**
  * `dojops tools init <name>` — scaffolds a v2 .dops file in .dojops/modules/
  * Uses AI to generate best practices and prompts when a provider is configured.
- * Falls back to legacy tool.yaml + input.schema.json with --legacy flag.
  */
 type FileFormatType = "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
 
@@ -532,10 +432,9 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   let outputFilePath = "";
   let useLLM = false;
   const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
-  const isLegacy = args.includes("--legacy");
 
   if (!toolName && !isNonInteractive) {
-    const result = await runInitWizard(ctx, isLegacy);
+    const result = await runInitWizard(ctx, false);
     if (!result) return;
     toolName = result.toolName;
     description = result.description;
@@ -570,19 +469,6 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   description = defaults.description;
   technology = defaults.technology;
   outputFilePath = defaults.outputFilePath;
-
-  if (isLegacy) {
-    const legacyPrompt = `You are a ${toolName} configuration expert. Generate valid configuration based on the user's requirements. Respond with valid JSON only.`;
-    const legacyFilePath = `{outputPath}/${outputFilePath}`;
-    return scaffoldLegacyTool(
-      toolName,
-      description,
-      fileFormat === "ini" || fileFormat === "toml" ? "raw" : fileFormat,
-      legacyPrompt,
-      legacyFilePath,
-      baseDir,
-    );
-  }
 
   return scaffoldV2Module(
     ctx,
@@ -796,124 +682,6 @@ function indent(text: string, spaces: number): string {
     .map((line) => pad + line)
     .join("\n");
 }
-
-function scaffoldLegacyTool(
-  toolName: string,
-  description: string,
-  format: string,
-  systemPrompt: string,
-  filePath: string,
-  baseDir?: string,
-): void {
-  const toolDir = path.join(baseDir ?? path.resolve(".dojops", "modules"), toolName);
-  if (fs.existsSync(toolDir)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Module directory already exists: ${toolDir}`);
-  }
-
-  fs.mkdirSync(toolDir, { recursive: true });
-
-  const manifest = {
-    spec: 1,
-    name: toolName,
-    version: "0.1.0",
-    type: "tool",
-    description,
-    inputSchema: "input.schema.json",
-    tags: [],
-    generator: {
-      strategy: "llm",
-      systemPrompt,
-      updateMode: true,
-    },
-    files: [{ path: filePath, serializer: format }],
-    detector: { path: filePath },
-  };
-
-  const inputSchema = {
-    type: "object",
-    properties: {
-      outputPath: { type: "string", description: "Directory to write the configuration file" },
-      description: { type: "string", description: "What the configuration should do" },
-    },
-    required: ["outputPath", "description"],
-  };
-
-  fs.writeFileSync(
-    path.join(toolDir, "tool.yaml"),
-    yaml.dump(manifest, { lineWidth: 120, noRefs: true }),
-    "utf-8",
-  );
-
-  fs.writeFileSync(
-    path.join(toolDir, "input.schema.json"),
-    JSON.stringify(inputSchema, null, 2) + "\n",
-    "utf-8",
-  );
-
-  p.log.success(`Module scaffolded at ${pc.underline(toolDir)}`);
-  p.log.info(
-    `  ${pc.dim("Edit")} tool.yaml ${pc.dim("and")} input.schema.json ${pc.dim("to customize.")}`,
-  );
-}
-
-/**
- * `dojops tools load <path>` — loads a tool from a local directory into .dojops/tools/
- */
-export const toolsLoadCommand: CommandHandler = async (args, ctx) => {
-  const sourcePath = args[0];
-  if (!sourcePath) {
-    p.log.info(`  ${pc.dim("$")} dojops modules load <path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module directory path required.");
-  }
-
-  const resolvedSource = path.resolve(sourcePath);
-  if (!fs.existsSync(resolvedSource)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Directory not found: ${resolvedSource}`);
-  }
-
-  // Find manifest file (tool.yaml or plugin.yaml fallback)
-  let manifestPath = path.join(resolvedSource, "tool.yaml");
-  if (!fs.existsSync(manifestPath)) {
-    manifestPath = path.join(resolvedSource, "plugin.yaml");
-  }
-  if (!fs.existsSync(manifestPath)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `No tool.yaml found in ${resolvedSource}`);
-  }
-
-  // Validate the manifest
-  const content = fs.readFileSync(manifestPath, "utf-8");
-  const data = yaml.load(content);
-  const result = validateManifest(data);
-
-  if (!result.valid) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid module manifest: ${result.error}`);
-  }
-
-  const toolName = result.manifest!.name;
-
-  // Check input schema exists
-  const inputSchemaPath = path.join(resolvedSource, result.manifest!.inputSchema);
-  if (!fs.existsSync(inputSchemaPath)) {
-    throw new CLIError(
-      ExitCode.VALIDATION_ERROR,
-      `Input schema file not found: ${result.manifest!.inputSchema}`,
-    );
-  }
-
-  // Select scope (global or project)
-  const { baseDir } = await selectModuleScope(ctx.globalOpts.nonInteractive);
-  const destDir = path.join(baseDir, toolName);
-  if (fs.existsSync(destDir)) {
-    p.log.warn(`Module "${toolName}" already exists at ${destDir}. Overwriting.`);
-    fs.rmSync(destDir, { recursive: true, force: true });
-  }
-
-  fs.cpSync(resolvedSource, destDir, { recursive: true });
-
-  p.log.success(
-    `Module "${toolName}" v${result.manifest!.version} loaded to ${pc.underline(destDir)}`,
-  );
-};
 
 function resolveDopsPath(target: string): string {
   const resolved = path.resolve(target);

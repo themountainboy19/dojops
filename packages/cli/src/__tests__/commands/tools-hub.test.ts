@@ -39,9 +39,7 @@ vi.mock("@dojops/runtime", () => ({
 
 // Mock @dojops/module-registry
 vi.mock("@dojops/module-registry", () => ({
-  discoverTools: vi.fn(() => []),
   discoverUserDopsFiles: vi.fn(() => []),
-  validateManifest: vi.fn(),
 }));
 
 // Mock the state module

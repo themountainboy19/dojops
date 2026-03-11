@@ -226,7 +226,7 @@ export async function serveCommand(args: string[], ctx: CLIContext): Promise<voi
     diffAnalyzer,
     store,
     rootDir: projectRoot,
-    customToolCount: registry.getCustomTools().length,
+    customToolCount: 0,
     customAgentNames,
     corsOrigin: `${tlsOptions ? "https" : "http"}://localhost:${port}`,
     apiKey: serverApiKey ?? undefined,

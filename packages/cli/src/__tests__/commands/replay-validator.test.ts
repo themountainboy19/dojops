@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { validateReplayIntegrity, checkToolIntegrity } from "../../commands/replay-validator";
 import { PlanState } from "../../state";
-import { ToolRegistry } from "@dojops/module-registry";
+import type { ToolRegistry } from "@dojops/module-registry";
 
 function createPlanState(overrides?: Partial<PlanState>): PlanState {
   return {
@@ -29,7 +29,6 @@ function createMockRegistry(
     get: vi.fn(),
     has: vi.fn(),
     getBuiltIn: vi.fn(() => []),
-    getCustomTools: vi.fn(() => []),
     size: 0,
   } as unknown as ToolRegistry;
   return registry;

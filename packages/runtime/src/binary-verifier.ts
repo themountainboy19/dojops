@@ -8,7 +8,7 @@ import { BinaryVerificationConfig, VerificationConfig } from "./spec";
 import { getParser, SeverityMapping } from "./parsers/index";
 
 /**
- * Allowed verification binaries — same whitelist as custom-tool.ts in tool-registry.
+ * Allowed verification binaries for .dops module binary verification.
  */
 export const ALLOWED_VERIFICATION_BINARIES = new Set([
   "terraform",

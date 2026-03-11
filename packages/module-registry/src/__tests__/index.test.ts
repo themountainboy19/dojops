@@ -19,8 +19,7 @@ vi.mock("@dojops/runtime", () => {
   };
 });
 
-vi.mock("../tool-loader", () => ({
-  discoverTools: vi.fn().mockReturnValue([]),
+vi.mock("../dops-loader", () => ({
   discoverUserDopsFiles: vi.fn().mockReturnValue([]),
 }));
 
@@ -31,9 +30,9 @@ vi.mock("../policy", () => ({
 
 import { loadBuiltInDopsModules, loadUserDopsModules, createToolRegistry } from "../index";
 import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
-import { discoverTools, discoverUserDopsFiles } from "../tool-loader";
+import { discoverUserDopsFiles } from "../dops-loader";
 import type { LLMProvider } from "@dojops/core";
-import type { DopsFileEntry } from "../tool-loader";
+import type { DopsFileEntry } from "../dops-loader";
 
 const mockProvider: LLMProvider = {
   name: "mock",
@@ -191,7 +190,6 @@ describe("createToolRegistry", () => {
 
   it("creates a registry with no tools", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
-    vi.mocked(discoverTools).mockReturnValue([]);
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
     const registry = createToolRegistry(mockProvider);
@@ -199,13 +197,12 @@ describe("createToolRegistry", () => {
     expect(registry.size).toBe(0);
   });
 
-  it("creates a registry with built-in and custom tools", () => {
+  it("creates a registry with built-in modules", () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.readdirSync).mockReturnValue(["tool.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
     vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
-    vi.mocked(discoverTools).mockReturnValue([]);
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
     const registry = createToolRegistry(mockProvider);

@@ -1,5 +1,4 @@
 import { DevOpsTool } from "@dojops/sdk";
-import { CustomTool } from "./custom-tool";
 
 /**
  * Interface for DopsRuntime metadata access.
@@ -26,34 +25,23 @@ function isDopsRuntime(tool: DevOpsTool): tool is DopsRuntimeLike {
 }
 
 /**
- * Central registry combining built-in and custom tools.
+ * Central registry combining built-in and user .dops modules.
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
 export class ToolRegistry {
   private readonly toolMap: Map<string, DevOpsTool>;
   private readonly builtIn: DevOpsTool[];
-  private readonly customTools: CustomTool[];
 
-  constructor(builtInTools: DevOpsTool[], customTools: CustomTool[]) {
+  constructor(builtInTools: DevOpsTool[]) {
     this.builtIn = builtInTools;
-    this.customTools = customTools;
     this.toolMap = new Map();
 
-    // Built-in tools first
     for (const tool of builtInTools) {
       this.toolMap.set(tool.name, tool);
     }
-
-    // Custom tools can override built-in tools (project tools win)
-    for (const custom of customTools) {
-      if (this.toolMap.has(custom.name) && this.builtIn.some((b) => b.name === custom.name)) {
-        console.warn(`[tool-registry] Custom tool "${custom.name}" overrides built-in tool`);
-      }
-      this.toolMap.set(custom.name, custom);
-    }
   }
 
-  /** All tools: built-in + custom, deduplicated by name (custom tools override). */
+  /** All tools, deduplicated by name. */
   getAll(): DevOpsTool[] {
     return Array.from(this.toolMap.values());
   }
@@ -73,16 +61,6 @@ export class ToolRegistry {
     return [...this.builtIn];
   }
 
-  /** Get only custom tools. */
-  getCustomTools(): CustomTool[] {
-    return [...this.customTools];
-  }
-
-  /** @deprecated Use getCustomTools() instead */
-  getPlugins(): CustomTool[] {
-    return this.getCustomTools();
-  }
-
   /** Extract tool metadata for a tool by name. */
   getToolMetadata(name: string):
     | {
@@ -99,17 +77,6 @@ export class ToolRegistry {
     // Check if it's a DopsRuntime instance (has metadata property)
     if (isDopsRuntime(tool)) {
       return tool.metadata;
-    }
-
-    const custom = this.customTools.find((t) => t.name === name);
-    if (custom) {
-      return {
-        toolType: "custom",
-        toolVersion: custom.source.toolVersion,
-        toolHash: custom.source.toolHash,
-        toolSource: custom.source.location,
-        systemPromptHash: custom.systemPromptHash,
-      };
     }
 
     return { toolType: "built-in" };

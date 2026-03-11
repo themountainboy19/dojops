@@ -4,18 +4,14 @@ import { DopsRuntimeV2, parseDopsFile, validateDopsModule, DocProvider } from "@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { ToolRegistry } from "./registry";
-import { CustomTool } from "./custom-tool";
-import { discoverTools, discoverUserDopsFiles } from "./tool-loader";
+import { discoverUserDopsFiles } from "./dops-loader";
 import { loadToolPolicy, isToolAllowed } from "./policy";
 
-export * from "./types";
 export * from "./registry";
-export * from "./custom-tool";
-export * from "./tool-loader";
+export * from "./dops-loader";
 export * from "./policy";
 export * from "./json-schema-to-zod";
 export * from "./serializers";
-export * from "./manifest-schema";
 export * from "./agent-parser";
 export * from "./agent-loader";
 export * from "./agent-schema";
@@ -117,7 +113,7 @@ export function loadUserDopsModules(
 
 /**
  * Convenience factory: builds a ToolRegistry with all built-in .dops modules
- * plus any valid, policy-allowed custom tools.
+ * plus any valid, policy-allowed user .dops modules.
  */
 export function createToolRegistry(
   provider: LLMProvider,
@@ -127,33 +123,13 @@ export function createToolRegistry(
   // 1. Built-in .dops modules (sole built-in tool source)
   const builtInTools: DevOpsTool[] = loadBuiltInDopsModules(provider, options);
 
-  // 2. Discover legacy custom tools (tool.yaml manifests)
-  const toolEntries = discoverTools(projectPath);
-
-  // 3. Apply policy filter
+  // 2. Load user .dops files, apply policy filter
   const policy = loadToolPolicy(projectPath);
-  const allowedEntries = toolEntries.filter((entry) => isToolAllowed(entry.manifest.name, policy));
-
-  // 4. Create CustomTool instances from legacy manifests (FB10: pass projectPath for output)
-  const customTools: CustomTool[] = allowedEntries.map(
-    (entry) =>
-      new CustomTool(
-        entry.manifest,
-        provider,
-        entry.toolDir,
-        entry.source,
-        entry.inputSchemaRaw,
-        entry.outputSchemaRaw,
-        projectPath,
-      ),
-  );
-
-  // 5. Load user .dops files (treated as custom tools, can override built-in)
   const { tools: userDopsTools } = loadUserDopsModules(provider, projectPath, options);
   const allowedDops = userDopsTools.filter((rt) => isToolAllowed(rt.name, policy));
 
   // Add user .dops runtimes as built-in tools (they'll override by name in registry)
   builtInTools.push(...allowedDops);
 
-  return new ToolRegistry(builtInTools, customTools);
+  return new ToolRegistry(builtInTools);
 }

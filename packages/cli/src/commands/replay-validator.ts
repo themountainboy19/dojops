@@ -1,4 +1,4 @@
-import { ToolRegistry, CustomTool } from "@dojops/module-registry";
+import { ToolRegistry } from "@dojops/module-registry";
 import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {
@@ -90,7 +90,7 @@ export function validateReplayIntegrity(
 
 /**
  * Checks tool integrity for resume operations.
- * Extracted from apply.ts for independent testability.
+ * Verifies that tools referenced by tasks still exist.
  */
 export function checkToolIntegrity(
   planTasks: PlanState["tasks"],
@@ -104,23 +104,8 @@ export function checkToolIntegrity(
     const currentTool = currentTools.find((t) => t.name === task.tool);
     if (!currentTool) {
       mismatches.push(`Module "${task.tool}" no longer available (was v${task.toolVersion})`);
-      continue;
-    }
-
-    if (currentTool instanceof CustomTool && task.toolHash) {
-      const currentHash = currentTool.source.toolHash;
-      if (currentHash !== task.toolHash) {
-        mismatches.push(
-          `Module "${task.tool}" changed: plan used v${task.toolVersion} (${task.toolHash?.slice(0, 8)}), ` +
-            `current is v${currentTool.source.toolVersion} (${currentHash?.slice(0, 8)})`,
-        );
-      }
     }
   }
 
   return { mismatches, hasMismatches: mismatches.length > 0 };
 }
-
-// Backward compatibility alias
-/** @deprecated Use checkToolIntegrity instead */
-export const checkPluginIntegrity = checkToolIntegrity;

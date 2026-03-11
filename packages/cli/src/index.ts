@@ -45,7 +45,6 @@ import {
   toolsListCommand,
   toolsInitCommand,
   toolsValidateCommand,
-  toolsLoadCommand,
   toolsPublishCommand,
   toolsInstallCommand,
   toolsSearchCommand,
@@ -108,11 +107,10 @@ registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", .
 registerSubcommand("history", "repair", (args, ctx) => historyCommand(["repair", ...args], ctx));
 registerCommand("provider", providerCommand);
 
-// Nested: modules <sub> (manifest-based custom modules, .dops files)
+// Nested: modules <sub> (.dops modules)
 registerSubcommand("modules", "list", toolsListCommand);
 registerSubcommand("modules", "init", toolsInitCommand);
 registerSubcommand("modules", "validate", toolsValidateCommand);
-registerSubcommand("modules", "load", toolsLoadCommand);
 registerSubcommand("modules", "publish", toolsPublishCommand);
 registerSubcommand("modules", "install", toolsInstallCommand);
 registerSubcommand("modules", "search", toolsSearchCommand);
@@ -122,7 +120,6 @@ registerSubcommand("modules", "dev", toolsDevCommand);
 registerSubcommand("tools", "list", toolsListCommand);
 registerSubcommand("tools", "init", toolsInitCommand);
 registerSubcommand("tools", "validate", toolsValidateCommand);
-registerSubcommand("tools", "load", toolsLoadCommand);
 registerSubcommand("tools", "publish", toolsPublishCommand);
 registerSubcommand("tools", "install", toolsInstallCommand);
 registerSubcommand("tools", "search", toolsSearchCommand);

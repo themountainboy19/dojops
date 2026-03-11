@@ -42,9 +42,7 @@ vi.mock("@dojops/runtime", () => ({
 
 // Mock @dojops/module-registry
 vi.mock("@dojops/module-registry", () => ({
-  discoverTools: vi.fn(() => []),
   discoverUserDopsFiles: vi.fn(() => []),
-  validateManifest: vi.fn(),
 }));
 
 // Mock @dojops/core
@@ -211,31 +209,6 @@ describe("toolsInitCommand — v2 scaffold", () => {
   it("logs success message", async () => {
     await initAndGetContent("my-tool");
     expect(mockLog.success).toHaveBeenCalledWith(expect.stringContaining("my-tool.dops"));
-  });
-});
-
-// ── Tests: toolsInitCommand — --legacy flag ───────────────────────
-
-describe("toolsInitCommand — --legacy flag", () => {
-  beforeEach(resetFsMocks);
-
-  it("generates v1 format with --legacy flag", async () => {
-    await toolsInitCommand(["old-tool", "--legacy", "--non-interactive"], makeCtx());
-
-    // Legacy creates a tool.yaml file
-    expect(fs.writeFileSync).toHaveBeenCalled();
-    const writtenPath = String(vi.mocked(fs.writeFileSync).mock.calls[0][0]);
-    expect(writtenPath).toContain("tool.yaml");
-  });
-
-  it("creates tool.yaml and input.schema.json for legacy", async () => {
-    await toolsInitCommand(["old-tool", "--legacy", "--non-interactive"], makeCtx());
-
-    // Should write 2 files: tool.yaml + input.schema.json
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
-    const paths = vi.mocked(fs.writeFileSync).mock.calls.map((c) => String(c[0]));
-    expect(paths.some((p) => p.includes("tool.yaml"))).toBe(true);
-    expect(paths.some((p) => p.includes("input.schema.json"))).toBe(true);
   });
 });
 
