@@ -40,6 +40,7 @@ describe("config", () => {
     vi.clearAllMocks();
     vi.mocked(os.homedir).mockReturnValue(mockHome);
     process.env = { ...originalEnv };
+    process.env.DOJOPS_VAULT_KEY = "test-key";
     delete process.env.DOJOPS_PROVIDER;
     delete process.env.DOJOPS_MODEL;
     delete process.env.OPENAI_API_KEY;
@@ -93,11 +94,12 @@ describe("config", () => {
       saveConfig(config);
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(configDir, { recursive: true, mode: 0o700 });
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        configFile,
-        JSON.stringify(config, null, 2) + "\n",
-        { encoding: "utf-8", mode: 0o600 },
-      );
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      // Verify tokens are encrypted at rest
+      const writtenJson = (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      const written = JSON.parse(writtenJson);
+      expect(written.defaultProvider).toBe("openai");
+      expect(written.tokens.openai).toMatch(/^enc:v1:/);
     });
 
     it("skips directory creation when it exists", () => {
@@ -303,7 +305,7 @@ describe("config", () => {
   });
 
   describe("saveProfile", () => {
-    it("creates profiles directory and writes profile file", () => {
+    it("creates profiles directory and writes profile file with encrypted tokens", () => {
       vi.mocked(fs.existsSync).mockReturnValue(false);
       vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
       vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
@@ -312,11 +314,11 @@ describe("config", () => {
       saveProfile("work", config);
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(profilesPath, { recursive: true, mode: 0o700 });
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        path.join(profilesPath, "work.json"),
-        JSON.stringify(config, null, 2) + "\n",
-        { encoding: "utf-8", mode: 0o600 },
-      );
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const writtenJson = (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      const written = JSON.parse(writtenJson);
+      expect(written.defaultProvider).toBe("openai");
+      expect(written.tokens.openai).toMatch(/^enc:v1:/);
     });
 
     it("skips directory creation when profiles dir exists", () => {

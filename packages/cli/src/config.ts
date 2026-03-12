@@ -3,6 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { isCopilotAuthenticated } from "@dojops/core";
 import { mkdirOwnerOnly, writeFileOwnerOnly } from "./secure-fs";
+import { encryptTokens, decryptTokens } from "./vault";
 
 export interface DojOpsConfig {
   defaultProvider?: string;
@@ -107,7 +108,12 @@ export function readConfigFile(filePath: string): DojOpsConfig {
       return {};
     }
     checkConfigPermissions(filePath);
-    return parsed as DojOpsConfig;
+    const config = parsed as DojOpsConfig;
+    // Decrypt tokens transparently on read
+    if (config.tokens) {
+      config.tokens = decryptTokens(config.tokens);
+    }
+    return config;
   } catch {
     return {};
   }
@@ -161,6 +167,7 @@ function checkConfigPermissions(filePath: string): void {
 /**
  * Writes config to the specified path, or defaults to ~/.dojops/config.json.
  * Creates directory with 0o700 and file with 0o600.
+ * Tokens are encrypted at rest using AES-256-GCM.
  */
 export function saveConfig(config: DojOpsConfig, targetPath?: string): void {
   const filePath = targetPath ?? globalConfigFile();
@@ -168,7 +175,9 @@ export function saveConfig(config: DojOpsConfig, targetPath?: string): void {
   if (!fs.existsSync(dir)) {
     mkdirOwnerOnly(dir);
   }
-  writeFileOwnerOnly(filePath, JSON.stringify(config, null, 2) + "\n");
+  // Encrypt tokens before writing to disk
+  const toWrite = config.tokens ? { ...config, tokens: encryptTokens(config.tokens) } : config;
+  writeFileOwnerOnly(filePath, JSON.stringify(toWrite, null, 2) + "\n");
 }
 
 /** Validates that a provider name is supported. Throws with a clear message if not. */
@@ -287,7 +296,11 @@ export function loadProfile(name: string): DojOpsConfig | null {
   validateProfileName(name);
   const file = path.join(profilesDir(), `${name}.json`);
   try {
-    return JSON.parse(fs.readFileSync(file, "utf-8")) as DojOpsConfig;
+    const config = JSON.parse(fs.readFileSync(file, "utf-8")) as DojOpsConfig;
+    if (config.tokens) {
+      config.tokens = decryptTokens(config.tokens);
+    }
+    return config;
   } catch {
     return null;
   }
@@ -299,7 +312,8 @@ export function saveProfile(name: string, config: DojOpsConfig): void {
   if (!fs.existsSync(dir)) {
     mkdirOwnerOnly(dir);
   }
-  writeFileOwnerOnly(path.join(dir, `${name}.json`), JSON.stringify(config, null, 2) + "\n");
+  const toWrite = config.tokens ? { ...config, tokens: encryptTokens(config.tokens) } : config;
+  writeFileOwnerOnly(path.join(dir, `${name}.json`), JSON.stringify(toWrite, null, 2) + "\n");
 }
 
 export function deleteProfile(name: string): boolean {

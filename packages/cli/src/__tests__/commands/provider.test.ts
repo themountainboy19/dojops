@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 
@@ -28,6 +28,7 @@ vi.mock("@clack/prompts", () => ({
 
 import { providerCommand } from "../../commands/provider";
 import { CLIContext } from "../../types";
+import { decrypt } from "../../vault";
 import * as clack from "@clack/prompts";
 
 const mockHome = "/home/testuser";
@@ -70,13 +71,37 @@ function getWrittenConfig(): Record<string, unknown> | undefined {
   const calls = vi.mocked(fs.writeFileSync).mock.calls;
   const lastCall = calls.find((c) => String(c[0]).includes("config.json"));
   if (!lastCall) return undefined;
-  return JSON.parse(String(lastCall[1]).trim());
+  const parsed = JSON.parse(String(lastCall[1]).trim());
+  // Decrypt tokens so assertions can compare plaintext
+  if (parsed.tokens && typeof parsed.tokens === "object") {
+    for (const [k, v] of Object.entries(parsed.tokens)) {
+      if (typeof v === "string") {
+        try {
+          parsed.tokens[k] = decrypt(v);
+        } catch {
+          // leave as-is
+        }
+      }
+    }
+  }
+  return parsed;
 }
 
 describe("provider command", () => {
+  const originalVaultKey = process.env.DOJOPS_VAULT_KEY;
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(os.homedir).mockReturnValue(mockHome);
+    process.env.DOJOPS_VAULT_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    if (originalVaultKey !== undefined) {
+      process.env.DOJOPS_VAULT_KEY = originalVaultKey;
+    } else {
+      delete process.env.DOJOPS_VAULT_KEY;
+    }
   });
 
   describe("provider list", () => {
