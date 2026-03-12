@@ -71,7 +71,10 @@ import {
   completionInstallCommand,
   completionUsageCommand,
 } from "./commands/completion";
+import { tokensCommand } from "./commands/tokens";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
+import { withTracking } from "./tracking-provider";
+import { findProjectRoot } from "./state";
 
 registerCommand("init", initCommand);
 registerCommand("apply", applyCommand);
@@ -88,6 +91,7 @@ registerCommand("check", checkCommand);
 registerCommand("verify", verifyCommand);
 registerCommand("upgrade", upgradeCommand);
 registerCommand("cron", cronCommand);
+registerCommand("tokens", tokensCommand);
 
 // `dojops help <command>` → show per-command help
 registerCommand("help", async (args) => {
@@ -253,7 +257,9 @@ function buildLazyProvider(
       }
     }
 
-    cachedProvider = provider;
+    // Wrap with token usage tracking
+    const root = findProjectRoot();
+    cachedProvider = withTracking(provider, root, "cli");
     return cachedProvider;
   };
 }
@@ -279,6 +285,7 @@ const QUIET_COMMANDS = new Set([
   "help",
   "cron",
   "completion",
+  "tokens",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([

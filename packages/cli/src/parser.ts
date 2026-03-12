@@ -191,6 +191,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "cron",
     "auto",
     "completion",
+    "tokens",
   ]);
 
   const KNOWN_SUBCOMMANDS = new Set([
