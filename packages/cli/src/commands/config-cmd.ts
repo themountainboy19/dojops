@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
+import { execFileSync } from "node:child_process";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import {
@@ -19,6 +21,7 @@ import { CLIContext } from "../types";
 import { maskToken, truncateNoteTitle } from "../formatter";
 import { extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
+import { findProjectRoot, dojopsDir } from "../state";
 import { createProvider } from "@dojops/api";
 import { isCopilotAuthenticated, copilotLogin } from "@dojops/core";
 
@@ -564,6 +567,83 @@ function handleAliasSubcommand(args: string[]): void {
   p.log.success(`Alias ${pc.bold(name)} → ${pc.dim(target)}`);
 }
 
+function handleBackupSubcommand(args: string[], ctx: CLIContext): void {
+  const root = findProjectRoot() ?? ctx.cwd;
+  const dir = dojopsDir(root);
+  if (!fs.existsSync(dir)) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "No .dojops directory found. Run: dojops init");
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const outFlag = extractFlagValue(args, "--output");
+  const outPath = outFlag ?? path.join(root, `dojops-backup-${timestamp}.tar.gz`);
+
+  try {
+    execFileSync("tar", ["czf", outPath, "-C", root, ".dojops"], { stdio: "pipe" });
+  } catch (err) {
+    throw new CLIError(ExitCode.GENERAL_ERROR, `Backup failed: ${(err as Error).message}`);
+  }
+
+  const hash = createHash("sha256").update(fs.readFileSync(outPath)).digest("hex");
+  const stat = fs.statSync(outPath);
+  const sizeKB = Math.round(stat.size / 1024);
+
+  if (ctx.globalOpts.output === "json") {
+    console.log(JSON.stringify({ path: outPath, sha256: hash, sizeBytes: stat.size }));
+  } else {
+    p.log.success(`Backup created: ${pc.bold(outPath)} (${sizeKB} KB)`);
+    p.log.info(`SHA-256: ${pc.dim(hash)}`);
+  }
+}
+
+async function handleRestoreSubcommand(args: string[], ctx: CLIContext): Promise<void> {
+  const archivePath = args[1];
+  if (!archivePath) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config restore <backup.tar.gz>");
+  }
+  if (!fs.existsSync(archivePath)) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${archivePath}`);
+  }
+
+  // Verify the archive looks like a tar.gz
+  if (!archivePath.endsWith(".tar.gz") && !archivePath.endsWith(".tgz")) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Expected a .tar.gz archive.");
+  }
+
+  // Verify SHA-256 if --checksum provided
+  const expectedHash = extractFlagValue(args, "--checksum");
+  if (expectedHash) {
+    const actualHash = createHash("sha256").update(fs.readFileSync(archivePath)).digest("hex");
+    if (actualHash !== expectedHash) {
+      throw new CLIError(
+        ExitCode.VALIDATION_ERROR,
+        `Checksum mismatch.\n  Expected: ${expectedHash}\n  Actual:   ${actualHash}`,
+      );
+    }
+  }
+
+  const root = findProjectRoot() ?? ctx.cwd;
+  const dir = dojopsDir(root);
+
+  if (!ctx.globalOpts.nonInteractive && fs.existsSync(dir)) {
+    const confirmed = await p.confirm({
+      message: `This will overwrite ${dir}. Continue?`,
+    });
+    if (p.isCancel(confirmed) || !confirmed) {
+      p.log.info("Cancelled.");
+      return;
+    }
+  }
+
+  try {
+    execFileSync("tar", ["xzf", archivePath, "-C", root], { stdio: "pipe" });
+  } catch (err) {
+    throw new CLIError(ExitCode.GENERAL_ERROR, `Restore failed: ${(err as Error).message}`);
+  }
+
+  p.log.success(`Restored from ${pc.bold(archivePath)}`);
+}
+
 async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<boolean> {
   switch (args[0]) {
     case "show":
@@ -587,6 +667,12 @@ async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<bool
       return true;
     case "alias":
       handleAliasSubcommand(args);
+      return true;
+    case "backup":
+      handleBackupSubcommand(args, ctx);
+      return true;
+    case "restore":
+      await handleRestoreSubcommand(args, ctx);
       return true;
     case "profile": {
       const { configProfileCommand } = await import("./config-profile");

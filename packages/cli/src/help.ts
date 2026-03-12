@@ -524,6 +524,9 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("profile list")}     List all profiles`);
       console.log(`  ${pc.cyan("profile delete")}   Remove a named profile`);
       console.log(`  ${pc.cyan("reset")}            Reset configuration to defaults`);
+      console.log(`  ${pc.cyan("alias")}            Manage model aliases`);
+      console.log(`  ${pc.cyan("backup")}           Archive .dojops/ directory to tar.gz`);
+      console.log(`  ${pc.cyan("restore <file>")}   Restore from a backup archive`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Without arguments, launches an interactive configuration wizard.`);
       console.log(`  With flags, applies settings directly and exits.`);
