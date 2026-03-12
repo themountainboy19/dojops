@@ -213,6 +213,7 @@ export function initProject(rootDir: string): string[] {
     path.join(base, "sessions"),
     path.join(base, "sbom"),
     path.join(base, "memory"),
+    path.join(base, "debug"),
   ];
 
   const created: string[] = [];
@@ -933,4 +934,66 @@ export function loadContext(rootDir: string): RepoContext | null {
   } catch {
     return null;
   }
+}
+
+// ── Debug output tee/recovery ──────────────────────────────────────
+
+/**
+ * Save raw tool output to .dojops/debug/ for later reference.
+ * Used when compression loses detail or when tools fail.
+ * Returns the path to the saved file.
+ */
+export function saveDebugOutput(
+  rootDir: string,
+  source: string,
+  content: string,
+  metadata?: Record<string, unknown>,
+): string {
+  const debugDir = path.join(dojopsDir(rootDir), "debug");
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+
+  const ts = new Date().toISOString().replaceAll(/[:.]/g, "-");
+  const safeName = source.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  const filePath = path.join(debugDir, `${safeName}-${ts}.txt`);
+
+  const header = metadata
+    ? `--- debug output ---\nsource: ${source}\ntimestamp: ${new Date().toISOString()}\n${Object.entries(
+        metadata,
+      )
+        .map(([k, v]) => `${k}: ${v}`)
+        .join("\n")}\n---\n\n`
+    : "";
+
+  fs.writeFileSync(filePath, header + content);
+  return filePath;
+}
+
+/**
+ * List debug output files, newest first.
+ */
+export function listDebugOutputs(rootDir: string): string[] {
+  const debugDir = path.join(dojopsDir(rootDir), "debug");
+  if (!fs.existsSync(debugDir)) return [];
+  return fs
+    .readdirSync(debugDir)
+    .filter((f) => f.endsWith(".txt"))
+    .sort()
+    .reverse()
+    .map((f) => path.join(debugDir, f));
+}
+
+/**
+ * Read the most recent debug output for a given source.
+ */
+export function readLatestDebugOutput(rootDir: string, source: string): string | null {
+  const debugDir = path.join(dojopsDir(rootDir), "debug");
+  if (!fs.existsSync(debugDir)) return null;
+  const safeName = source.replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  const files = fs
+    .readdirSync(debugDir)
+    .filter((f) => f.startsWith(safeName) && f.endsWith(".txt"))
+    .sort()
+    .reverse();
+  if (files.length === 0) return null;
+  return fs.readFileSync(path.join(debugDir, files[0]), "utf-8");
 }

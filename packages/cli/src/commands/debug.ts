@@ -7,6 +7,7 @@ import { formatConfidence, wrapForNote } from "../formatter";
 import { ExitCode, CLIError } from "../exit-codes";
 import { extractFlagValue } from "../parser";
 import { readStdin } from "../stdin";
+import { findProjectRoot, saveDebugOutput } from "../state";
 
 /** Resolve content from --file flag, stdin, or positional args. */
 function resolveInputContent(args: string[]): string | undefined {
@@ -67,6 +68,12 @@ export async function debugCommand(args: string[], ctx: CLIContext): Promise<voi
     p.log.info(`  ${pc.dim("$")} dojops debug ci --file <path>`);
     p.log.info(`  ${pc.dim("$")} cat ci.log | dojops debug ci`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No CI log content provided.");
+  }
+
+  // Save raw log to .dojops/debug/ for recovery
+  const root = findProjectRoot();
+  if (root) {
+    saveDebugOutput(root, "ci-log", logContent, { command: "debug ci" });
   }
 
   const provider = ctx.getProvider();
