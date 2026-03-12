@@ -49,6 +49,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("cron")}               Manage scheduled jobs`);
   console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
   console.log(`  ${pc.cyan("tokens")}             Show LLM token usage and cost analytics`);
+  console.log(`  ${pc.cyan("insights")}           Actionable suggestions from execution history`);
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
