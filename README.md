@@ -2,11 +2,11 @@
   <img src="packages/api/public/logo/official-dojops-logo.png" alt="DojOps" width="120" />
 </p>
 
-<h1 align="center">DojOps — AI DevOps Automation Engine</h1>
+<h1 align="center">DojOps AI DevOps Automation Engine</h1>
 
 <p align="center">
   <strong>Enterprise-grade AI DevOps automation.</strong><br />
-  Generate, validate, and execute infrastructure &amp; CI/CD configurations safely — with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
+  Generate, validate, and execute infrastructure &amp; CI/CD configurations safely with structured output enforcement, sandboxed execution, approval workflows, and hash-chained audit trails.
 </p>
 
 <p align="center">
