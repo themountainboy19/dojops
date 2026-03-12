@@ -3,6 +3,8 @@ import * as p from "@clack/prompts";
 import { CLIContext } from "../types";
 import { findProjectRoot, initProject, readAudit, listScanReports, listExecutions } from "../state";
 import { readTokenUsage } from "../token-store";
+import { listErrorPatterns, listNotes, ErrorPattern } from "../memory";
+import { hasFlag } from "../parser";
 
 export interface Insight {
   category: "efficiency" | "security" | "quality" | "cost";
@@ -14,7 +16,10 @@ export async function insightsCommand(args: string[], ctx: CLIContext): Promise<
   const root = findProjectRoot() ?? ctx.cwd;
   if (!findProjectRoot()) initProject(root);
 
-  const insights = analyzeHistory(root);
+  const all = analyzeHistory(root);
+  const filterCat = args.find((a) => !a.startsWith("-"));
+  const insights = filterCat ? all.filter((i) => i.category === filterCat) : all;
+  const showAll = hasFlag(args, "--all");
 
   if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(insights, null, 2));
@@ -33,12 +38,22 @@ export async function insightsCommand(args: string[], ctx: CLIContext): Promise<
     cost: pc.green("$$"),
   };
 
-  const lines = insights.map((i) => {
+  const displayed = showAll ? insights : insights.slice(0, 10);
+  const lines = displayed.map((i) => {
     const icon = categoryIcons[i.category] ?? pc.dim("--");
     return `  ${icon} ${i.message}\n     ${pc.dim("→")} ${pc.dim(i.suggestion)}`;
   });
 
-  p.note(lines.join("\n\n"), `${insights.length} Insight(s)`);
+  const title = filterCat
+    ? `${displayed.length} ${filterCat} Insight(s)`
+    : `${displayed.length} Insight(s)`;
+  p.note(lines.join("\n\n"), title);
+
+  if (!showAll && insights.length > displayed.length) {
+    p.log.info(
+      pc.dim(`Showing ${displayed.length}/${insights.length}. Use --all to see everything.`),
+    );
+  }
 }
 
 export function analyzeHistory(rootDir: string): Insight[] {
@@ -48,6 +63,8 @@ export function analyzeHistory(rootDir: string): Insight[] {
   analyzeScanPatterns(rootDir, insights);
   analyzeExecutionPatterns(rootDir, insights);
   analyzeTokenPatterns(rootDir, insights);
+  analyzeErrorPatterns(rootDir, insights);
+  analyzeMemoryUsage(rootDir, insights);
 
   return insights;
 }
@@ -172,5 +189,87 @@ function analyzeTokenPatterns(rootDir: string, insights: Insight[]): void {
       message: `All ${records.length} calls use ${provider}. No fallback configured.`,
       suggestion: "Add a fallback provider with --fallback-provider for resilience.",
     });
+  }
+}
+
+function analyzeErrorPatterns(rootDir: string, insights: Insight[]): void {
+  let patterns: ErrorPattern[];
+  try {
+    patterns = listErrorPatterns(rootDir);
+  } catch {
+    return;
+  }
+  if (patterns.length === 0) return;
+
+  // Surface top recurring unresolved errors
+  const unresolved = patterns.filter((p) => !p.resolution);
+  const recurring = unresolved.filter((p) => p.occurrences >= 2);
+
+  if (recurring.length > 0) {
+    const top = recurring[0];
+    const truncMsg =
+      top.error_message.length > 60 ? top.error_message.slice(0, 57) + "..." : top.error_message;
+    insights.push({
+      category: "quality",
+      message: `"${truncMsg}" has occurred ${top.occurrences}x in ${top.task_type}.`,
+      suggestion: `Investigate the root cause. Use \`dojops memory add "fix: ..."\` to record the resolution.`,
+    });
+  }
+
+  if (recurring.length >= 3) {
+    insights.push({
+      category: "quality",
+      message: `${recurring.length} different error patterns are recurring.`,
+      suggestion: "Run `dojops insights quality` to focus on quality issues.",
+    });
+  }
+
+  // Check if there are resolved patterns that could help
+  const resolved = patterns.filter((p) => p.resolution);
+  if (resolved.length > 0 && unresolved.length > 0) {
+    insights.push({
+      category: "efficiency",
+      message: `${resolved.length} error pattern(s) have resolutions but ${unresolved.length} remain unresolved.`,
+      suggestion: "Past resolutions may apply to current errors — check error history.",
+    });
+  }
+
+  // Surface module-specific failure concentrations
+  const byModule = new Map<string, number>();
+  for (const p of unresolved) {
+    if (p.agent_or_module) {
+      byModule.set(p.agent_or_module, (byModule.get(p.agent_or_module) ?? 0) + p.occurrences);
+    }
+  }
+  for (const [mod, count] of byModule) {
+    if (count >= 3) {
+      insights.push({
+        category: "quality",
+        message: `Module "${mod}" has ${count} error occurrences across patterns.`,
+        suggestion: `Check module compatibility or try a different model for ${mod} tasks.`,
+      });
+    }
+  }
+}
+
+function analyzeMemoryUsage(rootDir: string, insights: Insight[]): void {
+  let notes: { id: number }[];
+  try {
+    notes = listNotes(rootDir);
+  } catch {
+    return;
+  }
+
+  // Suggest using memory if no notes exist but there's error history
+  if (notes.length === 0) {
+    const errorPatterns = listErrorPatterns(rootDir);
+    if (errorPatterns.length >= 2) {
+      insights.push({
+        category: "efficiency",
+        message: `${errorPatterns.length} error patterns stored but no project notes.`,
+        suggestion:
+          "Use `dojops memory add` to record project conventions — they're injected into LLM context.",
+      });
+    }
   }
 }

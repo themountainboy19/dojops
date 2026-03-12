@@ -14,8 +14,14 @@ vi.mock("../token-store", () => ({
   readTokenUsage: vi.fn(() => []),
 }));
 
+vi.mock("../memory", () => ({
+  listErrorPatterns: vi.fn(() => []),
+  listNotes: vi.fn(() => []),
+}));
+
 import { readAudit, listScanReports } from "../state";
 import { readTokenUsage } from "../token-store";
+import { listErrorPatterns, listNotes } from "../memory";
 
 describe("analyzeHistory", () => {
   beforeEach(() => {
@@ -100,5 +106,91 @@ describe("analyzeHistory", () => {
     const costInsight = insights.find((i) => i.message.includes("No fallback"));
     expect(costInsight).toBeDefined();
     expect(costInsight!.category).toBe("cost");
+  });
+
+  it("detects recurring error patterns", () => {
+    vi.mocked(listErrorPatterns).mockReturnValue([
+      {
+        id: 1,
+        fingerprint: "generate:terraform:timeout",
+        error_message: "LLM request timed out after 60s",
+        task_type: "generate",
+        agent_or_module: "terraform",
+        occurrences: 5,
+        first_seen: "2026-03-10T00:00:00Z",
+        last_seen: "2026-03-12T00:00:00Z",
+        resolution: "",
+      },
+    ]);
+
+    const insights = analyzeHistory("/tmp/test");
+    const errorInsight = insights.find((i) => i.message.includes("5x"));
+    expect(errorInsight).toBeDefined();
+    expect(errorInsight!.category).toBe("quality");
+  });
+
+  it("detects module-specific failure concentration", () => {
+    vi.mocked(listErrorPatterns).mockReturnValue([
+      {
+        id: 1,
+        fingerprint: "generate:terraform:err1",
+        error_message: "error 1",
+        task_type: "generate",
+        agent_or_module: "terraform",
+        occurrences: 2,
+        first_seen: "2026-03-10T00:00:00Z",
+        last_seen: "2026-03-12T00:00:00Z",
+        resolution: "",
+      },
+      {
+        id: 2,
+        fingerprint: "generate:terraform:err2",
+        error_message: "error 2",
+        task_type: "generate",
+        agent_or_module: "terraform",
+        occurrences: 2,
+        first_seen: "2026-03-10T00:00:00Z",
+        last_seen: "2026-03-12T00:00:00Z",
+        resolution: "",
+      },
+    ]);
+
+    const insights = analyzeHistory("/tmp/test");
+    const modInsight = insights.find((i) => i.message.includes('"terraform"'));
+    expect(modInsight).toBeDefined();
+    expect(modInsight!.category).toBe("quality");
+  });
+
+  it("suggests memory usage when errors exist but no notes", () => {
+    vi.mocked(listErrorPatterns).mockReturnValue([
+      {
+        id: 1,
+        fingerprint: "fp1",
+        error_message: "err",
+        task_type: "generate",
+        agent_or_module: "",
+        occurrences: 1,
+        first_seen: "2026-03-10T00:00:00Z",
+        last_seen: "2026-03-12T00:00:00Z",
+        resolution: "",
+      },
+      {
+        id: 2,
+        fingerprint: "fp2",
+        error_message: "err2",
+        task_type: "apply",
+        agent_or_module: "",
+        occurrences: 1,
+        first_seen: "2026-03-10T00:00:00Z",
+        last_seen: "2026-03-12T00:00:00Z",
+        resolution: "",
+      },
+    ]);
+    vi.mocked(listNotes).mockReturnValue([]);
+
+    const insights = analyzeHistory("/tmp/test");
+    const memInsight = insights.find((i) => i.message.includes("no project notes"));
+    expect(memInsight).toBeDefined();
+    expect(memInsight!.category).toBe("efficiency");
   });
 });
