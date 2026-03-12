@@ -20,11 +20,20 @@ export interface TaskRecord {
   metadata: string;
 }
 
+export interface NoteRecord {
+  id: number;
+  timestamp: string;
+  category: string;
+  content: string;
+  keywords: string;
+}
+
 export interface MemoryContext {
   recentTasks: TaskRecord[];
   relatedTasks: TaskRecord[];
   isContinuation: boolean;
   continuationOf?: TaskRecord;
+  relevantNotes: NoteRecord[];
 }
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -54,6 +63,18 @@ CREATE INDEX IF NOT EXISTS idx_tasks_history_type_ts
   ON tasks_history(task_type, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_tasks_history_ts
   ON tasks_history(timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp        TEXT    NOT NULL,
+  category         TEXT    NOT NULL DEFAULT 'general',
+  content          TEXT    NOT NULL,
+  keywords         TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_notes_category
+  ON notes(category);
+CREATE INDEX IF NOT EXISTS idx_notes_ts
+  ON notes(timestamp DESC);
 `;
 
 // ── Database lifecycle ─────────────────────────────────────────────
@@ -147,6 +168,88 @@ export function recordTask(rootDir: string, record: Omit<TaskRecord, "id">): voi
   }
 }
 
+// ── Notes CRUD ────────────────────────────────────────────────────
+
+/** Add a note to the memory database. Returns the inserted ID or -1 on failure. */
+export function addNote(
+  rootDir: string,
+  content: string,
+  category = "general",
+  keywords = "",
+): number {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return -1;
+
+    const result = db
+      .prepare(
+        `INSERT INTO notes (timestamp, category, content, keywords)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(new Date().toISOString(), category, content, keywords);
+    return Number(result.lastInsertRowid);
+  } catch {
+    return -1;
+  }
+}
+
+/** List notes, optionally filtered by category. */
+export function listNotes(rootDir: string, category?: string, limit = 50): NoteRecord[] {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return [];
+
+    if (category) {
+      return db
+        .prepare(`SELECT * FROM notes WHERE category = ? ORDER BY id DESC LIMIT ?`)
+        .all(category, limit) as NoteRecord[];
+    }
+    return db.prepare(`SELECT * FROM notes ORDER BY id DESC LIMIT ?`).all(limit) as NoteRecord[];
+  } catch {
+    return [];
+  }
+}
+
+/** Remove a note by ID. Returns true if a row was deleted. */
+export function removeNote(rootDir: string, id: number): boolean {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return false;
+
+    const result = db.prepare(`DELETE FROM notes WHERE id = ?`).run(id);
+    return result.changes > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Search notes by keyword match against content and keywords fields. */
+export function searchNotes(rootDir: string, query: string, limit = 20): NoteRecord[] {
+  try {
+    const db = openMemoryDb(rootDir);
+    if (!db) return [];
+
+    const words = tokenize(query);
+    if (words.length === 0) return listNotes(rootDir, undefined, limit);
+
+    // Build LIKE clauses for each word against content + keywords
+    const conditions = words
+      .map(() => `(LOWER(content) LIKE ? OR LOWER(keywords) LIKE ?)`)
+      .join(" AND ");
+    const params: string[] = [];
+    for (const w of words) {
+      params.push(`%${w}%`, `%${w}%`);
+    }
+    params.push(String(limit));
+
+    return db
+      .prepare(`SELECT * FROM notes WHERE ${conditions} ORDER BY id DESC LIMIT ?`)
+      .all(...params) as NoteRecord[];
+  } catch {
+    return [];
+  }
+}
+
 // ── Read ───────────────────────────────────────────────────────────
 
 /**
@@ -183,6 +286,7 @@ export function queryMemory(rootDir: string, taskType: TaskType, prompt: string)
     recentTasks: [],
     relatedTasks: [],
     isContinuation: false,
+    relevantNotes: [],
   };
 
   try {
@@ -241,7 +345,10 @@ export function queryMemory(rootDir: string, taskType: TaskType, prompt: string)
       }
     }
 
-    return { recentTasks, relatedTasks, isContinuation, continuationOf };
+    // Fetch notes relevant to the prompt
+    const relevantNotes = prompt ? searchNotes(rootDir, prompt, 5) : [];
+
+    return { recentTasks, relatedTasks, isContinuation, continuationOf, relevantNotes };
   } catch {
     return empty;
   }
@@ -339,6 +446,15 @@ export function buildMemoryContextString(ctx: MemoryContext): string | null {
     lines.push("Recent failures (avoid repeating):");
     for (const t of failed) {
       lines.push(`- ${summarizeTask(t)}`);
+    }
+  }
+
+  if (ctx.relevantNotes && ctx.relevantNotes.length > 0) {
+    lines.push("");
+    lines.push("Project notes:");
+    for (const note of ctx.relevantNotes) {
+      const tag = note.category !== "general" ? ` [${note.category}]` : "";
+      lines.push(`- ${truncate(note.content, 120)}${tag}`);
     }
   }
 

@@ -50,6 +50,9 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("upgrade")}            Check for and install CLI updates`);
   console.log(`  ${pc.cyan("tokens")}             Show LLM token usage and cost analytics`);
   console.log(`  ${pc.cyan("insights")}           Actionable suggestions from execution history`);
+  console.log(
+    `  ${pc.cyan("memory")}             Manage persistent project notes (add/search/remove)`,
+  );
   console.log(`  ${pc.cyan("completion")}         Generate shell completion scripts`);
   console.log();
   console.log(pc.bold("GLOBAL OPTIONS"));
@@ -1035,6 +1038,36 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.dim("$")} dojops completion install`);
       console.log(`  ${pc.dim("$")} dojops completion bash > ~/.bash_completion.d/dojops`);
       console.log(`  ${pc.dim("$")} dojops completion zsh > ~/.zsh/completions/_dojops`);
+      console.log();
+      break;
+
+    case "memory":
+      console.log(`\n${pc.bold("dojops memory")} — Persistent project notes for RAG context`);
+      console.log(`\n${pc.bold("USAGE")}`);
+      console.log(`  ${pc.dim("$")} dojops memory list [--category NAME]`);
+      console.log(`  ${pc.dim("$")} dojops memory add <text> [--category NAME] [--keywords WORDS]`);
+      console.log(`  ${pc.dim("$")} dojops memory remove <id>`);
+      console.log(`  ${pc.dim("$")} dojops memory search <query>`);
+      console.log(`\n${pc.bold("SUBCOMMANDS")}`);
+      console.log(`  ${pc.cyan("list")}       List all notes (default)`);
+      console.log(`  ${pc.cyan("add")}        Add a note with optional category and keywords`);
+      console.log(`  ${pc.cyan("remove")}     Remove a note by ID (alias: rm)`);
+      console.log(`  ${pc.cyan("search")}     Search notes by keyword`);
+      console.log(`\n${pc.bold("DESCRIPTION")}`);
+      console.log(`  Notes persist in .dojops/memory/dojops.db and are automatically`);
+      console.log(`  injected into LLM context when relevant to the current prompt.`);
+      console.log(`  Use this to teach DojOps about your project conventions,`);
+      console.log(`  infrastructure constraints, or preferred patterns.`);
+      console.log(`\n${pc.bold("EXAMPLES")}`);
+      console.log(
+        `  ${pc.dim("$")} dojops memory add "Always use us-east-1 for Terraform" --category terraform`,
+      );
+      console.log(
+        `  ${pc.dim("$")} dojops memory add "CI runs on Node 20 only" --keywords "ci node"`,
+      );
+      console.log(`  ${pc.dim("$")} dojops memory list --category terraform`);
+      console.log(`  ${pc.dim("$")} dojops memory search terraform`);
+      console.log(`  ${pc.dim("$")} dojops memory remove 3`);
       console.log();
       break;
 

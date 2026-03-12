@@ -73,6 +73,7 @@ import {
 } from "./commands/completion";
 import { tokensCommand } from "./commands/tokens";
 import { insightsCommand } from "./commands/insights";
+import { memoryCommand } from "./commands/memory";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
 import { findProjectRoot } from "./state";
@@ -94,6 +95,7 @@ registerCommand("upgrade", upgradeCommand);
 registerCommand("cron", cronCommand);
 registerCommand("tokens", tokensCommand);
 registerCommand("insights", insightsCommand);
+registerCommand("memory", memoryCommand);
 
 // `dojops help <command>` → show per-command help
 registerCommand("help", async (args) => {
@@ -289,6 +291,7 @@ const QUIET_COMMANDS = new Set([
   "completion",
   "tokens",
   "insights",
+  "memory",
 ]);
 
 const NESTED_COMMAND_PARENTS = new Set([

@@ -9,6 +9,10 @@ import {
   recordTask,
   queryMemory,
   buildMemoryContextString,
+  addNote,
+  listNotes,
+  removeNote,
+  searchNotes,
 } from "../memory";
 import type { TaskRecord } from "../memory";
 
@@ -201,6 +205,7 @@ describe("buildMemoryContextString", () => {
       recentTasks: [],
       relatedTasks: [],
       isContinuation: false,
+      relevantNotes: [],
     });
     expect(result).toBeNull();
   });
@@ -235,6 +240,7 @@ describe("buildMemoryContextString", () => {
         agent_or_module: "terraform",
         metadata: "{}",
       },
+      relevantNotes: [],
     });
     expect(result).toContain("Continuing previous work");
     expect(result).toContain("Create Terraform config");
@@ -258,6 +264,7 @@ describe("buildMemoryContextString", () => {
       ],
       relatedTasks: [],
       isContinuation: false,
+      relevantNotes: [],
     });
     expect(result).toContain("Recent successful operations");
     expect(result).toContain("3 findings");
@@ -281,9 +288,117 @@ describe("buildMemoryContextString", () => {
       recentTasks: tasks,
       relatedTasks: [],
       isContinuation: false,
+      relevantNotes: [],
     });
     expect(result).not.toBeNull();
     // Budget is MAX_CONTEXT_CHARS (1200) for task lines, plus footer
     expect(result!.length).toBeLessThanOrEqual(1400);
+  });
+});
+
+// ── Notes CRUD ──────────────────────────────────────────────────────
+
+describe("addNote", () => {
+  it("inserts a note and returns its ID", () => {
+    const id = addNote(tmpDir, "Always use us-east-1", "terraform");
+    expect(id).toBeGreaterThan(0);
+  });
+
+  it("uses 'general' category by default", () => {
+    const id = addNote(tmpDir, "Some general note");
+    const notes = listNotes(tmpDir);
+    expect(notes.find((n) => n.id === id)?.category).toBe("general");
+  });
+});
+
+describe("listNotes", () => {
+  it("returns all notes ordered by ID descending", () => {
+    addNote(tmpDir, "First note");
+    addNote(tmpDir, "Second note");
+    const notes = listNotes(tmpDir);
+    expect(notes).toHaveLength(2);
+    expect(notes[0].content).toBe("Second note");
+    expect(notes[1].content).toBe("First note");
+  });
+
+  it("filters by category", () => {
+    addNote(tmpDir, "Terraform rule", "terraform");
+    addNote(tmpDir, "CI rule", "ci");
+    addNote(tmpDir, "Another terraform", "terraform");
+    const tfNotes = listNotes(tmpDir, "terraform");
+    expect(tfNotes).toHaveLength(2);
+    expect(tfNotes.every((n) => n.category === "terraform")).toBe(true);
+  });
+
+  it("returns empty array when no notes", () => {
+    expect(listNotes(tmpDir)).toEqual([]);
+  });
+});
+
+describe("removeNote", () => {
+  it("deletes a note by ID", () => {
+    const id = addNote(tmpDir, "To be deleted");
+    expect(removeNote(tmpDir, id)).toBe(true);
+    expect(listNotes(tmpDir)).toHaveLength(0);
+  });
+
+  it("returns false for non-existent ID", () => {
+    expect(removeNote(tmpDir, 999)).toBe(false);
+  });
+});
+
+describe("searchNotes", () => {
+  it("finds notes by content match", () => {
+    addNote(tmpDir, "Always deploy to us-east-1 for Terraform");
+    addNote(tmpDir, "CI must run on Node 20");
+    const results = searchNotes(tmpDir, "terraform deploy");
+    expect(results).toHaveLength(1);
+    expect(results[0].content).toContain("Terraform");
+  });
+
+  it("finds notes by keywords field", () => {
+    addNote(tmpDir, "Use strict mode", "general", "typescript strict");
+    const results = searchNotes(tmpDir, "typescript");
+    expect(results).toHaveLength(1);
+  });
+
+  it("returns empty for no match", () => {
+    addNote(tmpDir, "Some note");
+    expect(searchNotes(tmpDir, "nonexistent")).toEqual([]);
+  });
+});
+
+describe("buildMemoryContextString with notes", () => {
+  it("includes relevant notes in context", () => {
+    const result = buildMemoryContextString({
+      recentTasks: [
+        {
+          id: 1,
+          timestamp: "2025-03-08T10:00:00Z",
+          task_type: "generate",
+          prompt: "Create CI",
+          result_summary: "Done",
+          status: "success",
+          duration_ms: 100,
+          related_files: "[]",
+          agent_or_module: "",
+          metadata: "{}",
+        },
+      ],
+      relatedTasks: [],
+      isContinuation: false,
+      relevantNotes: [
+        {
+          id: 1,
+          timestamp: "2025-03-08T10:00:00Z",
+          category: "ci",
+          content: "CI must use Node 20 only",
+          keywords: "ci node",
+        },
+      ],
+    });
+    expect(result).toContain("Project notes:");
+    expect(result).toContain("CI must use Node 20 only");
+    expect(result).toContain("[ci]");
   });
 });
