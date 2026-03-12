@@ -527,6 +527,8 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("alias")}            Manage model aliases`);
       console.log(`  ${pc.cyan("backup")}           Archive .dojops/ directory to tar.gz`);
       console.log(`  ${pc.cyan("restore <file>")}   Restore from a backup archive`);
+      console.log(`  ${pc.cyan("apply <file>")}     Deep-merge a JSON patch into config`);
+      console.log(`  ${pc.cyan("export [file]")}    Export config as JSON (masks tokens)`);
       console.log(`\n${pc.bold("DESCRIPTION")}`);
       console.log(`  Without arguments, launches an interactive configuration wizard.`);
       console.log(`  With flags, applies settings directly and exits.`);

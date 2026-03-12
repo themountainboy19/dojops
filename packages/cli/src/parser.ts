@@ -254,6 +254,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "alias",
     "backup",
     "restore",
+    "apply",
   ]);
 
   const command: string[] = [];

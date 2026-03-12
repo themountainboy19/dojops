@@ -19,7 +19,7 @@ import {
 } from "../config";
 import { CLIContext } from "../types";
 import { maskToken, truncateNoteTitle } from "../formatter";
-import { extractFlagValue } from "../parser";
+import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
 import { findProjectRoot, dojopsDir } from "../state";
 import { createProvider } from "@dojops/api";
@@ -644,6 +644,102 @@ async function handleRestoreSubcommand(args: string[], ctx: CLIContext): Promise
   p.log.success(`Restored from ${pc.bold(archivePath)}`);
 }
 
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    const sv = source[key];
+    const tv = result[key];
+    if (
+      sv != null &&
+      typeof sv === "object" &&
+      !Array.isArray(sv) &&
+      tv != null &&
+      typeof tv === "object" &&
+      !Array.isArray(tv)
+    ) {
+      result[key] = deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
+    } else {
+      result[key] = sv;
+    }
+  }
+  return result;
+}
+
+function handleApplySubcommand(args: string[], ctx: CLIContext): void {
+  const filePath = args[1];
+  if (!filePath) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Usage: dojops config apply <config.json>");
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `File not found: ${filePath}`);
+  }
+
+  let patch: Record<string, unknown>;
+  try {
+    patch = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Record<string, unknown>;
+  } catch {
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Invalid JSON in ${filePath}`);
+  }
+
+  const config = loadConfig();
+  const merged = deepMerge(config as Record<string, unknown>, patch) as DojOpsConfig;
+
+  // Validate before saving
+  const issues = validateConfigValues(merged);
+  if (issues.length > 0) {
+    for (const issue of issues) {
+      p.log.warn(`${pc.yellow("!")} ${issue}`);
+    }
+    throw new CLIError(
+      ExitCode.VALIDATION_ERROR,
+      `Patch validation failed: ${issues.length} issue(s).`,
+    );
+  }
+
+  if (ctx.globalOpts.dryRun) {
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify(merged, null, 2));
+    } else {
+      p.log.info("Dry run — merged config:");
+      showConfig(merged);
+    }
+    return;
+  }
+
+  saveConfig(merged);
+  p.log.success(`Applied config patch from ${pc.bold(filePath)}`);
+  if (ctx.globalOpts.output !== "json") {
+    showConfig(merged);
+  } else {
+    console.log(JSON.stringify(merged, null, 2));
+  }
+}
+
+function handleExportSubcommand(args: string[]): void {
+  const config = loadConfig();
+  // Mask tokens in export unless --reveal is used
+  const reveal = hasFlag(args, "--reveal");
+  const safe = reveal
+    ? config
+    : {
+        ...config,
+        tokens: config.tokens
+          ? Object.fromEntries(Object.entries(config.tokens).map(([k, v]) => [k, v ? "***" : null]))
+          : undefined,
+      };
+
+  const outPath = args[1];
+  if (outPath && outPath !== "--reveal") {
+    fs.writeFileSync(outPath, JSON.stringify(safe, null, 2) + "\n");
+    p.log.success(`Config exported to ${pc.bold(outPath)}`);
+  } else {
+    console.log(JSON.stringify(safe, null, 2));
+  }
+}
+
 async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<boolean> {
   switch (args[0]) {
     case "show":
@@ -673,6 +769,12 @@ async function dispatchSubcommand(args: string[], ctx: CLIContext): Promise<bool
       return true;
     case "restore":
       await handleRestoreSubcommand(args, ctx);
+      return true;
+    case "apply":
+      handleApplySubcommand(args, ctx);
+      return true;
+    case "export":
+      handleExportSubcommand(args);
       return true;
     case "profile": {
       const { configProfileCommand } = await import("./config-profile");
