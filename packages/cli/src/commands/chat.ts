@@ -193,21 +193,10 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
   if (contextInfo) indicators.push(`${pc.green("●")} ${pc.dim("Project context loaded")}`);
   if (indicators.length > 0) p.log.message(indicators.join("  "));
 
-  // Commands in a compact layout
-  const cmds = [
-    pc.cyan("/exit"),
-    pc.cyan("/agent") + pc.dim(" <name>"),
-    pc.cyan("/model"),
-    pc.cyan("/sessions"),
-    pc.cyan("/status"),
-    pc.cyan("/history"),
-    pc.cyan("/clear"),
-    pc.cyan("/save"),
-    pc.cyan("/plan"),
-    pc.cyan("/apply"),
-    pc.cyan("/scan"),
-  ];
-  p.log.message(pc.dim("Commands: ") + cmds.join(pc.dim("  ")));
+  // Compact command hint
+  p.log.message(
+    pc.dim("Type a message to chat, or ") + pc.cyan("/help") + pc.dim(" for available commands."),
+  );
 }
 
 // ── Slash command handlers ──────────────────────────────────────
@@ -372,38 +361,34 @@ async function handleSendMessage(
   try {
     const startTime = Date.now();
 
-    // Step 1: Show routing
-    process.stdout.write(
-      `\n${pc.dim("○")} ${pc.dim("Routing query")} ${pc.dim("→")} ${pc.yellow(provider)}${pc.dim("/")}${pc.yellow(model)}\n`,
+    // Spinner while routing + waiting for first token
+    const s = p.spinner();
+    s.start(
+      `${pc.cyan("Thinking")} ${pc.dim("→")} ${pc.yellow(provider)}${pc.dim("/")}${pc.yellow(model)}`,
     );
 
-    // Step 2: Start streaming
     let firstChunk = true;
 
     const result = await session.sendStream(trimmed, (chunk: string) => {
       if (firstChunk) {
-        // Show which agent was selected once streaming begins
-        process.stdout.write(
-          `${pc.dim("○")} ${pc.dim("Agent")} ${pc.magenta("...")} ${pc.dim("generating")}\n\n`,
-        );
+        // Stop spinner, then start streaming output
+        s.stop(`${pc.green("●")} ${pc.dim("Generating response...")}`);
+        process.stdout.write("\n");
         firstChunk = false;
       }
       process.stdout.write(chunk);
     });
 
-    if (!firstChunk) {
-      // Had streaming output
+    // If no chunks came through (empty response), stop spinner anyway
+    if (firstChunk) {
+      s.stop(`${pc.green("●")} ${pc.magenta(result.agent)} ${pc.dim("responded")}`);
+    } else {
       process.stdout.write("\n");
     }
 
     const durationMs = Date.now() - startTime;
 
-    // Step 3: Show completion with agent info
-    process.stdout.write(
-      `\n${pc.green("●")} ${pc.dim("Completed via")} ${pc.magenta(result.agent)}\n`,
-    );
-
-    // Render per-turn stats
+    // Show completion + per-turn stats
     const turnStats: TurnStats = {
       agent: result.agent,
       durationMs,
@@ -411,7 +396,7 @@ async function handleSendMessage(
       sessionTokens: result.sessionTokens,
       model,
     };
-    process.stdout.write(`${renderTurnStats(turnStats)}\n`);
+    process.stdout.write(`\n${renderTurnStats(turnStats)}\n`);
 
     // Context warning for large sessions
     if (result.sessionTokens > 100_000) {
@@ -426,6 +411,40 @@ async function handleSendMessage(
   }
 }
 
+// ── Help ────────────────────────────────────────────────────────
+
+const HELP_ENTRIES: Array<{ cmd: string; args?: string; desc: string }> = [
+  { cmd: "/help", desc: "Show this help message" },
+  { cmd: "/exit", desc: "Save session and exit chat" },
+  { cmd: "/agent", args: "<name>", desc: "Pin routing to a specific agent (use 'auto' to unpin)" },
+  { cmd: "/model", desc: "Switch LLM model (interactive picker)" },
+  { cmd: "/sessions", desc: "List saved chat sessions" },
+  { cmd: "/status", desc: "Show current session status bar" },
+  { cmd: "/history", desc: "Show recent messages in this session" },
+  { cmd: "/clear", desc: "Clear all messages (keeps session)" },
+  { cmd: "/save", desc: "Save the current session to disk" },
+  { cmd: "/plan", args: "<goal>", desc: "Decompose a goal into a task plan" },
+  { cmd: "/apply", args: "[plan-id]", desc: "Execute a saved plan" },
+  { cmd: "/scan", args: "[type]", desc: "Run security/dependency scanners" },
+];
+
+function handleHelpCommand(): void {
+  const width = getTermWidth();
+  const divider = pc.dim("─".repeat(Math.min(width, 80)));
+
+  console.log(`\n${divider}`);
+  console.log(`${pc.bold(pc.cyan("  DojOps Chat Commands"))}\n`);
+
+  for (const entry of HELP_ENTRIES) {
+    const cmdStr = pc.cyan(entry.cmd) + (entry.args ? ` ${pc.dim(entry.args)}` : "");
+    const padding = " ".repeat(Math.max(1, 28 - entry.cmd.length - (entry.args?.length ?? 0)));
+    console.log(`  ${cmdStr}${padding}${pc.dim(entry.desc)}`);
+  }
+
+  console.log(`\n${pc.dim("  Anything else is sent as a message to the AI agent.")}`);
+  console.log(divider);
+}
+
 // ── Slash command router ────────────────────────────────────────
 
 async function handleSlashCommand(
@@ -434,6 +453,10 @@ async function handleSlashCommand(
   rootDir: string,
   ctx: CLIContext,
 ): Promise<boolean> {
+  if (trimmed === "/help") {
+    handleHelpCommand();
+    return true;
+  }
   if (trimmed === "/history") {
     handleHistoryCommand(session);
     return true;
