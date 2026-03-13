@@ -4,8 +4,20 @@ import { ChatMessage as CoreChatMessage } from "@dojops/core";
 export class MemoryManager {
   constructor(private readonly maxMessages: number = 20) {}
 
-  getContextMessages(allMessages: ChatMessage[], summary?: string): CoreChatMessage[] {
+  getContextMessages(
+    allMessages: ChatMessage[],
+    summary?: string,
+    projectContext?: string,
+  ): CoreChatMessage[] {
     const result: CoreChatMessage[] = [];
+
+    // Inject project context so LLM knows about the actual project structure
+    if (projectContext) {
+      result.push({
+        role: "system",
+        content: `Current project information:\n${projectContext}`,
+      });
+    }
 
     if (summary) {
       result.push({

@@ -12,6 +12,8 @@ export interface ChatSessionOptions {
   mode?: SessionMode;
   /** Project domains from `dojops init` for context-biased routing. */
   projectDomains?: string[];
+  /** Project context string injected as system message so LLM knows the project. */
+  projectContext?: string;
 }
 
 export interface BridgeCommand {
@@ -22,6 +24,10 @@ export interface BridgeCommand {
 export interface SendResult {
   content: string;
   agent: string;
+  /** Per-turn token usage from the LLM provider (when available). */
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
+  /** Total estimated tokens across all session messages. */
+  sessionTokens: number;
 }
 
 export class ChatSession {
@@ -31,6 +37,7 @@ export class ChatSession {
   private readonly memoryManager: MemoryManager;
   private readonly summarizer: SessionSummarizer;
   private readonly projectDomains: string[];
+  private readonly projectContext?: string;
 
   constructor(opts: ChatSessionOptions) {
     this.provider = opts.provider;
@@ -38,6 +45,7 @@ export class ChatSession {
     this.memoryManager = new MemoryManager(opts.maxContextMessages ?? 20);
     this.summarizer = new SessionSummarizer(opts.provider);
     this.projectDomains = opts.projectDomains ?? [];
+    this.projectContext = opts.projectContext;
 
     this.state = opts.state ?? {
       id: generateSessionId(),
@@ -71,6 +79,7 @@ export class ChatSession {
       return {
         content: `__bridge__:${bridge.command}:${bridge.args}`,
         agent: "bridge",
+        sessionTokens: this.state.metadata.totalTokensEstimate,
       };
     }
 
@@ -116,6 +125,7 @@ export class ChatSession {
     const contextMessages = this.memoryManager.getContextMessages(
       this.state.messages,
       this.state.summary,
+      this.projectContext,
     );
 
     // UX #5: Call LLM with history — on failure, roll back user message to keep session clean
@@ -152,7 +162,12 @@ export class ChatSession {
       );
     }
 
-    return { content: response.content, agent: agent.name };
+    return {
+      content: response.content,
+      agent: agent.name,
+      usage: response.usage,
+      sessionTokens: this.state.metadata.totalTokensEstimate,
+    };
   }
 
   /**
@@ -165,7 +180,7 @@ export class ChatSession {
     if (bridge) {
       const content = `__bridge__:${bridge.command}:${bridge.args}`;
       onChunk(content);
-      return { content, agent: "bridge" };
+      return { content, agent: "bridge", sessionTokens: this.state.metadata.totalTokensEstimate };
     }
 
     // Add user message
@@ -204,6 +219,7 @@ export class ChatSession {
     const contextMessages = this.memoryManager.getContextMessages(
       this.state.messages,
       this.state.summary,
+      this.projectContext,
     );
 
     // Stream response
@@ -231,7 +247,12 @@ export class ChatSession {
     this.state.metadata.lastAgentUsed = agent.name;
     this.state.updatedAt = new Date().toISOString();
 
-    return { content: response.content, agent: agent.name };
+    return {
+      content: response.content,
+      agent: agent.name,
+      usage: response.usage,
+      sessionTokens: this.state.metadata.totalTokensEstimate,
+    };
   }
 
   setName(name: string): void {

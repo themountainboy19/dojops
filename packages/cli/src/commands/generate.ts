@@ -20,6 +20,7 @@ import { recordTask, queryMemory, buildMemoryContextString } from "../memory";
 import { classifyTaskRisk } from "../risk-classifier";
 import { cliApprovalHandler } from "../approval";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
+import { buildFileTree } from "@dojops/session";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
 type Context7Provider = {
@@ -74,6 +75,11 @@ function buildProjectContextString(projectRoot: string | undefined): string | un
   if (repoCtx.infra?.hasTerraform) parts.push("Has Terraform");
   if (repoCtx.infra?.hasKubernetes) parts.push("Has Kubernetes");
   if (repoCtx.meta?.isMonorepo) parts.push("Monorepo");
+
+  // Include file tree so LLM knows actual project structure
+  const tree = buildFileTree(projectRoot);
+  if (tree) parts.push(`\nProject files:\n${tree}`);
+
   return parts.length > 0 ? parts.join("; ") : undefined;
 }
 
@@ -495,6 +501,10 @@ function augmentPromptWithContext(prompt: string, projectRoot: string | undefine
   if (repoContext.infra.hasKubernetes) contextParts.push("Has Kubernetes");
   if (repoContext.container.hasDockerfile) contextParts.push("Has Dockerfile");
   if (repoContext.meta.isMonorepo) contextParts.push("Monorepo structure");
+
+  // Include file tree so LLM knows actual project structure
+  const tree = buildFileTree(projectRoot);
+  if (tree) contextParts.push(`\nProject files:\n${tree}`);
 
   if (contextParts.length > 0) {
     return `${prompt}\n\n[Project context: ${contextParts.join("; ")}]`;

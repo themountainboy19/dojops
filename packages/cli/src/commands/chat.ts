@@ -14,8 +14,8 @@ import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
-import { renderHeader } from "../tui/status-bar";
-import type { StatusBarState } from "../tui/status-bar";
+import { renderHeader, renderTurnStats, getTermWidth } from "../tui/status-bar";
+import type { StatusBarState, TurnStats } from "../tui/status-bar";
 import { highlightCodeBlocks } from "../tui/code-highlight";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
@@ -121,16 +121,29 @@ async function sendSingleMessage(
   session: ChatSession,
   messageFlag: string,
   isStructuredOutput: boolean,
+  ctx: CLIContext,
 ): Promise<void> {
+  const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
   const s = p.spinner();
+  const startTime = Date.now();
   if (!isStructuredOutput) s.start("Thinking...");
   try {
     const result = await session.send(messageFlag);
+    const durationMs = Date.now() - startTime;
     if (!isStructuredOutput) {
-      const agentLabel = `${pc.green("Agent")} ${pc.dim("(" + result.agent + ")")}`;
-      s.stop(agentLabel);
+      s.stop(pc.green("Done"));
     }
     displaySingleResult(result, isStructuredOutput);
+    if (!isStructuredOutput) {
+      const turnStats: TurnStats = {
+        agent: result.agent,
+        durationMs,
+        usage: result.usage,
+        sessionTokens: result.sessionTokens,
+        model,
+      };
+      process.stdout.write(`${renderTurnStats(turnStats)}\n`);
+    }
   } catch (err) {
     if (!isStructuredOutput) s.stop("Error");
     p.log.error(formatError(err));
@@ -155,7 +168,7 @@ async function handleSingleMessage(
   ctx: CLIContext,
 ): Promise<void> {
   const isStructuredOutput = ctx.globalOpts.output === "json" || ctx.globalOpts.output === "yaml";
-  await sendSingleMessage(session, messageFlag, isStructuredOutput);
+  await sendSingleMessage(session, messageFlag, isStructuredOutput, ctx);
   saveChatSession(rootDir, session.getState());
   if (ctx.globalOpts.output !== "json") {
     p.log.info(pc.dim(`Session: ${session.id}`));
@@ -174,19 +187,27 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
   const sessionState = session.getState();
   const msgCount = sessionState.messages.length;
 
-  const details = [
-    msgCount > 0 ? `${pc.dim("History:")} ${msgCount} messages` : "",
-    contextInfo ? pc.dim("Project context loaded") : "",
-  ]
-    .filter(Boolean)
-    .join("  ");
-  if (details) p.log.info(details);
+  // Status indicators
+  const indicators: string[] = [];
+  if (msgCount > 0) indicators.push(`${pc.green("●")} ${pc.dim(`History: ${msgCount} messages`)}`);
+  if (contextInfo) indicators.push(`${pc.green("●")} ${pc.dim("Project context loaded")}`);
+  if (indicators.length > 0) p.log.message(indicators.join("  "));
 
-  p.log.info(
-    pc.dim(
-      "Commands: /exit  /agent <name>  /model  /sessions  /status  /history  /clear  /save  /plan  /apply  /scan",
-    ),
-  );
+  // Commands in a compact layout
+  const cmds = [
+    pc.cyan("/exit"),
+    pc.cyan("/agent") + pc.dim(" <name>"),
+    pc.cyan("/model"),
+    pc.cyan("/sessions"),
+    pc.cyan("/status"),
+    pc.cyan("/history"),
+    pc.cyan("/clear"),
+    pc.cyan("/save"),
+    pc.cyan("/plan"),
+    pc.cyan("/apply"),
+    pc.cyan("/scan"),
+  ];
+  p.log.message(pc.dim("Commands: ") + cmds.join(pc.dim("  ")));
 }
 
 // ── Slash command handlers ──────────────────────────────────────
@@ -340,44 +361,68 @@ async function handleScanCommand(
 
 // ── Streaming message handler ───────────────────────────────────
 
-async function handleSendMessage(session: ChatSession, trimmed: string): Promise<void> {
-  // Try streaming first
+async function handleSendMessage(
+  session: ChatSession,
+  trimmed: string,
+  ctx: CLIContext,
+): Promise<void> {
+  const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+  const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
+
   try {
-    process.stdout.write(`${pc.green("Agent")} ${pc.dim("streaming...")}\n`);
-    let hasChunks = false;
+    const startTime = Date.now();
+
+    // Step 1: Show routing
+    process.stdout.write(
+      `\n${pc.dim("○")} ${pc.dim("Routing query")} ${pc.dim("→")} ${pc.yellow(provider)}${pc.dim("/")}${pc.yellow(model)}\n`,
+    );
+
+    // Step 2: Start streaming
+    let firstChunk = true;
 
     const result = await session.sendStream(trimmed, (chunk: string) => {
-      hasChunks = true;
+      if (firstChunk) {
+        // Show which agent was selected once streaming begins
+        process.stdout.write(
+          `${pc.dim("○")} ${pc.dim("Agent")} ${pc.magenta("...")} ${pc.dim("generating")}\n\n`,
+        );
+        firstChunk = false;
+      }
       process.stdout.write(chunk);
     });
 
-    if (hasChunks) {
-      // Finish the streaming line
+    if (!firstChunk) {
+      // Had streaming output
       process.stdout.write("\n");
     }
 
-    // Show agent name after response
-    const agentLabel = pc.dim(`(${result.agent})`);
-    p.log.info(agentLabel);
+    const durationMs = Date.now() - startTime;
 
-    showContextWarning(session);
+    // Step 3: Show completion with agent info
+    process.stdout.write(
+      `\n${pc.green("●")} ${pc.dim("Completed via")} ${pc.magenta(result.agent)}\n`,
+    );
+
+    // Render per-turn stats
+    const turnStats: TurnStats = {
+      agent: result.agent,
+      durationMs,
+      usage: result.usage,
+      sessionTokens: result.sessionTokens,
+      model,
+    };
+    process.stdout.write(`${renderTurnStats(turnStats)}\n`);
+
+    // Context warning for large sessions
+    if (result.sessionTokens > 100_000) {
+      p.log.warn(
+        pc.yellow(
+          `Context: ~${Math.round(result.sessionTokens / 1000)}K tokens. Consider /clear or start a new session.`,
+        ),
+      );
+    }
   } catch (err) {
     p.log.error(formatError(err));
-  }
-}
-
-function showContextWarning(session: ChatSession): void {
-  const sessionState = session.getState();
-  const totalChars = sessionState.messages.reduce((sum, m) => sum + m.content.length, 0);
-  const estimatedTokens = Math.ceil(totalChars / 4);
-  if (estimatedTokens > 100_000) {
-    p.log.warn(
-      pc.yellow(
-        `Context size: ~${Math.round(estimatedTokens / 1000)}K tokens. Consider starting a new session (/exit) to avoid degraded responses.`,
-      ),
-    );
-  } else if (estimatedTokens > 50_000) {
-    p.log.info(pc.dim(`Context: ~${Math.round(estimatedTokens / 1000)}K tokens`));
   }
 }
 
@@ -436,6 +481,27 @@ async function handleSlashCommand(
 
 // ── Interactive loop ────────────────────────────────────────────
 
+function showGoodbye(session: ChatSession): void {
+  const state = session.getState();
+  const msgCount = state.metadata.messageCount;
+  const tokens = state.metadata.totalTokensEstimate;
+  const width = getTermWidth();
+  const divider = pc.dim("─".repeat(Math.min(width, 80)));
+
+  console.log(`\n${divider}`);
+  console.log(`${pc.cyan("Session saved")} ${pc.dim(state.name ?? state.id)}`);
+
+  const stats: string[] = [];
+  if (msgCount > 0) stats.push(`${msgCount} messages`);
+  if (tokens > 0) stats.push(`~${Math.round(tokens / 1000)}K tokens`);
+  if (state.metadata.lastAgentUsed) stats.push(`last agent: ${state.metadata.lastAgentUsed}`);
+  if (stats.length > 0) console.log(pc.dim(stats.join(" · ")));
+
+  console.log(pc.dim("Resume with: dojops chat --resume"));
+  console.log(divider);
+  p.outro(pc.dim("Goodbye!"));
+}
+
 function isExitInput(input: unknown): boolean {
   return p.isCancel(input) || input === "/exit";
 }
@@ -451,7 +517,7 @@ async function processLoopInput(
 
   const handled = await handleSlashCommand(trimmed, session, rootDir, ctx);
   if (!handled) {
-    await handleSendMessage(session, trimmed);
+    await handleSendMessage(session, trimmed, ctx);
   }
 }
 
@@ -462,7 +528,7 @@ async function runInteractiveLoop(
 ): Promise<void> {
   const saveAndExit = () => {
     saveChatSession(rootDir, session.getState());
-    p.log.success(`\nSession saved: ${session.id}`);
+    showGoodbye(session);
     process.exit(ExitCode.SUCCESS);
   };
   process.on("SIGINT", saveAndExit);
@@ -475,7 +541,7 @@ async function runInteractiveLoop(
 
     if (isExitInput(input)) {
       saveChatSession(rootDir, session.getState());
-      p.log.success(`Session saved: ${session.id}`);
+      showGoodbye(session);
       break;
     }
 
@@ -484,7 +550,6 @@ async function runInteractiveLoop(
 
   process.off("SIGINT", saveAndExit);
   saveChatSession(rootDir, session.getState());
-  p.outro("Chat session ended.");
   // Force exit — Ollama's axios keep-alive connections prevent natural shutdown
   process.exit(ExitCode.SUCCESS);
 }
@@ -595,11 +660,11 @@ export async function chatCommand(args: string[], ctx: CLIContext): Promise<void
   const state = resolveSessionState(rootDir, resumeFlag, sessionName, deterministic);
   const mode: SessionMode = deterministic ? "DETERMINISTIC" : "INTERACTIVE";
 
-  const session = new ChatSession({ provider, router, state, mode });
+  const contextInfo = buildSessionContext(rootDir);
+
+  const session = new ChatSession({ provider, router, state, mode, projectContext: contextInfo });
 
   if (agentFlag) validateAgentFlag(session, agentFlag);
-
-  const contextInfo = buildSessionContext(rootDir);
 
   if (messageFlag) {
     await handleSingleMessage(session, messageFlag, rootDir, ctx);

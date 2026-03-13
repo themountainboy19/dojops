@@ -94,9 +94,60 @@ function loadSessionState(rootDir: string, parts: string[]): void {
   }
 }
 
+/** Build a lightweight file tree (max depth, skip hidden/node_modules). */
+export function buildFileTree(
+  rootDir: string,
+  maxDepth: number = 3,
+  maxEntries: number = 120,
+): string {
+  const lines: string[] = [];
+  const SKIP = new Set(["node_modules", ".git", ".dojops", "__pycache__", ".next", "dist", "out"]);
+
+  function walk(dir: string, prefix: string, depth: number): void {
+    if (depth > maxDepth || lines.length >= maxEntries) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    // Sort: dirs first, then files
+    entries.sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    for (const entry of entries) {
+      if (lines.length >= maxEntries) {
+        lines.push(`${prefix}... (truncated)`);
+        return;
+      }
+      if (entry.name.startsWith(".") || SKIP.has(entry.name)) continue;
+      if (entry.isDirectory()) {
+        lines.push(`${prefix}${entry.name}/`);
+        walk(path.join(dir, entry.name), prefix + "  ", depth + 1);
+      } else {
+        lines.push(`${prefix}${entry.name}`);
+      }
+    }
+  }
+
+  walk(rootDir, "", 0);
+  return lines.join("\n");
+}
+
 export function buildSessionContext(rootDir: string): string {
   const parts: string[] = [];
   loadProjectContext(rootDir, parts);
+
+  // Add file tree so LLM knows actual project structure
+  const tree = buildFileTree(rootDir);
+  if (tree) {
+    parts.push(`\n## Project File Tree`);
+    parts.push("```");
+    parts.push(tree);
+    parts.push("```");
+  }
+
   loadLatestScanSummary(rootDir, parts);
   loadSessionState(rootDir, parts);
   return parts.length > 0 ? parts.join("\n") : "";

@@ -12,6 +12,7 @@ import { classifyPlanRisk } from "../risk-classifier";
 import { wrapForNote, truncateNoteTitle } from "../formatter";
 import * as yaml from "js-yaml";
 import crypto from "node:crypto";
+import { buildFileTree } from "@dojops/session";
 import {
   findProjectRoot,
   initProject,
@@ -168,6 +169,7 @@ async function runDecomposition(
   ctx: CLIContext,
   isJson: boolean,
   executionMemory?: string,
+  fileTree?: string,
 ): Promise<TaskGraph> {
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
@@ -179,6 +181,7 @@ async function runDecomposition(
     graph = await decompose(prompt, provider, tools, {
       repoContext: repoContext ?? undefined,
       executionMemory,
+      fileTree,
     });
   } catch (err) {
     if (!isJson) s.stop("Decomposition failed.");
@@ -294,6 +297,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
 
   const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.tool, isJson);
   const executionMemory = await loadExecutionMemory(projectRoot, prompt);
+  const fileTree = projectRoot ? buildFileTree(projectRoot) : undefined;
 
   const graph = await runDecomposition(
     prompt,
@@ -303,6 +307,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     ctx,
     isJson,
     executionMemory,
+    fileTree,
   );
 
   enrichTasksWithMetadata(graph, registry);

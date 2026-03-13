@@ -44,6 +44,7 @@ import { runHooks } from "../hooks";
 import { createProgressReporter } from "../progress";
 import { validateReplayIntegrity, checkToolIntegrity } from "./replay-validator";
 import { createAutoInstallHandler } from "../toolchain-sandbox";
+import { buildFileTree } from "@dojops/session";
 // readExistingToolFile is no longer used here — existingContent is detected
 // lazily at execution time by each tool's runtime (detectContent in DopsRuntimeV2).
 
@@ -326,8 +327,10 @@ async function executeDryRun(
 
   try {
     const provider = ctx.getProvider();
+    const projectContext = buildFileTree(root);
     const registry = createModuleRegistry(provider, root, {
       onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+      projectContext: projectContext || undefined,
     });
     const tools = registry.getAll();
 
@@ -1114,8 +1117,10 @@ async function executeApplyPlan(
   if (flags.replay) {
     provider = new DeterministicProvider(provider);
   }
+  const projectContext = buildFileTree(root);
   const registry = createModuleRegistry(provider, root, {
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
+    projectContext: projectContext || undefined,
   });
   const tools = registry.getAll();
 

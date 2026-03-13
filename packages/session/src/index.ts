@@ -10,5 +10,5 @@ export {
   generateSessionId,
   cleanExpiredSessions,
 } from "./serializer";
-export { buildSessionContext } from "./context-injector";
+export { buildSessionContext, buildFileTree } from "./context-injector";
 export type { ChatMessage, ChatSessionState, SessionMode } from "./types";

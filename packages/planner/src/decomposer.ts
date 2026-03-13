@@ -9,6 +9,8 @@ export interface DecomposeOptions {
   repoContext?: RepoContext;
   /** Recent execution history summary for context-aware planning */
   executionMemory?: string;
+  /** Lightweight project file tree for structure-aware planning */
+  fileTree?: string;
 }
 
 /** Collect CI-related context bullets. */
@@ -107,6 +109,9 @@ export async function decompose(
   }
 
   const contextSection = options?.repoContext ? buildContextSection(options.repoContext) : "";
+  const fileTreeSection = options?.fileTree
+    ? `\n## Project File Tree\n\nExisting files in the project (reference these to avoid generating duplicates):\n\`\`\`\n${options.fileTree}\n\`\`\`\n`
+    : "";
   const memorySection = options?.executionMemory
     ? `\n## Execution Memory\n\n${options.executionMemory}\n\nUse this history to avoid duplicating work already completed. If a task was recently completed successfully, skip it unless the user explicitly asks to redo it.\n`
     : "";
@@ -118,6 +123,7 @@ export async function decompose(
 
 ${toolList}
 ${contextSection}
+${fileTreeSection}
 ${memorySection}
 
 ## How to write good task prompts
