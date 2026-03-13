@@ -113,10 +113,21 @@ export class SpecialistAgent {
         content: m.role === "user" ? sanitizeUserInput(m.content) : m.content,
       }));
 
+    // Providers strip system messages from the messages array — merge them
+    // into the system prompt so project context, chat-mode instructions, and
+    // conversation summaries actually reach the LLM.
+    const contextSystemMsgs = sanitizedMessages.filter((m) => m.role === "system");
+    const nonSystemMessages = sanitizedMessages.filter((m) => m.role !== "system");
+
     let systemPrompt = this.config.systemPrompt;
-    if (this.docAugmenter && sanitizedMessages.length > 0) {
+    if (contextSystemMsgs.length > 0) {
+      const contextBlock = contextSystemMsgs.map((m) => m.content).join("\n\n");
+      systemPrompt = `${systemPrompt}\n\n${contextBlock}`;
+    }
+
+    if (this.docAugmenter && nonSystemMessages.length > 0) {
       try {
-        const lastUserMsg = [...sanitizedMessages].reverse().find((m) => m.role === "user");
+        const lastUserMsg = [...nonSystemMessages].reverse().find((m) => m.role === "user");
         if (lastUserMsg) {
           const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
           systemPrompt = await this.docAugmenter.augmentPrompt(
@@ -136,7 +147,7 @@ export class SpecialistAgent {
         this.provider.generate({
           ...llmOpts,
           prompt: "",
-          messages: sanitizedMessages,
+          messages: nonSystemMessages,
           system: systemPrompt,
         }),
       timeoutMs,
@@ -171,10 +182,19 @@ export class SpecialistAgent {
         content: m.role === "user" ? sanitizeUserInput(m.content) : m.content,
       }));
 
+    // Merge system messages into the system prompt (providers strip them from messages)
+    const contextSystemMsgs = sanitizedMessages.filter((m) => m.role === "system");
+    const nonSystemMessages = sanitizedMessages.filter((m) => m.role !== "system");
+
     let systemPrompt = this.config.systemPrompt;
-    if (this.docAugmenter && sanitizedMessages.length > 0) {
+    if (contextSystemMsgs.length > 0) {
+      const contextBlock = contextSystemMsgs.map((m) => m.content).join("\n\n");
+      systemPrompt = `${systemPrompt}\n\n${contextBlock}`;
+    }
+
+    if (this.docAugmenter && nonSystemMessages.length > 0) {
       try {
-        const lastUserMsg = [...sanitizedMessages].reverse().find((m) => m.role === "user");
+        const lastUserMsg = [...nonSystemMessages].reverse().find((m) => m.role === "user");
         if (lastUserMsg) {
           const keywords = [this.config.domain, ...this.config.keywords.slice(0, 3)];
           systemPrompt = await this.docAugmenter.augmentPrompt(
@@ -192,7 +212,7 @@ export class SpecialistAgent {
     const request: LLMRequest = {
       ...llmOpts,
       prompt: "",
-      messages: sanitizedMessages,
+      messages: nonSystemMessages,
       system: systemPrompt,
     };
 

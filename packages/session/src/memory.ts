@@ -11,6 +11,18 @@ export class MemoryManager {
   ): CoreChatMessage[] {
     const result: CoreChatMessage[] = [];
 
+    // Chat-mode override: the specialist system prompt says "single-shot interaction"
+    // but in chat we ARE multi-turn, so override that instruction.
+    result.push({
+      role: "system",
+      content:
+        "This is a multi-turn chat session — the user CAN reply and ask follow-up questions. " +
+        "When the user asks you to analyze, review, or check project files, use the actual file " +
+        "contents provided in the project context below to give specific, actionable feedback. " +
+        "Do NOT output generic task lists or plans — instead, directly analyze the files and " +
+        "provide concrete findings with file paths, line references, and specific fixes.",
+    });
+
     // Inject project context so LLM knows about the actual project structure
     if (projectContext) {
       result.push({

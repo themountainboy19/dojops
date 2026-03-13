@@ -249,6 +249,8 @@ Always design pipelines that are fast, reliable, and secure.${NO_FOLLOWUP_INSTRU
     "cd",
     "pipeline",
     "github actions",
+    "github workflows",
+    "github workflow",
     "build",
     "deploy",
     "release",
@@ -258,11 +260,12 @@ Always design pipelines that are fast, reliable, and secure.${NO_FOLLOWUP_INSTRU
     "gitlab ci",
     "artifact",
     "workflow",
+    "workflows",
     "cache",
     "matrix",
     "runner",
   ],
-  primaryKeywords: ["pipeline", "github actions", "ci", "cd", "jenkinsfile"],
+  primaryKeywords: ["pipeline", "github actions", "ci", "cd", "jenkinsfile", "workflows"],
 };
 
 // ---------------------------------------------------------------------------
@@ -817,8 +820,12 @@ Always be specific — cite exact versions, line references, and concrete fixes.
     "security review",
     "upgrade",
     "update versions",
+    "analyze",
+    "analyse",
+    "missing",
+    "improve",
   ],
-  primaryKeywords: ["review", "validate", "outdated", "deprecated", "devsecops"],
+  primaryKeywords: ["review", "validate", "outdated", "deprecated", "devsecops", "analyze"],
 };
 
 // ---------------------------------------------------------------------------

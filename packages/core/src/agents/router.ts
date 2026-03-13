@@ -1,6 +1,8 @@
+import { z } from "zod";
 import { LLMProvider } from "../llm/provider";
 import { SpecialistAgent, SpecialistConfig } from "./specialist";
 import { ALL_SPECIALIST_CONFIGS } from "./specialists";
+import { parseAndValidate } from "../llm/json-validator";
 
 export interface RouteResult {
   agent: SpecialistAgent;
@@ -35,8 +37,9 @@ export class AgentRouter {
   /**
    * Check if a keyword matches in the prompt using word boundary awareness.
    * Multi-word keywords use substring match (already specific enough).
-   * Single-word keywords use word boundary regex to avoid false positives
-   * (e.g., "ci" shouldn't match "circuit").
+   * Single-word keywords use word boundary matching to avoid false positives
+   * (e.g., "ci" shouldn't match "circuit"), but allow plural suffixes
+   * (e.g., "workflow" matches "workflows").
    */
   private matchesKeyword(lower: string, kw: string): boolean {
     if (kw.includes(" ")) {
@@ -48,7 +51,12 @@ export class AgentRouter {
       const idx = lower.indexOf(kw, start);
       if (idx === -1) return false;
       const before = idx === 0 || !isWordChar(lower[idx - 1]);
-      const after = idx + kw.length === lower.length || !isWordChar(lower[idx + kw.length]);
+      const endIdx = idx + kw.length;
+      const after =
+        endIdx === lower.length ||
+        !isWordChar(lower[endIdx]) ||
+        // Allow plural suffix: keyword + "s" at word boundary
+        (lower[endIdx] === "s" && (endIdx + 1 === lower.length || !isWordChar(lower[endIdx + 1])));
       if (before && after) return true;
       start = idx + 1;
     }
@@ -132,6 +140,57 @@ export class AgentRouter {
       confidence: best.confidence,
       reason: `Matched keywords: ${best.keywords.join(", ")}`,
     };
+  }
+
+  /**
+   * LLM-based routing: asks the LLM to classify the user message and pick the
+   * best specialist agent. Falls back to keyword-based `route()` on failure.
+   */
+  async routeWithLLM(prompt: string, options?: RouteOptions): Promise<RouteResult> {
+    try {
+      const agentList = this.agents
+        .map((a) => `- ${a.name}: ${a.description ?? a.domain}`)
+        .join("\n");
+
+      const routingPrompt =
+        `Select the single best specialist agent for this user message.\n\n` +
+        `Available agents:\n${agentList}\n\n` +
+        `User message: "${prompt}"\n\n` +
+        `Pick the agent whose expertise best matches the user's intent. ` +
+        `If the request spans multiple domains, pick the most relevant one — ` +
+        `do NOT pick ops-cortex unless the user explicitly asks for task planning or decomposition.`;
+
+      const routeSchema = z.object({
+        agent: z.string().describe("The name of the selected agent"),
+        reason: z.string().describe("One-sentence explanation for the choice"),
+      });
+
+      const response = await this.provider.generate({
+        system: "You are a routing classifier. Output valid JSON matching the schema. Be concise.",
+        prompt: routingPrompt,
+        schema: routeSchema,
+        temperature: 0,
+      });
+
+      const parsed = parseAndValidate<{ agent: string; reason: string }>(
+        response.content,
+        routeSchema,
+      );
+
+      const matched = this.agents.find((a) => a.name === parsed.agent);
+      if (!matched) {
+        return this.route(prompt, options);
+      }
+
+      return {
+        agent: matched,
+        confidence: 1,
+        reason: `LLM routing: ${parsed.reason}`,
+      };
+    } catch {
+      // LLM routing failed — fall back to keyword matching
+      return this.route(prompt, options);
+    }
   }
 
   getAgents(): SpecialistAgent[] {

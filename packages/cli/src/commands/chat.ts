@@ -9,12 +9,19 @@ import {
   listSessions as listChatSessions,
   generateSessionId,
 } from "@dojops/session";
-import type { ChatSessionState, SessionMode } from "@dojops/session";
+import type { ChatSessionState, SessionMode, ChatProgressCallbacks } from "@dojops/session";
 import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
-import { renderHeader, renderTurnStats, renderContextBar, getTermWidth } from "../tui/status-bar";
+import {
+  renderHeader,
+  renderTurnStats,
+  renderContextBar,
+  renderPhaseIndicator,
+  renderCompactionNotice,
+  getTermWidth,
+} from "../tui/status-bar";
 import type { StatusBarState, TurnStats, ContextBarState } from "../tui/status-bar";
 import { execFileSync } from "node:child_process";
 import { highlightCodeBlocks } from "../tui/code-highlight";
@@ -140,14 +147,31 @@ async function sendSingleMessage(
   ctx: CLIContext,
 ): Promise<void> {
   const model = ctx.globalOpts.model ?? process.env.DOJOPS_MODEL ?? "(default)";
+  const provider = ctx.globalOpts.provider ?? process.env.DOJOPS_PROVIDER ?? "openai";
   const s = p.spinner();
   const startTime = Date.now();
-  if (!isStructuredOutput) s.start("Thinking...");
+  let compactionInfo: { messagesSummarized: number; messagesRetained: number } | undefined;
+
+  const progress: ChatProgressCallbacks = {
+    onPhase: (phase, detail) => {
+      if (isStructuredOutput) return;
+      const line = renderPhaseIndicator({ phase, detail, provider, model });
+      if (line) s.message(line);
+    },
+    onCompaction: (info) => {
+      compactionInfo = info;
+    },
+  };
+
+  if (!isStructuredOutput) s.start(renderPhaseIndicator({ phase: "routing" }));
   try {
-    const result = await session.send(messageFlag);
+    const result = await session.send(messageFlag, progress);
     const durationMs = Date.now() - startTime;
     if (!isStructuredOutput) {
       s.stop(pc.green("Done"));
+      if (compactionInfo) {
+        process.stdout.write(`${renderCompactionNotice(compactionInfo)}\n`);
+      }
     }
     displaySingleResult(result, isStructuredOutput);
     if (!isStructuredOutput) {
@@ -364,6 +388,16 @@ async function handleScanCommand(
   }
 }
 
+// ── Phase line helpers ───────────────────────────────────────────
+
+function writePhaseLine(line: string): void {
+  if (process.stdout.isTTY) process.stdout.write(`\r\x1b[K${line}`);
+}
+
+function clearPhaseLine(): void {
+  if (process.stdout.isTTY) process.stdout.write("\r\x1b[K");
+}
+
 // ── Streaming message handler ───────────────────────────────────
 
 async function handleSendMessage(
@@ -376,35 +410,47 @@ async function handleSendMessage(
 
   try {
     const startTime = Date.now();
-
-    // Spinner while routing + waiting for first token
-    const s = p.spinner();
-    s.start(
-      `${pc.cyan("Thinking")} ${pc.dim("→")} ${pc.yellow(provider)}${pc.dim("/")}${pc.yellow(model)}`,
-    );
-
     let firstChunk = true;
 
-    const result = await session.sendStream(trimmed, (chunk: string) => {
-      if (firstChunk) {
-        // Stop spinner, then start streaming output
-        s.stop(`${pc.green("●")} ${pc.dim("Generating response...")}`);
-        process.stdout.write("\n");
-        firstChunk = false;
-      }
-      process.stdout.write(chunk);
-    });
+    // Show initial routing phase
+    writePhaseLine(renderPhaseIndicator({ phase: "routing" }));
 
-    // If no chunks came through (empty response), stop spinner anyway
+    const progress: ChatProgressCallbacks = {
+      onPhase: (phase, detail) => {
+        if (phase === "done") return;
+        writePhaseLine(renderPhaseIndicator({ phase, detail, provider, model }));
+      },
+      onCompaction: (info) => {
+        // Print compaction notice as a permanent line (not overwritten)
+        clearPhaseLine();
+        process.stdout.write(`${renderCompactionNotice(info)}\n`);
+      },
+    };
+
+    const result = await session.sendStream(
+      trimmed,
+      (chunk: string) => {
+        if (firstChunk) {
+          clearPhaseLine();
+          process.stdout.write("\n");
+          firstChunk = false;
+        }
+        process.stdout.write(chunk);
+      },
+      progress,
+    );
+
+    // If no chunks came through (empty response), clear phase line
     if (firstChunk) {
-      s.stop(`${pc.green("●")} ${pc.magenta(result.agent)} ${pc.dim("responded")}`);
+      clearPhaseLine();
+      process.stdout.write(`${pc.green("●")} ${pc.magenta(result.agent)} ${pc.dim("responded")}\n`);
     } else {
       process.stdout.write("\n");
     }
 
     const durationMs = Date.now() - startTime;
 
-    // Show completion + per-turn stats
+    // Show per-turn stats
     const turnStats: TurnStats = {
       agent: result.agent,
       durationMs,
@@ -423,6 +469,7 @@ async function handleSendMessage(
       );
     }
   } catch (err) {
+    clearPhaseLine();
     p.log.error(formatError(err));
   }
 }

@@ -207,6 +207,40 @@ export function renderContextBar(state: ContextBarState): string {
   return `${divider}\n${left}${" ".repeat(gap)}${right}`;
 }
 
+export function renderPhaseIndicator(state: {
+  phase: string;
+  detail?: string;
+  provider?: string;
+  model?: string;
+}): string {
+  switch (state.phase) {
+    case "routing":
+      return `${pc.cyan("●")} ${pc.dim("Routing...")}`;
+    case "compacting":
+      return `${pc.yellow("●")} ${pc.dim("Compacting conversation...")}`;
+    case "generating": {
+      const agent = state.detail ? pc.magenta(state.detail) : "";
+      const modelInfo =
+        state.provider && state.model
+          ? ` ${pc.dim("→")} ${pc.yellow(state.provider)}${pc.dim("/")}${pc.yellow(state.model)}`
+          : "";
+      return `${pc.green("●")} ${pc.dim("Generating response...")} ${agent}${modelInfo}`;
+    }
+    default:
+      return "";
+  }
+}
+
+export function renderCompactionNotice(info: {
+  messagesSummarized: number;
+  messagesRetained: number;
+}): string {
+  return (
+    `${pc.yellow("✳")} ${pc.bold("Conversation compacted")}\n` +
+    `  ${pc.dim("↳")} ${pc.dim(`Summarized ${info.messagesSummarized} messages, ${info.messagesRetained} retained`)}`
+  );
+}
+
 /** Get terminal width, defaulting to 80. */
 export function getTermWidth(): number {
   return process.stdout.columns || 80;

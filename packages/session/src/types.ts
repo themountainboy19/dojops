@@ -21,3 +21,18 @@ export interface ChatSessionState {
     lastAgentUsed?: string;
   };
 }
+
+/** Phases of chat message processing, reported via progress callbacks. */
+export type ChatPhase = "routing" | "compacting" | "generating" | "done";
+
+/** Information about a conversation compaction event. */
+export interface CompactionInfo {
+  messagesSummarized: number;
+  messagesRetained: number;
+}
+
+/** Optional callbacks for observing chat processing phases. */
+export interface ChatProgressCallbacks {
+  onPhase?: (phase: ChatPhase, detail?: string) => void;
+  onCompaction?: (info: CompactionInfo) => void;
+}

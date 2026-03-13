@@ -33,6 +33,24 @@ describe("autoDetectModule", () => {
   it("is case-insensitive", () => {
     expect(autoDetectModule("Create a DOCKERFILE")).toBe("dockerfile");
   });
+
+  it("skips module detection for analysis questions", () => {
+    expect(
+      autoDetectModule("What do you think about our current github workflows?"),
+    ).toBeUndefined();
+    expect(autoDetectModule("Analyse our terraform configuration")).toBeUndefined();
+    expect(autoDetectModule("Review the kubernetes deployment")).toBeUndefined();
+    expect(autoDetectModule("Is our dockerfile following best practices?")).toBeUndefined();
+    expect(autoDetectModule("Check the ansible playbook for issues")).toBeUndefined();
+    expect(autoDetectModule("Tell me about the nginx config")).toBeUndefined();
+  });
+
+  it("still detects modules for generation prompts with action verbs", () => {
+    expect(autoDetectModule("Create a GitHub Actions workflow")).toBe("github-actions");
+    expect(autoDetectModule("Generate terraform config for S3")).toBe("terraform");
+    expect(autoDetectModule("Write a kubernetes deployment manifest")).toBe("kubernetes");
+    expect(autoDetectModule("Set up a dockerfile for Node.js")).toBe("dockerfile");
+  });
 });
 
 describe("autoDetectInstalledModule", () => {

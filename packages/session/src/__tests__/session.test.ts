@@ -147,6 +147,8 @@ describe("ChatSession", () => {
 
       const router = new AgentRouter(provider);
       const session = new ChatSession({ provider, router, maxContextMessages: 4 });
+      // Pin agent to skip LLM routing (this test is about summarization, not routing)
+      session.pinAgent("ops-cortex");
 
       const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 

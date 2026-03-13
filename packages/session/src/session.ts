@@ -1,5 +1,5 @@
 import { LLMProvider, AgentRouter, StreamCallback } from "@dojops/core";
-import { ChatMessage, ChatSessionState, SessionMode } from "./types";
+import { ChatMessage, ChatSessionState, SessionMode, ChatProgressCallbacks } from "./types";
 import { MemoryManager } from "./memory";
 import { SessionSummarizer } from "./summarizer";
 import { generateSessionId } from "./serializer";
@@ -72,7 +72,7 @@ export class ChatSession {
     return this.state.mode;
   }
 
-  async send(userMessage: string): Promise<SendResult> {
+  async send(userMessage: string, progress?: ChatProgressCallbacks): Promise<SendResult> {
     // Check for bridge command
     const bridge = this.isBridgeCommand(userMessage);
     if (bridge) {
@@ -97,12 +97,18 @@ export class ChatSession {
       this.state.mode === "INTERACTIVE" &&
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
+      progress?.onPhase?.("compacting");
       try {
         const keepCount = this.memoryManager["maxMessages"];
-        const oldMessages = this.state.messages.slice(0, this.state.messages.length - keepCount);
+        const totalBefore = this.state.messages.length;
+        const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
         // Trim old messages after successful summarization to prevent memory leak
         this.state.messages = this.state.messages.slice(-keepCount);
+        progress?.onCompaction?.({
+          messagesSummarized: totalBefore - keepCount,
+          messagesRetained: keepCount,
+        });
       } catch (err) {
         console.warn(
           "Session summarization failed, continuing without summary:",
@@ -111,15 +117,20 @@ export class ChatSession {
       }
     }
 
-    // Route to agent
+    // Route to agent (LLM-based for natural language understanding)
+    progress?.onPhase?.("routing");
     const agentName = this.state.pinnedAgent;
     const agents = this.router.getAgents();
     let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
 
     if (!agent) {
-      const route = this.router.route(userMessage, { projectDomains: this.projectDomains });
+      const route = await this.router.routeWithLLM(userMessage, {
+        projectDomains: this.projectDomains,
+      });
       agent = route.agent;
     }
+
+    progress?.onPhase?.("generating", agent.name);
 
     // Build context messages for LLM
     const contextMessages = this.memoryManager.getContextMessages(
@@ -154,6 +165,8 @@ export class ChatSession {
     this.state.metadata.lastAgentUsed = agent.name;
     this.state.updatedAt = new Date().toISOString();
 
+    progress?.onPhase?.("done");
+
     // Warn when session approaches typical context limit (85% of 128K tokens)
     const TOKEN_LIMIT_THRESHOLD = 108_000; // ~85% of 128K
     if (this.state.metadata.totalTokensEstimate > TOKEN_LIMIT_THRESHOLD) {
@@ -174,7 +187,11 @@ export class ChatSession {
    * Send a message with streaming — calls onChunk with each text delta.
    * Falls back to non-streaming send() if the agent doesn't support it.
    */
-  async sendStream(userMessage: string, onChunk: StreamCallback): Promise<SendResult> {
+  async sendStream(
+    userMessage: string,
+    onChunk: StreamCallback,
+    progress?: ChatProgressCallbacks,
+  ): Promise<SendResult> {
     // Bridge commands don't stream
     const bridge = this.isBridgeCommand(userMessage);
     if (bridge) {
@@ -196,24 +213,35 @@ export class ChatSession {
       this.state.mode === "INTERACTIVE" &&
       this.memoryManager.needsSummarization(this.state.messages.length)
     ) {
+      progress?.onPhase?.("compacting");
       try {
         const keepCount = this.memoryManager["maxMessages"];
-        const oldMessages = this.state.messages.slice(0, this.state.messages.length - keepCount);
+        const totalBefore = this.state.messages.length;
+        const oldMessages = this.state.messages.slice(0, totalBefore - keepCount);
         this.state.summary = await this.summarizer.summarize(oldMessages);
         this.state.messages = this.state.messages.slice(-keepCount);
+        progress?.onCompaction?.({
+          messagesSummarized: totalBefore - keepCount,
+          messagesRetained: keepCount,
+        });
       } catch {
         // Non-fatal
       }
     }
 
-    // Route to agent
+    // Route to agent (LLM-based for natural language understanding)
+    progress?.onPhase?.("routing");
     const agentName = this.state.pinnedAgent;
     const agents = this.router.getAgents();
     let agent = agentName ? agents.find((a) => a.name === agentName) : undefined;
     if (!agent) {
-      const route = this.router.route(userMessage, { projectDomains: this.projectDomains });
+      const route = await this.router.routeWithLLM(userMessage, {
+        projectDomains: this.projectDomains,
+      });
       agent = route.agent;
     }
+
+    progress?.onPhase?.("generating", agent.name);
 
     // Build context
     const contextMessages = this.memoryManager.getContextMessages(
@@ -246,6 +274,8 @@ export class ChatSession {
     );
     this.state.metadata.lastAgentUsed = agent.name;
     this.state.updatedAt = new Date().toISOString();
+
+    progress?.onPhase?.("done");
 
     return {
       content: response.content,

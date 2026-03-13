@@ -113,6 +113,40 @@ function writeFileContent(
   return "created";
 }
 
+/**
+ * If content is a JSON `{ "files": { "path": "content", ... } }` object,
+ * render each file with a header and code block for human readability.
+ */
+function tryRenderFileBlocks(content: string): string | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !parsed.files ||
+      typeof parsed.files !== "object"
+    ) {
+      return null;
+    }
+    const entries = Object.entries(parsed.files as Record<string, string>);
+    if (entries.length === 0) return null;
+
+    const blocks: string[] = [];
+    for (const [filePath, fileContent] of entries) {
+      if (typeof fileContent !== "string") continue;
+      const ext = filePath.split(".").pop() ?? "";
+      blocks.push(`${pc.cyan("─")} ${pc.bold(filePath)}`);
+      blocks.push(`${pc.dim("```" + ext)}`);
+      blocks.push(fileContent);
+      blocks.push(pc.dim("```"));
+      blocks.push("");
+    }
+    return blocks.join("\n");
+  } catch {
+    return null;
+  }
+}
+
 /** @internal exported for testing */
 export function outputFormatted(
   outputMode: string | undefined,
@@ -136,7 +170,10 @@ export function outputFormatted(
       console.log(`  ${line}`);
     }
   } else if (process.stdout.isTTY) {
-    p.log.message(content);
+    // If the LLM returned a JSON { files: { ... } } object, render each file block
+    // with filename headers instead of dumping raw JSON.
+    const rendered = tryRenderFileBlocks(content);
+    p.log.message(rendered ?? content);
   } else {
     process.stdout.write(content);
   }
@@ -160,10 +197,29 @@ const MODULE_KEYWORDS: Record<string, string[]> = {
 };
 
 /**
+ * Detect if the prompt is asking for analysis/review rather than generation.
+ * Analysis prompts should route to specialist agents, not modules.
+ */
+function isAnalysisIntent(prompt: string): boolean {
+  const lower = prompt.toLowerCase();
+  // Question patterns — user is asking about existing infrastructure
+  const questionPatterns = [
+    /^(what|how|why|is|are|do|does|can|could|should|would|tell|explain|describe|show)\b/,
+    /\b(analy[sz]e|review|check|evaluate|audit|inspect|assess|examine|look at)\b/,
+    /\b(think about|opinion|feedback|improve|missing|wrong|issue|problem)\b/,
+    /\b(good|bad|correct|best practice|recommend)\b.*\?/,
+    /\?\s*$/,
+  ];
+  return questionPatterns.some((p) => p.test(lower));
+}
+
+/**
  * Auto-detect a module from the prompt based on keyword matching.
  * Returns the module name if a strong match is found, undefined otherwise.
+ * Skips detection when the prompt is an analysis/review question.
  */
 export function autoDetectModule(prompt: string): string | undefined {
+  if (isAnalysisIntent(prompt)) return undefined;
   const lower = prompt.toLowerCase();
   for (const [moduleName, keywords] of Object.entries(MODULE_KEYWORDS)) {
     for (const kw of keywords) {

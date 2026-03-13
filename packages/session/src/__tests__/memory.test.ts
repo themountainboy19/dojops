@@ -11,9 +11,12 @@ describe("MemoryManager", () => {
     const mm = new MemoryManager(10);
     const msgs = [makeMsg("user", "Hello"), makeMsg("assistant", "Hi")];
     const result = mm.getContextMessages(msgs);
-    expect(result).toHaveLength(2);
-    expect(result[0].content).toBe("Hello");
-    expect(result[1].content).toBe("Hi");
+    // First message is the chat-mode system instruction
+    expect(result).toHaveLength(3);
+    expect(result[0].role).toBe("system");
+    expect(result[0].content).toContain("multi-turn chat session");
+    expect(result[1].content).toBe("Hello");
+    expect(result[2].content).toBe("Hi");
   });
 
   it("returns only the last N messages when exceeding window", () => {
@@ -26,20 +29,24 @@ describe("MemoryManager", () => {
       makeMsg("user", "msg5"),
     ];
     const result = mm.getContextMessages(msgs);
-    expect(result).toHaveLength(3);
-    expect(result[0].content).toBe("msg3");
-    expect(result[1].content).toBe("msg4");
-    expect(result[2].content).toBe("msg5");
+    // +1 for chat-mode system instruction
+    expect(result).toHaveLength(4);
+    expect(result[1].content).toBe("msg3");
+    expect(result[2].content).toBe("msg4");
+    expect(result[3].content).toBe("msg5");
   });
 
   it("injects summary as first system message", () => {
     const mm = new MemoryManager(3);
     const msgs = [makeMsg("user", "msg1"), makeMsg("assistant", "msg2")];
     const result = mm.getContextMessages(msgs, "This is a summary of previous conversation.");
-    expect(result).toHaveLength(3);
+    // chat-mode instruction + summary system message + 2 messages
+    expect(result).toHaveLength(4);
     expect(result[0].role).toBe("system");
-    expect(result[0].content).toContain("summary");
-    expect(result[1].content).toBe("msg1");
+    expect(result[0].content).toContain("multi-turn chat session");
+    expect(result[1].role).toBe("system");
+    expect(result[1].content).toContain("summary");
+    expect(result[2].content).toBe("msg1");
   });
 
   it("needsSummarization returns true when threshold exceeded", () => {

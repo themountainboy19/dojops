@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { parseDojopsMdString } from "@dojops/core";
+import { parseDojopsMdString, discoverDevOpsFiles } from "@dojops/core";
 import type { RepoContext } from "@dojops/core";
 
 /** Load project context from DOJOPS.md (preferred) or .dojops/context.json (legacy). */
@@ -135,6 +135,44 @@ export function buildFileTree(
   return lines.join("\n");
 }
 
+/** Maximum total size for injected DevOps file contents (~24KB ≈ ~6K tokens). */
+const MAX_DEVOPS_CONTENT_SIZE = 24 * 1024;
+
+/**
+ * Discover and inject actual DevOps file contents into the context.
+ * This allows agents to analyze CI/CD, Docker, Terraform, etc. files directly.
+ */
+function loadDevOpsFileContents(rootDir: string, parts: string[]): void {
+  try {
+    const files = discoverDevOpsFiles(rootDir);
+    if (files.length === 0) return;
+
+    parts.push(`\n## Project DevOps Files`);
+    parts.push(
+      "The following are the actual contents of DevOps configuration files in the project.",
+      "Use these to provide specific analysis when asked about the project's CI/CD, infrastructure, or configuration.",
+    );
+
+    let totalSize = 0;
+    let includedCount = 0;
+    for (const file of files) {
+      const entrySize = file.path.length + file.content.length + 20; // overhead for formatting
+      if (totalSize + entrySize > MAX_DEVOPS_CONTENT_SIZE) break;
+      parts.push(`\n### \`${file.path}\`\n\`\`\`\n${file.content}\n\`\`\``);
+      totalSize += entrySize;
+      includedCount++;
+    }
+
+    if (includedCount < files.length) {
+      parts.push(
+        `\n*${files.length - includedCount} additional DevOps files not shown (context limit).*`,
+      );
+    }
+  } catch {
+    // Non-fatal — continue without file contents
+  }
+}
+
 export function buildSessionContext(rootDir: string): string {
   const parts: string[] = [];
   loadProjectContext(rootDir, parts);
@@ -147,6 +185,9 @@ export function buildSessionContext(rootDir: string): string {
     parts.push(tree);
     parts.push("```");
   }
+
+  // Inject actual DevOps file contents for analysis
+  loadDevOpsFileContents(rootDir, parts);
 
   loadLatestScanSummary(rootDir, parts);
   loadSessionState(rootDir, parts);
