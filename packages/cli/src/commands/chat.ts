@@ -14,11 +14,27 @@ import { CLIContext } from "../types";
 import { findProjectRoot } from "../state";
 import { extractFlagValue, hasFlag } from "../parser";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
-import { renderHeader, renderTurnStats, getTermWidth } from "../tui/status-bar";
-import type { StatusBarState, TurnStats } from "../tui/status-bar";
+import { renderHeader, renderTurnStats, renderContextBar, getTermWidth } from "../tui/status-bar";
+import type { StatusBarState, TurnStats, ContextBarState } from "../tui/status-bar";
+import { execFileSync } from "node:child_process";
 import { highlightCodeBlocks } from "../tui/code-highlight";
 
 type DocAugmenter = { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
+
+/** Detect the current git branch, or undefined if not a git repo. */
+function detectGitBranch(rootDir: string): string | undefined {
+  try {
+    return (
+      execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+        cwd: rootDir,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim() || undefined
+    );
+  } catch {
+    return undefined;
+  }
+}
 
 async function loadDocAugmenter(): Promise<DocAugmenter | undefined> {
   if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return undefined;
@@ -564,7 +580,17 @@ async function runInteractiveLoop(
   };
   process.on("SIGINT", saveAndExit);
 
+  // Detect git branch once at session start
+  const gitBranch = detectGitBranch(rootDir);
+
   while (true) {
+    // Render context bar before each prompt (branch + context %)
+    const ctxBar: ContextBarState = {
+      branch: gitBranch,
+      tokenEstimate: session.getState().metadata.totalTokensEstimate,
+    };
+    console.log(renderContextBar(ctxBar));
+
     const input = await p.text({
       message: pc.cyan("You"),
       placeholder: "Type a message or /command...",

@@ -158,6 +158,55 @@ function estimateCost(promptTokens: number, completionTokens: number, model: str
   return (promptTokens * inputPer1M + completionTokens * outputPer1M) / 1_000_000;
 }
 
+/** Max context window size in tokens (128K default). */
+const CONTEXT_WINDOW = 128_000;
+
+export interface ContextBarState {
+  /** Git branch name, or undefined if not a git repo. */
+  branch?: string;
+  /** Estimated total tokens used in the session. */
+  tokenEstimate: number;
+  /** Context window size (defaults to 128K). */
+  contextWindow?: number;
+}
+
+/**
+ * Render the bottom context bar (like Claude Code):
+ *   main                          6% until auto-compact
+ */
+export function renderContextBar(state: ContextBarState): string {
+  const width = getTermWidth();
+  const barWidth = Math.min(width, 80);
+  const divider = pc.dim(DIVIDER_CHAR.repeat(barWidth));
+
+  const left = state.branch ? pc.dim(`  ${state.branch}`) : "";
+
+  const ctxWindow = state.contextWindow ?? CONTEXT_WINDOW;
+  const used = state.tokenEstimate;
+  const pctUsed = ctxWindow > 0 ? Math.min(Math.round((used / ctxWindow) * 100), 100) : 0;
+  const pctRemaining = 100 - pctUsed;
+
+  let rightLabel: string;
+  if (pctRemaining <= 5) {
+    rightLabel = pc.red(`${pctRemaining}% until auto-compact`);
+  } else if (pctRemaining <= 20) {
+    rightLabel = pc.yellow(`${pctRemaining}% until auto-compact`);
+  } else {
+    rightLabel = pc.dim(`${pctRemaining}% until auto-compact`);
+  }
+  const right = `${rightLabel}  `;
+
+  // Pad between left and right to fill the bar width
+  // Strip ANSI for length calculation
+  // eslint-disable-next-line no-control-regex
+  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+  const leftLen = stripAnsi(left).length;
+  const rightLen = stripAnsi(right).length;
+  const gap = Math.max(1, barWidth - leftLen - rightLen);
+
+  return `${divider}\n${left}${" ".repeat(gap)}${right}`;
+}
+
 /** Get terminal width, defaulting to 80. */
 export function getTermWidth(): number {
   return process.stdout.columns || 80;
