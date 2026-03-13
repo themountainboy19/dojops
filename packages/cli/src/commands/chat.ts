@@ -540,6 +540,14 @@ async function processLoopInput(
 
   const handled = await handleSlashCommand(trimmed, session, rootDir, ctx);
   if (!handled) {
+    // Block unknown slash commands from being sent to the LLM
+    if (trimmed.startsWith("/")) {
+      const cmd = trimmed.split(/\s/)[0];
+      p.log.warn(
+        `Unknown command ${pc.cyan(cmd)}. Type ${pc.cyan("/help")} for available commands.`,
+      );
+      return;
+    }
     await handleSendMessage(session, trimmed, ctx);
   }
 }
