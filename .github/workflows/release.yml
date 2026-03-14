@@ -87,7 +87,7 @@ jobs:
           files: checksums/SHA256SUMS.txt
 
       - name: Notify subscribers
-        if: ${{ secrets.BROADCAST_WEBHOOK_SECRET != '' }}
+        if: env.BROADCAST_WEBHOOK_SECRET != ''
         env:
           BROADCAST_WEBHOOK_SECRET: ${{ secrets.BROADCAST_WEBHOOK_SECRET }}
           RELEASE_NOTES: ${{ steps.changelog.outputs.notes }}
