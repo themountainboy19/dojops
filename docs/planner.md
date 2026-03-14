@@ -48,11 +48,36 @@ interface TaskGraph {
 interface TaskNode {
   id: string; // Unique task identifier (e.g. "1", "2")
   tool: string; // Tool name (e.g. "github-actions", "terraform")
+  agent?: string; // Specialist agent for domain context (e.g. "terraform-specialist")
   description: string; // Human-readable task description
   input: object; // Tool-specific input (validated by tool's inputSchema)
   deps: string[]; // Task IDs this task depends on
 }
 ```
+
+---
+
+## Agent Delegation
+
+The planner supports **agent-aware decomposition** — the LLM assigns a specialist agent to each task based on domain relevance. This enriches each task's LLM generation with the agent's domain expertise.
+
+### How It Works
+
+1. **Decomposition** — The `decompose()` function includes the list of available specialist agents (name, domain, description) in the system prompt. The LLM assigns the best-matching agent to each task via the optional `agent` field.
+2. **Context injection** — During execution, the `PlannerExecutor` looks up the assigned agent's system prompt and injects it into the skill's input as `_agentContext`.
+3. **Prompt prepending** — The `DopsRuntimeV2` prepends the agent's system prompt to the skill's compiled prompt, giving the LLM both domain expertise (e.g., Terraform state management patterns) and skill-specific generation instructions (e.g., "output valid HCL").
+
+### Example
+
+```
+Goal: "Set up CI/CD with Docker and Kubernetes"
+
+Task 1: github-actions  [agent: cicd-specialist]      -> CI/CD expertise
+Task 2: dockerfile      [agent: docker-specialist]     -> Docker best practices
+Task 3: kubernetes      [agent: kubernetes-specialist]  -> K8s deployment patterns
+```
+
+Agent assignment is optional — tasks without a matching specialist omit the `agent` field and execute without additional domain context. Both built-in and custom agents participate in delegation.
 
 ---
 

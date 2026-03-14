@@ -45,15 +45,18 @@ function createSmartMockProvider() {
   const provider = createMockProvider();
   provider.generate = vi.fn().mockImplementation(async (req) => {
     // Return structured parsed data when schema is provided
+    // NOTE: "task planner" must be checked before "infrastructure" because
+    // the planner's system prompt may contain agent domain descriptions
+    // that include the word "infrastructure".
     if (req.schema) {
       if (req.system?.includes("CI/CD debugger") || req.system?.includes("CI pipeline")) {
         return { content: JSON.stringify(mockDiagnosis), parsed: mockDiagnosis };
       }
-      if (req.system?.includes("infrastructure")) {
-        return { content: JSON.stringify(mockAnalysis), parsed: mockAnalysis };
-      }
       if (req.system?.includes("task planner")) {
         return { content: JSON.stringify(mockTaskGraph), parsed: mockTaskGraph };
+      }
+      if (req.system?.includes("infrastructure")) {
+        return { content: JSON.stringify(mockAnalysis), parsed: mockAnalysis };
       }
     }
     return {

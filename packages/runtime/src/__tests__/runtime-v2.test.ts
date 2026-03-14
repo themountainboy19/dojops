@@ -289,6 +289,35 @@ describe("DopsRuntimeV2.generate", () => {
     const call = vi.mocked(provider.generate).mock.calls[0][0];
     expect(call.prompt).toContain("Update");
   });
+
+  it("prepends _agentContext to system prompt when provided", async () => {
+    const { provider, runtime } = createRuntime('resource "aws_s3_bucket" {}');
+
+    await runtime.generate({
+      prompt: "Create S3 bucket",
+      _agentContext: "You are a Terraform infrastructure specialist with deep HCL expertise.",
+    });
+
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
+    expect(call.system).toMatch(
+      /^You are a Terraform infrastructure specialist with deep HCL expertise\./,
+    );
+    expect(call.system).toContain("---");
+    expect(call.system).toContain(
+      "You are now generating specific output using the instructions below.",
+    );
+    // Original prompt should still be present after the separator
+    expect(call.system).toContain("Terraform");
+  });
+
+  it("does not modify system prompt when _agentContext is absent", async () => {
+    const { provider, runtime } = createRuntime('resource "aws_s3_bucket" {}');
+
+    await runtime.generate({ prompt: "Create S3 bucket" });
+
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
+    expect(call.system).not.toContain("You are now generating specific output");
+  });
 });
 
 describe("DopsRuntimeV2.execute", () => {

@@ -3,6 +3,7 @@ import { z } from "zod";
 export const TaskNodeSchema = z.object({
   id: z.string(),
   tool: z.string(),
+  agent: z.string().optional(),
   description: z.string(),
   dependsOn: z.array(z.string()).default([]),
   input: z.record(z.string(), z.unknown()).default({}),

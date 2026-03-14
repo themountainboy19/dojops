@@ -128,7 +128,7 @@ See [Specialist Agents](agents.md) for the full agent list.
 
 ### 3. Task Planner (`@dojops/planner`)
 
-LLM-powered goal decomposition into structured, dependency-aware task graphs. Uses Kahn's algorithm for topological execution ordering, `$ref:<taskId>` for inter-task data wiring, and `completedTaskIds` for resume after partial failures.
+LLM-powered goal decomposition into structured, dependency-aware task graphs with **agent-aware delegation**. The decomposer assigns specialist agents to tasks based on domain relevance, and the executor injects each agent's system prompt as domain context during skill generation. Uses Kahn's algorithm for topological execution ordering, `$ref:<taskId>` for inter-task data wiring, and `completedTaskIds` for resume after partial failures.
 
 See [Task Planner](planner.md) for details.
 

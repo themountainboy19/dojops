@@ -417,6 +417,114 @@ describe("PlannerExecutor", () => {
     });
   });
 
+  describe("agent context injection", () => {
+    it("injects _agentContext when task has an assigned agent with matching config", async () => {
+      let capturedInput: Record<string, unknown> = {};
+      class CaptureTool extends BaseSkill<Record<string, unknown>> {
+        name = "capture-tool";
+        description = "Captures input for inspection";
+        inputSchema = PassthroughSchema;
+        async generate(input: Record<string, unknown>): Promise<SkillOutput> {
+          capturedInput = input;
+          return { success: true, data: { result: "ok" } };
+        }
+      }
+
+      const graph = makeGraph("agent context test", [
+        {
+          id: "t1",
+          tool: "capture-tool",
+          description: "task with agent",
+          input: { prompt: "test" },
+        },
+      ]);
+      // Assign agent to the task
+      graph.tasks[0].agent = "terraform-specialist";
+
+      const agentConfigs = new Map([
+        [
+          "terraform-specialist",
+          { systemPrompt: "You are a Terraform infrastructure specialist." },
+        ],
+      ]);
+      const executor = new PlannerExecutor([new CaptureTool()], undefined, { agentConfigs });
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      expect(capturedInput._agentContext).toBe("You are a Terraform infrastructure specialist.");
+      expect(capturedInput.prompt).toBe("test");
+    });
+
+    it("does not inject _agentContext when task has no agent assigned", async () => {
+      let capturedInput: Record<string, unknown> = {};
+      class CaptureTool extends BaseSkill<Record<string, unknown>> {
+        name = "capture-tool";
+        description = "Captures input for inspection";
+        inputSchema = PassthroughSchema;
+        async generate(input: Record<string, unknown>): Promise<SkillOutput> {
+          capturedInput = input;
+          return { success: true, data: { result: "ok" } };
+        }
+      }
+
+      const graph = makeGraph("no agent test", [
+        {
+          id: "t1",
+          tool: "capture-tool",
+          description: "task without agent",
+          input: { prompt: "test" },
+        },
+      ]);
+
+      const agentConfigs = new Map([
+        [
+          "terraform-specialist",
+          { systemPrompt: "You are a Terraform infrastructure specialist." },
+        ],
+      ]);
+      const executor = new PlannerExecutor([new CaptureTool()], undefined, { agentConfigs });
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      expect(capturedInput._agentContext).toBeUndefined();
+    });
+
+    it("does not inject _agentContext when agent name has no matching config", async () => {
+      let capturedInput: Record<string, unknown> = {};
+      class CaptureTool extends BaseSkill<Record<string, unknown>> {
+        name = "capture-tool";
+        description = "Captures input for inspection";
+        inputSchema = PassthroughSchema;
+        async generate(input: Record<string, unknown>): Promise<SkillOutput> {
+          capturedInput = input;
+          return { success: true, data: { result: "ok" } };
+        }
+      }
+
+      const graph = makeGraph("unknown agent test", [
+        {
+          id: "t1",
+          tool: "capture-tool",
+          description: "task with unknown agent",
+          input: { prompt: "test" },
+        },
+      ]);
+      graph.tasks[0].agent = "nonexistent-specialist";
+
+      const agentConfigs = new Map([
+        [
+          "terraform-specialist",
+          { systemPrompt: "You are a Terraform infrastructure specialist." },
+        ],
+      ]);
+      const executor = new PlannerExecutor([new CaptureTool()], undefined, { agentConfigs });
+      const result = await executor.execute(graph);
+
+      expect(result.success).toBe(true);
+      expect(capturedInput._agentContext).toBeUndefined();
+    });
+  });
+
   describe("logger integration", () => {
     it("calls taskStart and taskEnd with correct arguments for each task", async () => {
       const logger: PlannerLogger = {

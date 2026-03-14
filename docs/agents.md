@@ -232,6 +232,29 @@ dojops "Design SLOs and error budgets for our payment service"
 
 ---
 
+## Agents in Plan Execution
+
+Beyond prompt routing, agents also participate in **plan execution**. When `dojops plan` decomposes a goal into a task graph, the LLM assigns a specialist agent to each task based on domain relevance.
+
+During execution, the assigned agent's system prompt is injected as domain context into the skill's LLM call. This means the LLM sees both:
+
+- **Agent expertise** — Domain-specific knowledge (e.g., Terraform state management, K8s security best practices)
+- **Skill instructions** — The skill's generation format and rules (e.g., "output valid HCL")
+
+```
+Goal: "Set up CI/CD with Docker and Kubernetes"
+
+Task 1: github-actions  [cicd-specialist]       -> CI/CD pipeline expertise
+Task 2: dockerfile      [docker-specialist]     -> Multi-stage build patterns
+Task 3: kubernetes      [kubernetes-specialist]  -> Deployment best practices
+```
+
+Agent assignment is optional — tasks where no specialist clearly matches proceed without additional domain context. Both built-in and custom agents participate in delegation.
+
+See [Task Planner](planner.md) for details on the decomposition and execution flow.
+
+---
+
 ## Built-in Agent Configuration
 
 Built-in agents are defined in `packages/core/src/agents/specialists.ts`. Each agent specifies:

@@ -247,7 +247,21 @@ export function createApp(deps: AppDependencies): Express {
     deps.rootDir,
     deps.context7Provider,
   );
-  const planRouter = createPlanRouter(deps.provider, deps.tools, deps.store);
+  // Build agent configs map from the AgentRouter for plan-time agent delegation
+  const agentConfigs = new Map<
+    string,
+    { name: string; domain: string; description?: string; systemPrompt: string }
+  >();
+  for (const agent of deps.router.getAgents()) {
+    agentConfigs.set(agent.name, {
+      name: agent.name,
+      domain: agent.domain,
+      description: agent.description,
+      systemPrompt: agent.systemPrompt,
+    });
+  }
+
+  const planRouter = createPlanRouter(deps.provider, deps.tools, deps.store, agentConfigs);
   const debugCIRouter = createDebugCIRouter(deps.debugger, deps.store);
   const diffRouter = createDiffRouter(deps.diffAnalyzer, deps.store);
   const agentsRouter = createAgentsRouter(deps.router, deps.customAgentNames);

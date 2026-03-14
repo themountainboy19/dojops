@@ -593,7 +593,12 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       };
       let systemPrompt = compilePromptV2(this.skill.sections, promptContext);
 
-      // 3b. Fallback: legacy docAugmenter if no Context7 provider
+      // 3b. Inject specialist agent domain context when delegated from planner
+      if (typeof input._agentContext === "string") {
+        systemPrompt = `${input._agentContext}\n\n---\n\nYou are now generating specific output using the instructions below.\n\n${systemPrompt}`;
+      }
+
+      // 3c. Fallback: legacy docAugmenter if no Context7 provider
       if (!context7Docs && this.options.docAugmenter) {
         try {
           const keywords = this.keywords.slice(0, 3);

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent-Aware Plan Execution**: The task planner now assigns specialist agents to tasks during goal decomposition. Each task in the `TaskGraph` gets an optional `agent` field (e.g., `terraform-specialist`, `kubernetes-specialist`) assigned by the LLM based on domain relevance. During execution, the assigned agent's system prompt is injected as domain context into the skill's LLM call via `_agentContext`, giving the LLM both specialist expertise and skill-specific generation instructions. Backward-compatible — existing plans without agent assignments still work
 - **Chat Progress Phases**: Chat TUI now displays phase-by-phase progress during message processing (Routing → Compacting → Generating → Done) with colored indicators showing the current phase, active agent name, and provider/model info
 - **Visible Auto-Compaction**: When conversation history exceeds the context window, a visible "Conversation compacted" notification shows how many messages were summarized and retained, replacing the previously silent compaction
 - **LLM-Based Chat Routing**: Chat sessions now use LLM intent classification (`routeWithLLM()`) to select the best specialist agent instead of keyword matching. Falls back to keyword-based `route()` when LLM routing fails

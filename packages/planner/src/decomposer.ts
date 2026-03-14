@@ -4,6 +4,12 @@ import { DevOpsSkill } from "@dojops/sdk";
 import { TaskGraph, TaskGraphSchema } from "./types";
 import { zodSchemaToText } from "./schema-to-text";
 
+export interface AgentInfo {
+  name: string;
+  domain: string;
+  description?: string;
+}
+
 export interface DecomposeOptions {
   /** Repo context from .dojops/context.json — used for context-aware file placement */
   repoContext?: RepoContext;
@@ -11,6 +17,8 @@ export interface DecomposeOptions {
   executionMemory?: string;
   /** Lightweight project file tree for structure-aware planning */
   fileTree?: string;
+  /** Available specialist agents for domain-aware task assignment */
+  agents?: AgentInfo[];
 }
 
 /** Collect CI-related context bullets. */
@@ -72,6 +80,21 @@ Canonical output paths by module:
 - gitlab-ci: outputPath="." (.gitlab-ci.yml at root)
 - jenkinsfile: outputPath="." (Jenkinsfile at root, or "jenkins-shared-lib" for shared libraries)`;
 
+export function buildAgentSection(agents: AgentInfo[]): string {
+  if (agents.length === 0) return "";
+  const agentLines = agents.map((a) => {
+    const desc = a.description ? `: ${a.description}` : "";
+    return `- ${a.name} (${a.domain})${desc}`;
+  });
+  return [
+    "\n## Specialist agents\n",
+    "Each task may be assigned to the specialist agent whose domain expertise best matches the task.",
+    'Set the "agent" field in each task node to the agent name. If no specialist clearly fits, omit the field.\n',
+    "Available agents:",
+    ...agentLines,
+  ].join("\n");
+}
+
 export function buildContextSection(ctx: RepoContext): string {
   const parts: string[] = [
     "\n## Project Context (from repo scan)\n",
@@ -109,6 +132,7 @@ export async function decompose(
   }
 
   const contextSection = options?.repoContext ? buildContextSection(options.repoContext) : "";
+  const agentSection = options?.agents?.length ? buildAgentSection(options.agents) : "";
   const fileTreeSection = options?.fileTree
     ? `\n## Project File Tree\n\nExisting files in the project (reference these to avoid generating duplicates):\n\`\`\`\n${options.fileTree}\n\`\`\`\n`
     : "";
@@ -122,6 +146,7 @@ export async function decompose(
 ## Available tools
 
 ${toolList}
+${agentSection}
 ${contextSection}
 ${fileTreeSection}
 ${memorySection}
@@ -206,6 +231,7 @@ Respond with a JSON object:
     {
       "id": "unique-id",
       "tool": "tool-name",
+      "agent": "specialist-name (optional)",
       "description": "what this task does",
       "dependsOn": ["id-of-dependency"],
       "input": { "prompt": "detailed instruction with exact file paths", "outputPath": "." }

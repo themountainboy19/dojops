@@ -1,8 +1,8 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { decompose, TaskGraph } from "@dojops/planner";
+import { decompose, TaskGraph, AgentInfo } from "@dojops/planner";
 import { createSkillRegistry, SkillRegistry } from "@dojops/skill-registry";
-import { scanRepo } from "@dojops/core";
+import { scanRepo, ALL_SPECIALIST_CONFIGS } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags, extractFlagValue } from "../parser";
 import { readPromptFile } from "../stdin";
@@ -46,7 +46,8 @@ function enrichTasksWithMetadata(graph: TaskGraph, registry: SkillRegistry): voi
 function displayTaskGraph(graph: TaskGraph): void {
   const taskLines = graph.tasks.map((task) => {
     const deps = task.dependsOn.length ? pc.dim(` (after: ${task.dependsOn.join(", ")})`) : "";
-    return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}: ${task.description}${deps}`;
+    const agent = task.agent ? pc.cyan(` [${task.agent}]`) : "";
+    return `  ${pc.blue(task.id)} ${pc.bold(task.tool)}${agent}: ${task.description}${deps}`;
   });
   const taskCountLabel = pc.dim(`(${graph.tasks.length} tasks)`);
   p.note(wrapForNote(taskLines.join("\n")), truncateNoteTitle(`${graph.goal} ${taskCountLabel}`));
@@ -160,6 +161,15 @@ function applyToolFilter(
   return [match];
 }
 
+/** Build agent info list from specialist configs for the decomposer. */
+function buildAgentList(): AgentInfo[] {
+  return ALL_SPECIALIST_CONFIGS.map((c) => ({
+    name: c.name,
+    domain: c.domain,
+    description: c.description,
+  }));
+}
+
 /** Run the decomposition and display verbose output if enabled. */
 async function runDecomposition(
   prompt: string,
@@ -182,6 +192,7 @@ async function runDecomposition(
       repoContext: repoContext ?? undefined,
       executionMemory,
       fileTree,
+      agents: buildAgentList(),
     });
   } catch (err) {
     if (!isJson) s.stop("Decomposition failed.");
@@ -192,7 +203,8 @@ async function runDecomposition(
   if (ctx.globalOpts.verbose) {
     p.log.info(`Decomposed into ${graph.tasks.length} task(s)`);
     for (const task of graph.tasks) {
-      p.log.info(`  ${pc.blue(task.id)} -> tool: ${pc.bold(task.tool)}`);
+      const agentLabel = task.agent ? ` agent: ${pc.cyan(task.agent)}` : "";
+      p.log.info(`  ${pc.blue(task.id)} -> tool: ${pc.bold(task.tool)}${agentLabel}`);
     }
   }
   return graph;

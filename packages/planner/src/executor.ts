@@ -147,11 +147,14 @@ async function executeInChunks<T>(
 export interface PlannerExecutorOptions {
   /** Timeout in ms for each tool.generate() call (default: unlimited) */
   generateTimeoutMs?: number;
+  /** Specialist agent configs: agent name → system prompt for domain context injection */
+  agentConfigs?: Map<string, { systemPrompt: string }>;
 }
 
 export class PlannerExecutor {
   private readonly toolMap: Map<string, DevOpsSkill>;
   private readonly generateTimeoutMs: number | undefined;
+  private readonly agentConfigs: Map<string, { systemPrompt: string }> | undefined;
 
   constructor(
     tools: DevOpsSkill[],
@@ -160,6 +163,7 @@ export class PlannerExecutor {
   ) {
     this.toolMap = new Map(tools.map((t) => [t.name, t]));
     this.generateTimeoutMs = options?.generateTimeoutMs;
+    this.agentConfigs = options?.agentConfigs;
   }
 
   private recordResult(
@@ -213,7 +217,14 @@ export class PlannerExecutor {
     failed: Set<string>,
   ): Promise<void> {
     try {
-      const resolvedInput = resolveInputRefs(task.input, results);
+      let resolvedInput = resolveInputRefs(task.input, results);
+
+      // Inject specialist agent domain context when task has an assigned agent
+      if (task.agent && this.agentConfigs?.has(task.agent)) {
+        const agentConfig = this.agentConfigs.get(task.agent)!;
+        resolvedInput = { ...resolvedInput, _agentContext: agentConfig.systemPrompt };
+      }
+
       const validation = tool.validate(resolvedInput);
 
       if (!validation.valid) {

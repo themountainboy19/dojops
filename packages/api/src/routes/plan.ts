@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { LLMProvider } from "@dojops/core";
 import { DevOpsSkill } from "@dojops/sdk";
-import { decompose, PlannerExecutor, TaskGraph, PlannerResult } from "@dojops/planner";
+import { decompose, PlannerExecutor, TaskGraph, PlannerResult, AgentInfo } from "@dojops/planner";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
 import type { CriticCallback } from "@dojops/executor";
 import { HistoryStore, logRouteError } from "../store";
@@ -91,6 +91,7 @@ async function executePlanWithTimeout(
   tools: DevOpsSkill[],
   autoApprove: boolean,
   provider: LLMProvider,
+  agentConfigs?: Map<string, { systemPrompt: string }>,
 ): Promise<PlannerResult> {
   const timeoutMs = Number.parseInt(process.env.DOJOPS_PLAN_TIMEOUT_MS ?? "300000", 10);
 
@@ -100,7 +101,7 @@ async function executePlanWithTimeout(
 
   let planResult: PlannerResult;
   try {
-    const executor = new PlannerExecutor(tools);
+    const executor = new PlannerExecutor(tools, undefined, { agentConfigs });
     planResult = await executor.execute(graph);
 
     if (autoApprove && !controller.signal.aborted) {
@@ -121,7 +122,21 @@ export function createPlanRouter(
   provider: LLMProvider,
   tools: DevOpsSkill[],
   store: HistoryStore,
+  agentConfigs?: Map<
+    string,
+    { name: string; domain: string; description?: string; systemPrompt: string }
+  >,
 ): Router {
+  // Build decomposer agent list and executor agent map from configs
+  const agentList: AgentInfo[] = [];
+  const executorAgentMap = new Map<string, { systemPrompt: string }>();
+  if (agentConfigs) {
+    for (const [name, config] of agentConfigs) {
+      agentList.push({ name, domain: config.domain, description: config.description });
+      executorAgentMap.set(name, { systemPrompt: config.systemPrompt });
+    }
+  }
+
   const router = Router();
 
   router.post("/", validateBody(PlanRequestSchema), async (req, res, next) => {
@@ -135,10 +150,12 @@ export function createPlanRouter(
         return;
       }
 
-      const graph = await decompose(goal, provider, tools);
+      const graph = await decompose(goal, provider, tools, {
+        agents: agentList.length > 0 ? agentList : undefined,
+      });
 
       const result = execute
-        ? await executePlanWithTimeout(graph, tools, autoApprove, provider)
+        ? await executePlanWithTimeout(graph, tools, autoApprove, provider, executorAgentMap)
         : undefined;
 
       const response = { graph, result };

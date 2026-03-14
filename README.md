@@ -163,7 +163,7 @@ The dashboard provides a visual interface with dark industrial terminal aestheti
 
 ### Execution
 
-- **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm)
+- **Task planner** — LLM-powered goal decomposition into dependency-aware task graphs with topological execution (Kahn's algorithm) and agent-aware delegation (specialist agents are assigned per task for domain context injection)
 - **Risk-aware planning** — Plans are automatically classified as LOW / MEDIUM / HIGH risk based on skill types and keyword analysis (IAM, production, secrets, RBAC). HIGH risk plans require explicit confirmation even with `--yes`
 - **Verification pipeline** — `verify()` step between generate and execute validates output with external validators (terraform validate, hadolint, kubectl dry-run) and built-in structure linters (GitHub Actions, GitLab CI). Enabled by default; use `--skip-verify` to skip
 - **Drift awareness** — Pre-apply warnings for stateful skills (Terraform, Kubernetes, Helm, Ansible) remind users to verify remote state before applying local config changes

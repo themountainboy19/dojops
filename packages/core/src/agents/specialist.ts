@@ -66,6 +66,10 @@ export class SpecialistAgent {
     return this.config.primaryKeywords ?? [];
   }
 
+  get systemPrompt(): string {
+    return this.config.systemPrompt;
+  }
+
   get toolDependencies(): ToolDependency[] {
     return this.config.toolDependencies ?? [];
   }

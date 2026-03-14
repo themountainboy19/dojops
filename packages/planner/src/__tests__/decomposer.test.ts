@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { LLMProvider } from "@dojops/core";
 import { BaseSkill, SkillOutput, z } from "@dojops/sdk";
-import { decompose } from "../decomposer";
+import { decompose, buildAgentSection } from "../decomposer";
 import { TaskGraphSchema } from "../types";
 
 class MockTool extends BaseSkill<{ projectPath: string; enabled: boolean }> {
@@ -100,6 +100,63 @@ describe("decompose", () => {
     expect(badValidation.error).toBeDefined();
   });
 
+  it("includes agent list in system prompt when agents are provided", async () => {
+    const provider = makeMockProvider(singleTaskGraph());
+    await decompose("test", provider, [new MockTool()], {
+      agents: [
+        { name: "terraform-specialist", domain: "infrastructure", description: "Terraform expert" },
+        { name: "kubernetes-specialist", domain: "container-orchestration" },
+      ],
+    });
+
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
+    expect(call.system).toContain("Specialist agents");
+    expect(call.system).toContain("terraform-specialist");
+    expect(call.system).toContain("Terraform expert");
+    expect(call.system).toContain("kubernetes-specialist");
+    expect(call.system).toContain("container-orchestration");
+  });
+
+  it("parses task graph with agent field from LLM response", async () => {
+    const mockGraph = {
+      goal: "deploy infra",
+      tasks: [
+        {
+          id: "t1",
+          tool: "mock-tool",
+          agent: "terraform-specialist",
+          description: "Generate Terraform config",
+          dependsOn: [],
+          input: { projectPath: "./infra" },
+        },
+      ],
+    };
+
+    const provider = makeMockProvider(mockGraph);
+    const result = await decompose("deploy infra", provider, [new MockTool()]);
+
+    expect(result.tasks[0].agent).toBe("terraform-specialist");
+    const validation = TaskGraphSchema.safeParse(result);
+    expect(validation.success).toBe(true);
+  });
+
+  it("parses task graph without agent field (backward compatible)", async () => {
+    const provider = makeMockProvider(singleTaskGraph());
+    const result = await decompose("test", provider, [new MockTool()]);
+
+    expect(result.tasks[0].agent).toBeUndefined();
+    const validation = TaskGraphSchema.safeParse(result);
+    expect(validation.success).toBe(true);
+  });
+
+  it("does not include agent section when no agents provided", async () => {
+    const provider = makeMockProvider(singleTaskGraph());
+    await decompose("test", provider, [new MockTool()]);
+
+    const call = vi.mocked(provider.generate).mock.calls[0][0];
+    expect(call.system).not.toContain("Specialist agents");
+  });
+
   it("includes schema info for terraform-shaped tool", async () => {
     class TerraformLikeTool extends BaseSkill<{
       projectPath: string;
@@ -136,5 +193,22 @@ describe("decompose", () => {
     expect(call.system).toContain('"aws" | "gcp" | "azure"');
     expect(call.system).toContain("Description of infrastructure resources to provision");
     expect(call.system).toContain("backendType");
+  });
+});
+
+describe("buildAgentSection", () => {
+  it("returns empty string for empty agent list", () => {
+    expect(buildAgentSection([])).toBe("");
+  });
+
+  it("formats agents with name, domain, and optional description", () => {
+    const section = buildAgentSection([
+      { name: "terraform-specialist", domain: "infrastructure", description: "Terraform expert" },
+      { name: "kubernetes-specialist", domain: "container-orchestration" },
+    ]);
+
+    expect(section).toContain("terraform-specialist (infrastructure): Terraform expert");
+    expect(section).toContain("kubernetes-specialist (container-orchestration)");
+    expect(section).not.toContain("kubernetes-specialist (container-orchestration):");
   });
 });
