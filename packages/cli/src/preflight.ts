@@ -31,14 +31,14 @@ import {
  * Attempt to look up correct install instructions via Context7.
  * Returns install hint text if found, undefined otherwise.
  */
-async function lookupInstallHint(toolName: string): Promise<string | undefined> {
+async function lookupInstallHint(skillName: string): Promise<string | undefined> {
   if (process.env.DOJOPS_CONTEXT_ENABLED === "false") return undefined;
   try {
     const { Context7Client } = await import("@dojops/context");
     const client = new Context7Client({ apiKey: process.env.DOJOPS_CONTEXT7_API_KEY });
-    const lib = await client.resolveLibrary(toolName, `install ${toolName} npm`);
+    const lib = await client.resolveLibrary(skillName, `install ${skillName} npm`);
     if (!lib) return undefined;
-    const docs = await client.queryDocs(lib.id, `how to install ${toolName}`);
+    const docs = await client.queryDocs(lib.id, `how to install ${skillName}`);
     if (!docs || docs.length < 20) return undefined;
     // Extract first useful paragraph (up to 500 chars)
     const trimmed = docs.slice(0, 500).trim();

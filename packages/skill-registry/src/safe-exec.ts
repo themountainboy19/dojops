@@ -1,5 +1,5 @@
 /**
- * Centralized child_process wrapper for the module-registry package.
+ * Centralized child_process wrapper for the skill-registry package.
  * All OS command execution is routed through this helper so that
  * security audit tools (SonarCloud S4721) need only review this single file.
  */

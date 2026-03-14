@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { validateReplayIntegrity, checkToolIntegrity } from "../../commands/replay-validator";
 import { PlanState } from "../../state";
-import type { ModuleRegistry } from "@dojops/module-registry";
+import type { SkillRegistry } from "@dojops/skill-registry";
 
 function createPlanState(overrides?: Partial<PlanState>): PlanState {
   return {
@@ -21,16 +21,16 @@ function createPlanState(overrides?: Partial<PlanState>): PlanState {
 }
 
 function createMockRegistry(
-  metadata?: Record<string, ReturnType<ModuleRegistry["getModuleMetadata"]>>,
-): ModuleRegistry {
+  metadata?: Record<string, ReturnType<SkillRegistry["getSkillMetadata"]>>,
+): SkillRegistry {
   const registry = {
-    getModuleMetadata: vi.fn((name: string) => metadata?.[name] ?? undefined),
+    getSkillMetadata: vi.fn((name: string) => metadata?.[name] ?? undefined),
     getAll: vi.fn(() => []),
     get: vi.fn(),
     has: vi.fn(),
     getBuiltIn: vi.fn(() => []),
     size: 0,
-  } as unknown as ModuleRegistry;
+  } as unknown as SkillRegistry;
   return registry;
 }
 

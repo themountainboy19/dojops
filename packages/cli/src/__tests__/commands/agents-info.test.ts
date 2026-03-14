@@ -62,8 +62,8 @@ vi.mock("@dojops/core", () => ({
   getInstallCommand: vi.fn(() => "npm install"),
 }));
 
-// Mock @dojops/module-registry
-vi.mock("@dojops/module-registry", () => ({
+// Mock @dojops/skill-registry
+vi.mock("@dojops/skill-registry", () => ({
   discoverCustomAgents: vi.fn(() => []),
   GeneratedAgentSchema: {},
   formatAgentReadme: vi.fn(() => ""),

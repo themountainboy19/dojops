@@ -301,7 +301,7 @@ function buildPnpmFinding(
   lockFile: string,
 ): ScanFinding {
   const prefix = subProject ? `${subProject}: ` : "";
-  const moduleName = extractPnpmModuleName(advisory);
+  const skillName = extractPnpmModuleName(advisory);
   const severity = mapSeverity(
     typeof advisory.severity === "string" ? advisory.severity : "moderate",
   );
@@ -311,14 +311,14 @@ function buildPnpmFinding(
   const cves = Array.isArray(advisory.cves) ? advisory.cves : [];
 
   return {
-    id: deterministicFindingId("pnpm", moduleName, severity),
+    id: deterministicFindingId("pnpm", skillName, severity),
     tool: "npm-audit",
     severity,
     category: "DEPENDENCY",
     file: subProject ? `${subProject}/${lockFile}` : lockFile,
-    message: `${prefix}${moduleName}: ${title}`,
+    message: `${prefix}${skillName}: ${title}`,
     recommendation: patchedVersions
-      ? `Update to ${moduleName}@${patchedVersions}`
+      ? `Update to ${skillName}@${patchedVersions}`
       : "No automatic fix available — review manually",
     autoFixAvailable: !!patchedVersions,
     cve: cves[0] ? String(cves[0]) : undefined,

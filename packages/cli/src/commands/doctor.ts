@@ -205,11 +205,11 @@ function resolveSystemToolStatus(
  * detected in the scan — not just broad domain matching.
  * For example, `circleci` is only relevant if CircleCI CI was detected.
  */
-function isToolRelevantToProject(toolName: string, repoCtx: RepoContext): boolean {
+function isToolRelevantToProject(skillName: string, repoCtx: RepoContext): boolean {
   const ciPlatforms = new Set(repoCtx.ci.map((c) => c.platform.toLowerCase()));
   const hasGitHub = [...ciPlatforms].some((p) => p.includes("github"));
 
-  switch (toolName) {
+  switch (skillName) {
     // CI-specific: only if that CI platform is detected
     case "actionlint":
       return hasGitHub;

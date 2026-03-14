@@ -3,14 +3,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as yaml from "js-yaml";
 import { LLMProvider } from "@dojops/core";
-import type {
-  DevOpsModule,
-  ModuleOutput,
-  VerificationResult,
-  VerificationIssue,
-} from "@dojops/sdk";
+import type { DevOpsSkill, SkillOutput, VerificationResult, VerificationIssue } from "@dojops/sdk";
 import { z } from "zod";
-import { DopsExecution, DopsModule, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
+import { DopsExecution, DopsSkill, DopsRisk, FileSpecV2, Context7LibraryRef } from "./spec";
 import { compilePromptV2, PromptContextV2 } from "./prompt-compiler";
 import { validateStructure } from "./structural-validator";
 import { runVerification } from "./binary-verifier";
@@ -22,14 +17,14 @@ function sha256(content: string): string {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
-/** Compute hashes for a DopsModule. */
-function computeModuleHashes(module: { sections: { prompt: string }; raw: string }): {
+/** Compute hashes for a DopsSkill. */
+function computeSkillHashes(module: { sections: { prompt: string }; raw: string }): {
   systemPromptHash: string;
-  moduleHash: string;
+  skillHash: string;
 } {
   return {
     systemPromptHash: sha256(module.sections.prompt),
-    moduleHash: sha256(module.raw),
+    skillHash: sha256(module.raw),
   };
 }
 
@@ -71,7 +66,7 @@ function validateInput(schema: z.ZodType, input: unknown): { valid: boolean; err
   return { valid: false, error: result.error.message };
 }
 
-function failedOutput(err: unknown): ModuleOutput {
+function failedOutput(err: unknown): SkillOutput {
   return { success: false, error: err instanceof Error ? err.message : String(err) };
 }
 
@@ -105,16 +100,16 @@ function parseKeywords(keywordsStr: string): string[] {
     .filter((k) => k.length > 0);
 }
 
-/** Build standard ToolMetadata from a parsed .dops module. */
+/** Build standard ToolMetadata from a parsed .dops skill. */
 function buildToolMetadata(
   frontmatter: { meta: { version: string; icon?: string }; risk?: DopsRisk },
-  moduleHash: string,
+  skillHash: string,
   systemPromptHash: string,
 ): ToolMetadata {
   return {
     toolType: "built-in",
     toolVersion: frontmatter.meta.version,
-    toolHash: moduleHash,
+    toolHash: skillHash,
     toolSource: "dops",
     systemPromptHash,
     riskLevel: getRisk(frontmatter).level,
@@ -531,21 +526,21 @@ function mergePeerFiles(
  * LLM generates raw file content instead of JSON objects.
  * Context7 libraries are declared in frontmatter and fetched at runtime.
  */
-export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
+export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: z.ZodType;
 
-  private readonly module: DopsModule;
+  private readonly skill: DopsSkill;
   private readonly provider: LLMProvider;
   private readonly options: DopsRuntimeV2Options;
   private readonly _systemPromptHash: string;
-  private readonly _moduleHash: string;
+  private readonly _skillHash: string;
   /** Cache of Context7 docs fetched during generate(), reused by verify(). */
   private _lastDocsCache: string = "";
 
-  constructor(module: DopsModule, provider: LLMProvider, options?: DopsRuntimeV2Options) {
-    this.module = module;
+  constructor(module: DopsSkill, provider: LLMProvider, options?: DopsRuntimeV2Options) {
+    this.skill = module;
     this.provider = provider;
     this.options = options ?? {};
 
@@ -559,30 +554,30 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
       outputPath: z.string().optional(),
     });
 
-    const hashes = computeModuleHashes(module);
+    const hashes = computeSkillHashes(module);
     this._systemPromptHash = hashes.systemPromptHash;
-    this._moduleHash = hashes.moduleHash;
+    this._skillHash = hashes.skillHash;
   }
 
   validate(input: unknown): { valid: boolean; error?: string } {
     return validateInput(this.inputSchema, input);
   }
 
-  async generate(input: Record<string, unknown>): Promise<ModuleOutput> {
+  async generate(input: Record<string, unknown>): Promise<SkillOutput> {
     try {
       // 1. Detect existing content
       const basePath = this.options.basePath ?? process.cwd();
       const existingContent = detectContent(
-        this.module.frontmatter.detection,
+        this.skill.frontmatter.detection,
         input.existingContent as string | undefined,
         basePath,
       );
 
       // 2. Fetch Context7 docs from declared libraries
       let context7Docs = "";
-      if (this.options.context7Provider && this.module.frontmatter.context.context7Libraries) {
+      if (this.options.context7Provider && this.skill.frontmatter.context.context7Libraries) {
         context7Docs = await this.fetchContext7Docs(
-          this.module.frontmatter.context.context7Libraries,
+          this.skill.frontmatter.context.context7Libraries,
         );
       }
       // Cache docs for post-generation audit in verify()
@@ -591,12 +586,12 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
       // 3. Compile prompt with v2 variables
       const promptContext: PromptContextV2 = {
         existingContent,
-        updateConfig: this.module.frontmatter.update,
+        updateConfig: this.skill.frontmatter.update,
         context7Docs: context7Docs || undefined,
         projectContext: this.options.projectContext,
-        contextBlock: this.module.frontmatter.context,
+        contextBlock: this.skill.frontmatter.context,
       };
-      let systemPrompt = compilePromptV2(this.module.sections, promptContext);
+      let systemPrompt = compilePromptV2(this.skill.sections, promptContext);
 
       // 3b. Fallback: legacy docAugmenter if no Context7 provider
       if (!context7Docs && this.options.docAugmenter) {
@@ -615,8 +610,8 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
       // 4. Build user prompt
       const isUpdate = !!existingContent;
       let userPrompt = isUpdate
-        ? `Update the existing ${this.module.frontmatter.context.technology} configuration: ${input.prompt}`
-        : `Generate ${this.module.frontmatter.context.technology} configuration: ${input.prompt}`;
+        ? `Update the existing ${this.skill.frontmatter.context.technology} configuration: ${input.prompt}`
+        : `Generate ${this.skill.frontmatter.context.technology} configuration: ${input.prompt}`;
 
       // Append verification feedback for retry loop
       if (typeof input._verificationFeedback === "string") {
@@ -645,8 +640,8 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   /** Whether this module uses multi-file JSON output (multiple file specs + JSON format). */
   private isMultiFileOutput(): boolean {
     return (
-      this.module.frontmatter.files.length > 1 &&
-      this.module.frontmatter.context.fileFormat === "json"
+      this.skill.frontmatter.files.length > 1 &&
+      this.skill.frontmatter.context.fileFormat === "json"
     );
   }
 
@@ -748,7 +743,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
     consumedLlmKeys: Set<string>,
     tracker: FileWriteTracker,
   ): void {
-    for (const fileSpec of this.module.frontmatter.files) {
+    for (const fileSpec of this.skill.frontmatter.files) {
       const resolvedPath = resolveFilePath(fileSpec.path, input);
       const content = this.resolveFileSpecContent(
         fileSpec,
@@ -792,9 +787,9 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
 
   /** Throw if the resolved path violates the module's scope policy. */
   private enforceScopePolicy(resolvedPath: string, input: Record<string, unknown>): void {
-    if (!this.module.frontmatter.scope) return;
+    if (!this.skill.frontmatter.scope) return;
 
-    if (!matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input)) {
+    if (!matchesScopePattern(resolvedPath, this.skill.frontmatter.scope.write, input)) {
       throw new Error(`Write to '${resolvedPath}' blocked by scope policy`);
     }
   }
@@ -827,8 +822,8 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
 
   /** Check if a path falls outside the module's declared write scope. */
   private isOutsideScope(resolvedPath: string, input: Record<string, unknown>): boolean {
-    if (!this.module.frontmatter.scope) return false;
-    return !matchesScopePattern(resolvedPath, this.module.frontmatter.scope.write, input);
+    if (!this.skill.frontmatter.scope) return false;
+    return !matchesScopePattern(resolvedPath, this.skill.frontmatter.scope.write, input);
   }
 
   /** Guard: multi-file mode must produce at least one file action. */
@@ -850,12 +845,12 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
     );
   }
 
-  async execute(input: Record<string, unknown>): Promise<ModuleOutput> {
+  async execute(input: Record<string, unknown>): Promise<SkillOutput> {
     // Default outputPath to module name when file specs reference {outputPath}
     const effectiveInput = this.applyOutputPathDefault(input);
 
     // Use pre-generated output from SafeExecutor when available (avoids redundant LLM call)
-    const preGen = input._generatedOutput as ModuleOutput | undefined;
+    const preGen = input._generatedOutput as SkillOutput | undefined;
     const genResult =
       preGen?.success && preGen.data !== undefined ? preGen : await this.generate(effectiveInput);
     if (!genResult.success || !genResult.data) return genResult;
@@ -890,9 +885,9 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
 
   /**
    * Validate generated output before writing files.
-   * Returns a ModuleOutput error if validation fails, or null if validation passes.
+   * Returns a SkillOutput error if validation fails, or null if validation passes.
    */
-  private validateGeneratedOutput(generated: string): ModuleOutput | null {
+  private validateGeneratedOutput(generated: string): SkillOutput | null {
     try {
       if (this.isMultiFileOutput()) {
         return this.validateMultiFileOutput(generated);
@@ -904,7 +899,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   }
 
   /** Validate multi-file JSON output: check paths and non-empty content. */
-  private validateMultiFileOutput(generated: string): ModuleOutput | null {
+  private validateMultiFileOutput(generated: string): SkillOutput | null {
     const fileContents = parseMultiFileOutput(generated);
 
     const pathErrors = validateGeneratedPaths(Object.keys(fileContents));
@@ -923,8 +918,8 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   }
 
   /** Validate single-file output against declared format. */
-  private validateSingleFileOutput(generated: string): ModuleOutput | null {
-    const fileFormat = this.module.frontmatter.context.fileFormat;
+  private validateSingleFileOutput(generated: string): SkillOutput | null {
+    const fileFormat = this.skill.frontmatter.context.fileFormat;
     const contentErrors = validateGeneratedContent(generated, fileFormat, this.name);
     if (contentErrors.length > 0) {
       return failedOutput(new Error(`Content validation failed: ${contentErrors.join("; ")}`));
@@ -936,7 +931,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
    * Handle validation errors: propagate path/content validation failures,
    * silently ignore parse failures (handled later by writeFileSpecs).
    */
-  private handleValidationError(validationErr: unknown): ModuleOutput | null {
+  private handleValidationError(validationErr: unknown): SkillOutput | null {
     const msg = validationErr instanceof Error ? validationErr.message : String(validationErr);
     const isValidationFailure =
       msg.includes("Path validation") || msg.includes("Content validation");
@@ -948,11 +943,11 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   }
 
   async verify(data: unknown): Promise<VerificationResult> {
-    const verificationConfig = this.module.frontmatter.verification;
-    const permissions = this.module.frontmatter.permissions ?? {};
+    const verificationConfig = this.skill.frontmatter.verification;
+    const permissions = this.skill.frontmatter.permissions ?? {};
 
     const rawContent = extractRawContent(data);
-    const fileFormat = this.module.frontmatter.context.fileFormat;
+    const fileFormat = this.skill.frontmatter.context.fileFormat;
     const parsed = parseRawContent(rawContent, fileFormat);
     const peerFiles = extractPeerFiles(data);
 
@@ -990,7 +985,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
     peerFiles: Record<string, string>,
   ): { verifyFiles: Record<string, string> | undefined; filename: string } {
     let verifyFiles = this.tryParseVerifyFiles(rawContent);
-    const filename = verifyFiles ? "output" : derivePrimaryFilename(this.module.frontmatter.files);
+    const filename = verifyFiles ? "output" : derivePrimaryFilename(this.skill.frontmatter.files);
     verifyFiles = mergePeerFiles(verifyFiles, peerFiles);
     return { verifyFiles, filename };
   }
@@ -1012,7 +1007,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
     const auditResult = auditAgainstDocs(
       rawContent,
       this._lastDocsCache,
-      this.module.frontmatter.context.technology,
+      this.skill.frontmatter.context.technology,
     );
     if (auditResult.issues.length > 0) {
       verificationResult.issues.push(...auditResult.issues);
@@ -1023,20 +1018,20 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
     return this._systemPromptHash;
   }
 
-  get moduleHash(): string {
-    return this._moduleHash;
+  get skillHash(): string {
+    return this._skillHash;
   }
 
   get metadata(): ToolMetadata {
-    return buildToolMetadata(this.module.frontmatter, this._moduleHash, this._systemPromptHash);
+    return buildToolMetadata(this.skill.frontmatter, this._skillHash, this._systemPromptHash);
   }
 
   get risk(): DopsRisk {
-    return getRisk(this.module.frontmatter);
+    return getRisk(this.skill.frontmatter);
   }
 
   get executionMode(): DopsExecution {
-    return getExecutionMode(this.module.frontmatter);
+    return getExecutionMode(this.skill.frontmatter);
   }
 
   get isDeterministic(): boolean {
@@ -1048,11 +1043,11 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   }
 
   get keywords(): string[] {
-    return parseKeywords(this.module.sections.keywords);
+    return parseKeywords(this.skill.sections.keywords);
   }
 
   get fileSpecs(): FileSpecV2[] {
-    return this.module.frontmatter.files;
+    return this.skill.frontmatter.files;
   }
 
   /**
@@ -1062,7 +1057,7 @@ export class DopsRuntimeV2 implements DevOpsModule<Record<string, unknown>> {
   private applyOutputPathDefault(input: Record<string, unknown>): Record<string, unknown> {
     if (input.outputPath) return input;
 
-    const usesOutputPath = this.module.frontmatter.files.some((f) =>
+    const usesOutputPath = this.skill.frontmatter.files.some((f) =>
       f.path.includes("{outputPath}"),
     );
     if (!usesOutputPath) return input;

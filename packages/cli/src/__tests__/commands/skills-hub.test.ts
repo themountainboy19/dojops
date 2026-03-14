@@ -34,11 +34,11 @@ vi.mock("@clack/prompts", () => ({
 vi.mock("@dojops/runtime", () => ({
   parseDopsFile: vi.fn(),
   parseDopsString: vi.fn(),
-  validateDopsModule: vi.fn(() => ({ valid: true })),
+  validateDopsSkill: vi.fn(() => ({ valid: true })),
 }));
 
-// Mock @dojops/module-registry
-vi.mock("@dojops/module-registry", () => ({
+// Mock @dojops/skill-registry
+vi.mock("@dojops/skill-registry", () => ({
   discoverUserDopsFiles: vi.fn(() => []),
 }));
 
@@ -51,8 +51,12 @@ vi.mock("../../state", () => ({
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-import { toolsPublishCommand, toolsInstallCommand, toolsSearchCommand } from "../../commands/tools";
-import { parseDopsFile, parseDopsString, validateDopsModule } from "@dojops/runtime";
+import {
+  skillsPublishCommand,
+  skillsInstallCommand,
+  skillsSearchCommand,
+} from "../../commands/skills";
+import { parseDopsFile, parseDopsString, validateDopsSkill } from "@dojops/runtime";
 import { CLIContext } from "../../types";
 import { CLIError } from "../../exit-codes";
 
@@ -137,7 +141,7 @@ function makeCtx(overrides?: Partial<CLIContext["globalOpts"]>): CLIContext {
 function setupPublishMocks() {
   vi.mocked(fs.existsSync).mockImplementation((p) => String(p).endsWith(".dops"));
   vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-  vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+  vi.mocked(validateDopsSkill).mockReturnValue({ valid: true });
   vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 }
 
@@ -180,9 +184,9 @@ function setupInstallFsMocks() {
   vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 }
 
-// ── Tests: toolsPublishCommand ─────────────────────────────────────
+// ── Tests: skillsPublishCommand ─────────────────────────────────────
 
-describe("toolsPublishCommand", () => {
+describe("skillsPublishCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.DOJOPS_HUB_TOKEN;
@@ -190,17 +194,17 @@ describe("toolsPublishCommand", () => {
   });
 
   it("rejects with no arguments", async () => {
-    await expect(toolsPublishCommand([], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsPublishCommand([], makeCtx())).rejects.toThrow(
-      "Path to .dops file or module name required",
+    await expect(skillsPublishCommand([], makeCtx())).rejects.toThrow(CLIError);
+    await expect(skillsPublishCommand([], makeCtx())).rejects.toThrow(
+      "Path to .dops file or skill name required",
     );
   });
 
   it("rejects if .dops file does not exist", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
 
-    await expect(toolsPublishCommand(["missing-tool"], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsPublishCommand(["missing-tool"], makeCtx())).rejects.toThrow(
+    await expect(skillsPublishCommand(["missing-tool"], makeCtx())).rejects.toThrow(CLIError);
+    await expect(skillsPublishCommand(["missing-tool"], makeCtx())).rejects.toThrow(
       'No .dops file found for "missing-tool"',
     );
   });
@@ -211,13 +215,13 @@ describe("toolsPublishCommand", () => {
       throw new Error("Invalid YAML frontmatter");
     });
 
-    await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow("Failed to parse");
+    await expect(skillsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow("Failed to parse");
   });
 
   it("rejects if no DOJOPS_HUB_TOKEN is set", async () => {
     setupPublishMocks();
 
-    await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
+    await expect(skillsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
       "No hub auth token",
     );
   });
@@ -231,7 +235,7 @@ describe("toolsPublishCommand", () => {
       json: async () => ({ slug: "test-tool", version: "1.0.0", created: true }),
     });
 
-    await toolsPublishCommand(["test.dops"], makeCtx());
+    await skillsPublishCommand(["test.dops"], makeCtx());
 
     // Verify fetch was called with multipart body containing sha256 field
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -257,7 +261,7 @@ describe("toolsPublishCommand", () => {
       json: async () => ({ slug: "test-tool", version: "1.0.0", created: true }),
     });
 
-    await toolsPublishCommand(["test.dops"], makeCtx());
+    await skillsPublishCommand(["test.dops"], makeCtx());
 
     const [, opts] = mockFetch.mock.calls[0];
     expect(opts.headers.Authorization).toBe("Bearer dojops_abc123def456");
@@ -274,7 +278,7 @@ describe("toolsPublishCommand", () => {
       json: async () => ({ error: "Version 1.0.0 already exists" }),
     });
 
-    await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
+    await expect(skillsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
       "Version 1.0.0 already exists",
     );
   });
@@ -288,22 +292,22 @@ describe("toolsPublishCommand", () => {
       json: async () => ({ slug: "test-tool", version: "1.0.0", created: true }),
     });
 
-    await toolsPublishCommand(["test.dops", "--changelog", "Initial release"], makeCtx());
+    await skillsPublishCommand(["test.dops", "--changelog", "Initial release"], makeCtx());
 
     const bodyStr = mockFetch.mock.calls[0][1].body.toString("utf-8");
     expect(bodyStr).toContain('name="changelog"');
     expect(bodyStr).toContain("Initial release");
   });
 
-  it("resolves .dops file by name from project tools dir", async () => {
+  it("resolves .dops file by name from project skills dir", async () => {
     process.env.DOJOPS_HUB_TOKEN = "test-token";
 
-    // Only the project tools path should exist
+    // Only the project skills path should exist
     vi.mocked(fs.existsSync).mockImplementation((p) => {
-      return String(p) === path.join("/mock/project", ".dojops", "tools", "my-tool.dops");
+      return String(p) === path.join("/mock/project", ".dojops", "skills", "my-tool.dops");
     });
     vi.mocked(parseDopsFile).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(validateDopsSkill).mockReturnValue({ valid: true });
     vi.mocked(fs.readFileSync).mockReturnValue(SAMPLE_BUFFER);
 
     mockFetch.mockResolvedValue({
@@ -311,7 +315,7 @@ describe("toolsPublishCommand", () => {
       json: async () => ({ slug: "my-tool", version: "1.0.0", created: true }),
     });
 
-    await toolsPublishCommand(["my-tool"], makeCtx());
+    await skillsPublishCommand(["my-tool"], makeCtx());
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
@@ -321,23 +325,23 @@ describe("toolsPublishCommand", () => {
 
     mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
 
-    await expect(toolsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
+    await expect(skillsPublishCommand(["test.dops"], makeCtx())).rejects.toThrow(
       "Failed to connect to hub",
     );
   });
 });
 
-// ── Tests: toolsInstallCommand ─────────────────────────────────────
+// ── Tests: skillsInstallCommand ─────────────────────────────────────
 
-describe("toolsInstallCommand", () => {
+describe("skillsInstallCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.DOJOPS_HUB_URL;
   });
 
   it("rejects with no arguments", async () => {
-    await expect(toolsInstallCommand([], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsInstallCommand([], makeCtx())).rejects.toThrow("Module name required");
+    await expect(skillsInstallCommand([], makeCtx())).rejects.toThrow(CLIError);
+    await expect(skillsInstallCommand([], makeCtx())).rejects.toThrow("Skill name required");
   });
 
   it("fetches package info and downloads latest version", async () => {
@@ -346,7 +350,7 @@ describe("toolsInstallCommand", () => {
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await toolsInstallCommand(["test-tool"], makeCtx());
+    await skillsInstallCommand(["test-tool"], makeCtx());
 
     // Verify two fetch calls: info + download
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -366,8 +370,8 @@ describe("toolsInstallCommand", () => {
       json: async () => ({ error: "Not found" }),
     });
 
-    await expect(toolsInstallCommand(["nonexistent"], makeCtx())).rejects.toThrow(
-      'Module "nonexistent" not found on hub',
+    await expect(skillsInstallCommand(["nonexistent"], makeCtx())).rejects.toThrow(
+      'Skill "nonexistent" not found on hub',
     );
   });
 
@@ -381,7 +385,7 @@ describe("toolsInstallCommand", () => {
       }),
     });
 
-    await expect(toolsInstallCommand(["empty-tool"], makeCtx())).rejects.toThrow(
+    await expect(skillsInstallCommand(["empty-tool"], makeCtx())).rejects.toThrow(
       "no published versions",
     );
   });
@@ -398,7 +402,7 @@ describe("toolsInstallCommand", () => {
       SAMPLE_SHA256,
     );
 
-    await expect(toolsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
+    await expect(skillsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
       "integrity check failed",
     );
   });
@@ -409,7 +413,7 @@ describe("toolsInstallCommand", () => {
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await toolsInstallCommand(["test-tool"], makeCtx());
+    await skillsInstallCommand(["test-tool"], makeCtx());
 
     // Should succeed — file written
     expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
@@ -422,7 +426,7 @@ describe("toolsInstallCommand", () => {
     mockDownloadResponse(sampleArrayBuffer());
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await toolsInstallCommand(["test-tool"], makeCtx());
+    await skillsInstallCommand(["test-tool"], makeCtx());
 
     expect(mockLog.warn).toHaveBeenCalledWith(
       expect.stringContaining("No publisher hash available"),
@@ -435,7 +439,7 @@ describe("toolsInstallCommand", () => {
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await toolsInstallCommand(["test-tool", "--version", "2.0.0"], makeCtx());
+    await skillsInstallCommand(["test-tool", "--version", "2.0.0"], makeCtx());
 
     // Should only make one fetch call (download), not two (info + download)
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -448,11 +452,11 @@ describe("toolsInstallCommand", () => {
     mockDownloadResponse(sampleArrayBuffer(), SAMPLE_SHA256);
     vi.mocked(parseDopsString).mockReturnValue(MOCK_MODULE as ReturnType<typeof parseDopsString>);
 
-    await toolsInstallCommand(["test-tool", "--global"], makeCtx());
+    await skillsInstallCommand(["test-tool", "--global"], makeCtx());
 
     const writtenPath = String(vi.mocked(fs.writeFileSync).mock.calls[0][0]);
     expect(writtenPath).toContain(".dojops");
-    expect(writtenPath).toContain("tools");
+    expect(writtenPath).toContain("skills");
     expect(writtenPath).toContain("test-tool.dops");
   });
 
@@ -464,7 +468,7 @@ describe("toolsInstallCommand", () => {
       status: 404,
     });
 
-    await expect(toolsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
+    await expect(skillsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
       "Version 1.0.0 not found",
     );
   });
@@ -484,15 +488,15 @@ describe("toolsInstallCommand", () => {
       throw new Error("Invalid frontmatter");
     });
 
-    await expect(toolsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
-      "not a valid .dops module",
+    await expect(skillsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
+      "not a valid .dops skill",
     );
   });
 
   it("throws on network failure", async () => {
     mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
-    await expect(toolsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
+    await expect(skillsInstallCommand(["test-tool"], makeCtx())).rejects.toThrow(
       "Failed to connect to hub",
     );
   });
@@ -567,17 +571,17 @@ describe("parseCommandPath — tools publish/install", () => {
   });
 });
 
-// ── Tests: toolsSearchCommand ─────────────────────────────────────
+// ── Tests: skillsSearchCommand ─────────────────────────────────────
 
-describe("toolsSearchCommand", () => {
+describe("skillsSearchCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.DOJOPS_HUB_URL;
   });
 
   it("rejects with no search query", async () => {
-    await expect(toolsSearchCommand([], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsSearchCommand([], makeCtx())).rejects.toThrow("Search query required");
+    await expect(skillsSearchCommand([], makeCtx())).rejects.toThrow(CLIError);
+    await expect(skillsSearchCommand([], makeCtx())).rejects.toThrow("Search query required");
   });
 
   it("displays search results from hub", async () => {
@@ -605,7 +609,7 @@ describe("toolsSearchCommand", () => {
       }),
     });
 
-    await toolsSearchCommand(["docker"], makeCtx());
+    await skillsSearchCommand(["docker"], makeCtx());
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url] = mockFetch.mock.calls[0];
@@ -619,10 +623,10 @@ describe("toolsSearchCommand", () => {
       json: async () => ({ packages: [] }),
     });
 
-    await toolsSearchCommand(["nonexistent-xyz"], makeCtx());
+    await skillsSearchCommand(["nonexistent-xyz"], makeCtx());
 
     expect(mockLog.info).toHaveBeenCalledWith(
-      expect.stringContaining('No modules found for "nonexistent-xyz"'),
+      expect.stringContaining('No skills found for "nonexistent-xyz"'),
     );
   });
 
@@ -644,7 +648,7 @@ describe("toolsSearchCommand", () => {
       }),
     });
 
-    await toolsSearchCommand(["test"], makeCtx({ output: "json" }));
+    await skillsSearchCommand(["test"], makeCtx({ output: "json" }));
 
     expect(consoleSpy).toHaveBeenCalledTimes(1);
     const output = JSON.parse(consoleSpy.mock.calls[0][0]);
@@ -657,7 +661,7 @@ describe("toolsSearchCommand", () => {
   it("handles hub connection failure", async () => {
     mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
 
-    await expect(toolsSearchCommand(["docker"], makeCtx())).rejects.toThrow(
+    await expect(skillsSearchCommand(["docker"], makeCtx())).rejects.toThrow(
       "Failed to connect to hub",
     );
   });
@@ -669,7 +673,7 @@ describe("toolsSearchCommand", () => {
       json: async () => ({ error: "Too many requests" }),
     });
 
-    await expect(toolsSearchCommand(["docker"], makeCtx())).rejects.toThrow("Rate limited by hub");
+    await expect(skillsSearchCommand(["docker"], makeCtx())).rejects.toThrow("Rate limited by hub");
   });
 
   it("respects --limit flag", async () => {
@@ -678,7 +682,7 @@ describe("toolsSearchCommand", () => {
       json: async () => ({ packages: [] }),
     });
 
-    await toolsSearchCommand(["docker", "--limit", "5"], makeCtx());
+    await skillsSearchCommand(["docker", "--limit", "5"], makeCtx());
 
     const [url] = mockFetch.mock.calls[0];
     expect(url).toContain("limit=5");

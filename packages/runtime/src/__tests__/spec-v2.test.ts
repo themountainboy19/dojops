@@ -4,7 +4,7 @@ import {
   ContextBlockSchema,
   FileSpecV2Schema,
   DopsFrontmatterSchema,
-  DopsModule,
+  DopsSkill,
 } from "../spec";
 
 describe("Context7LibraryRefSchema", () => {
@@ -265,9 +265,9 @@ describe("DopsFrontmatterSchema", () => {
   });
 });
 
-describe("DopsModule type", () => {
-  it("conforms to the DopsModule interface", () => {
-    const mod: DopsModule = {
+describe("DopsSkill type", () => {
+  it("conforms to the DopsSkill interface", () => {
+    const mod: DopsSkill = {
       frontmatter: {
         dops: "v2",
         kind: "tool",

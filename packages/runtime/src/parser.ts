@@ -1,13 +1,13 @@
 import * as fs from "node:fs";
 import * as yaml from "js-yaml";
-import { DopsFrontmatterSchema, DopsModule, DopsValidationResult, MarkdownSections } from "./spec";
+import { DopsFrontmatterSchema, DopsSkill, DopsValidationResult, MarkdownSections } from "./spec";
 
 const FRONTMATTER_DELIMITER = "---";
 
 /**
  * Parse a .dops file from disk.
  */
-export function parseDopsFile(filePath: string): DopsModule {
+export function parseDopsFile(filePath: string): DopsSkill {
   const content = fs.readFileSync(filePath, "utf-8");
   return parseDopsString(content);
 }
@@ -15,7 +15,7 @@ export function parseDopsFile(filePath: string): DopsModule {
 /**
  * Parse a .dops file from a string. Only v2 format is supported.
  */
-export function parseDopsString(content: string): DopsModule {
+export function parseDopsString(content: string): DopsSkill {
   const { frontmatterRaw, body } = splitFrontmatter(content);
   const frontmatterData = parseFrontmatterYaml(frontmatterRaw);
   const sections = parseMarkdownSections(body);
@@ -88,7 +88,7 @@ function validateVerificationParser(
 /**
  * Validate a parsed DOPS module for completeness.
  */
-export function validateDopsModule(module: DopsModule): DopsValidationResult {
+export function validateDopsSkill(module: DopsSkill): DopsValidationResult {
   const errors: string[] = [];
 
   validateRequiredSections(module.sections, errors);

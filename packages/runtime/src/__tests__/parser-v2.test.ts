@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { parseDopsString, parseDopsFile, validateDopsModule } from "../parser";
+import { parseDopsString, parseDopsFile, validateDopsSkill } from "../parser";
 
 vi.mock("node:fs", () => ({
   readFileSync: vi.fn(),
@@ -272,17 +272,17 @@ v1
   });
 });
 
-describe("validateDopsModule", () => {
+describe("validateDopsSkill", () => {
   it("returns valid for complete v2 module", () => {
     const module = parseDopsString(MINIMAL_V2_DOPS);
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
   });
 
   it("returns valid for full v2 module", () => {
     const module = parseDopsString(FULL_V2_DOPS);
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(true);
     expect(result.errors).toBeUndefined();
   });
@@ -290,7 +290,7 @@ describe("validateDopsModule", () => {
   it("returns errors for missing Prompt section", () => {
     const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.prompt = "";
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Prompt section");
   });
@@ -298,7 +298,7 @@ describe("validateDopsModule", () => {
   it("returns errors for missing Keywords section", () => {
     const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.keywords = "";
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Missing required ## Keywords section");
   });
@@ -307,7 +307,7 @@ describe("validateDopsModule", () => {
     const module = parseDopsString(MINIMAL_V2_DOPS);
     module.sections.prompt = "";
     module.sections.keywords = "";
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toHaveLength(2);
     expect(result.errors).toContain("Missing required ## Prompt section");
@@ -317,7 +317,7 @@ describe("validateDopsModule", () => {
   it("catches scope write path with path traversal", () => {
     const module = parseDopsString(MINIMAL_V2_DOPS);
     module.frontmatter.scope = { write: ["../etc/passwd"] };
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(false);
     expect(result.errors).toContain("Scope write path contains path traversal: '../etc/passwd'");
   });
@@ -332,7 +332,7 @@ describe("validateDopsModule", () => {
         cwd: "output",
       },
     };
-    const result = validateDopsModule(module);
+    const result = validateDopsSkill(module);
     expect(result.valid).toBe(false);
     expect(result.errors![0]).toContain("Unknown verification parser");
   });

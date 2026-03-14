@@ -122,7 +122,7 @@ function consumeSimpleStringFlag(args: string[], i: number, opts: GlobalOptions)
     { flags: "--model", key: "model" },
     { flags: "--fallback-provider", key: "fallbackProvider" },
     { flags: "--agent", key: "agent" },
-    { flags: ["--module", "--tool"], key: "tool" },
+    { flags: "--skill", key: "skill" },
     { flags: ["--file", "-f"], key: "file" },
   ];
 
@@ -192,7 +192,7 @@ export function parseCommandPath(args: string[]): ParsedCommandPath {
     "clean",
     "destroy",
     "rollback",
-    "modules",
+    "skills",
     "tools",
     "toolchain",
     "scan",

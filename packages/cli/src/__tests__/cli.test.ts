@@ -42,7 +42,7 @@ describe("CLI", () => {
       expect(output).toContain("--execute");
       expect(output).toContain("debug ci");
       expect(output).toContain("analyze diff");
-      expect(output).toContain("modules");
+      expect(output).toContain("skills");
       expect(output).toContain("--port=N");
       expect(output).toContain("--model=NAME");
       expect(output).toContain("--provider=NAME");
@@ -128,7 +128,7 @@ describe("CLI", () => {
       ["validate", ["dojops validate", "plan-id"]],
       ["auth", ["dojops auth", "login", "status"]],
       ["analyze", ["dojops analyze diff", "risk"]],
-      ["modules", ["dojops modules", "list", "init", "validate", "load"]],
+      ["skills", ["dojops skills", "list", "init", "validate", "load"]],
     ];
 
     for (const [cmd, expected, notExpected] of helpCases) {
@@ -150,10 +150,6 @@ describe("CLI", () => {
     it("shows destroy as deprecated alias for clean", () => {
       expectHelpContains("destroy", ["clean", "--dry-run"]);
     });
-
-    it("shows modules help via tools alias with dojops tools --help", () => {
-      expectHelpContains("tools", ["dojops modules", "list"]);
-    });
   });
 
   describe("subcommand routing", () => {
@@ -170,12 +166,8 @@ describe("CLI", () => {
       expect(output.includes("initialized") || output.includes("Initialized")).toBe(true);
     });
 
-    it("modules list runs without error", () => {
-      expectRunContains(["modules", "list"], ["No custom modules discovered"]);
-    });
-
-    it("tools list alias still works", () => {
-      expectRunContains(["tools", "list"], ["No custom modules discovered"]);
+    it("skills list runs without error", () => {
+      expectRunContains(["skills", "list"], ["No custom skills discovered"]);
     });
   });
 });

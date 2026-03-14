@@ -1,4 +1,4 @@
-import { DevOpsModule, ModuleOutput, VerificationResult } from "@dojops/sdk";
+import { DevOpsSkill, SkillOutput, VerificationResult } from "@dojops/sdk";
 import {
   ExecutionPolicy,
   ExecutionResult,
@@ -18,7 +18,7 @@ export interface CriticCallback {
   critique(
     generatedContent: string,
     verificationResult: VerificationResult,
-    toolName: string,
+    skillName: string,
     originalPrompt?: string,
   ): Promise<{ repairInstructions: string }>;
 }
@@ -43,9 +43,9 @@ export interface SafeExecutorOptions {
 /** Options for the internal runExecution method. */
 interface RunExecutionContext {
   taskId: string;
-  tool: DevOpsModule;
+  tool: DevOpsSkill;
   input: unknown;
-  generateOutput: ModuleOutput;
+  generateOutput: SkillOutput;
   approval: ApprovalDecision;
   verification: VerificationResult | undefined;
   startTime: number;
@@ -92,8 +92,8 @@ export class SafeExecutor {
   }
 
   private async runVerification(
-    tool: DevOpsModule,
-    generateOutput: ModuleOutput,
+    tool: DevOpsSkill,
+    generateOutput: SkillOutput,
     meta?: Record<string, unknown>,
   ): Promise<
     | { ok: true; verification: VerificationResult | undefined }
@@ -170,8 +170,8 @@ export class SafeExecutor {
    */
   private async resolveApproval(
     taskId: string,
-    tool: DevOpsModule,
-    generateOutput: ModuleOutput,
+    tool: DevOpsSkill,
+    generateOutput: SkillOutput,
     taskRisk?: RiskLevel,
   ): Promise<ApprovalDecision> {
     const mode = this.policy.approvalMode ?? "always";
@@ -194,14 +194,14 @@ export class SafeExecutor {
     const preview = buildPreview(generateOutput, tool.name);
     return this.approvalHandler.requestApproval({
       taskId,
-      toolName: tool.name,
+      skillName: tool.name,
       description: `Write LLM-generated output using ${tool.name}`,
       preview,
     });
   }
 
   /** Elevate task risk if generated output targets sensitive paths. */
-  private elevateRiskByPaths(taskRisk: RiskLevel, generateOutput: ModuleOutput): RiskLevel {
+  private elevateRiskByPaths(taskRisk: RiskLevel, generateOutput: SkillOutput): RiskLevel {
     if (!generateOutput.data) return taskRisk;
     const paths = this.extractDeclaredPaths(generateOutput.data);
     if (paths.length === 0) return taskRisk;
@@ -294,11 +294,11 @@ export class SafeExecutor {
   /** Run the generate phase, returning the output or an early ExecutionResult on failure. */
   private async runGeneratePhase(
     taskId: string,
-    tool: DevOpsModule,
+    tool: DevOpsSkill,
     input: unknown,
     startTime: number,
     meta?: Record<string, unknown>,
-  ): Promise<{ output: ModuleOutput } | { result: ExecutionResult }> {
+  ): Promise<{ output: SkillOutput } | { result: ExecutionResult }> {
     try {
       const output = await withTimeout(
         tool.generate(input as never),
@@ -336,8 +336,8 @@ export class SafeExecutor {
    */
   private async buildRepairFeedback(
     verifyResult: { verification: VerificationResult; error: string },
-    generateOutput: ModuleOutput,
-    tool: DevOpsModule,
+    generateOutput: SkillOutput,
+    tool: DevOpsSkill,
     input: unknown,
   ): Promise<string> {
     const rawFeedback = verifyResult.verification.issues
@@ -376,7 +376,7 @@ export class SafeExecutor {
   }
 
   /** Check pre-execution policy on declared output paths. Returns violation message or undefined. */
-  private checkDeclaredPathPolicy(generateOutput: ModuleOutput): string | undefined {
+  private checkDeclaredPathPolicy(generateOutput: SkillOutput): string | undefined {
     if (!this.policy.allowWrite || !generateOutput.data) return undefined;
     const declaredPaths = this.extractDeclaredPaths(generateOutput.data);
     return this.checkFilePaths(declaredPaths);
@@ -404,16 +404,16 @@ export class SafeExecutor {
    */
   private async runRepairLoop(
     taskId: string,
-    tool: DevOpsModule,
+    tool: DevOpsSkill,
     input: unknown,
-    initialOutput: ModuleOutput,
+    initialOutput: SkillOutput,
     initialVerify: Awaited<ReturnType<SafeExecutor["runVerification"]>>,
     startTime: number,
     meta?: Record<string, unknown>,
   ): Promise<
     | {
         repaired: true;
-        generateOutput: ModuleOutput;
+        generateOutput: SkillOutput;
         verifyResult: Awaited<ReturnType<SafeExecutor["runVerification"]>>;
       }
     | { repaired: false; earlyResult: ExecutionResult }
@@ -457,10 +457,10 @@ export class SafeExecutor {
 
   async executeTask(
     taskId: string,
-    tool: DevOpsModule,
+    tool: DevOpsSkill,
     input: unknown,
     metadata?: Record<string, unknown>,
-    preGeneratedOutput?: ModuleOutput,
+    preGeneratedOutput?: SkillOutput,
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
     const meta = metadata;
@@ -475,7 +475,7 @@ export class SafeExecutor {
       });
     }
 
-    let generateOutput: ModuleOutput;
+    let generateOutput: SkillOutput;
     if (preGeneratedOutput) {
       generateOutput = preGeneratedOutput;
       this.accumulateTokenUsage(generateOutput.usage);
@@ -574,7 +574,7 @@ export class SafeExecutor {
 
   private buildResult(
     taskId: string,
-    toolName: string,
+    skillName: string,
     status: ExecutionResult["status"],
     startTime: number,
     details: {
@@ -594,7 +594,7 @@ export class SafeExecutor {
 
     const auditEntry: ExecutionAuditEntry = {
       taskId,
-      toolName,
+      skillName,
       timestamp: new Date().toISOString(),
       policy: this.policy,
       approval,

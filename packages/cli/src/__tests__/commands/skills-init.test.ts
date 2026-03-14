@@ -37,11 +37,11 @@ vi.mock("@clack/prompts", () => ({
 vi.mock("@dojops/runtime", () => ({
   parseDopsFile: vi.fn(),
   parseDopsString: vi.fn(),
-  validateDopsModule: vi.fn(),
+  validateDopsSkill: vi.fn(),
 }));
 
-// Mock @dojops/module-registry
-vi.mock("@dojops/module-registry", () => ({
+// Mock @dojops/skill-registry
+vi.mock("@dojops/skill-registry", () => ({
   discoverUserDopsFiles: vi.fn(() => []),
 }));
 
@@ -55,7 +55,7 @@ vi.mock("../../state", () => ({
   findProjectRoot: vi.fn(() => "/mock/project"),
 }));
 
-import { toolsInitCommand } from "../../commands/tools";
+import { skillsInitCommand } from "../../commands/skills";
 import { CLIContext } from "../../types";
 import { CLIError } from "../../exit-codes";
 
@@ -101,9 +101,9 @@ function resetFsMocks() {
   vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 }
 
-/** Run toolsInitCommand in non-interactive mode and return the written file content. */
+/** Run skillsInitCommand in non-interactive mode and return the written file content. */
 async function initAndGetContent(name: string, ctx?: CLIContext): Promise<string> {
-  await toolsInitCommand([name, "--non-interactive"], ctx ?? makeCtx());
+  await skillsInitCommand([name, "--non-interactive"], ctx ?? makeCtx());
   return String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
 }
 
@@ -126,20 +126,20 @@ function setupWizardResponses(opts: {
   }
 }
 
-// ── Tests: toolsInitCommand — v2 scaffold (no LLM) ───────────────
+// ── Tests: skillsInitCommand — v2 scaffold (no LLM) ───────────────
 
-describe("toolsInitCommand — v2 scaffold", () => {
+describe("skillsInitCommand — v2 scaffold", () => {
   beforeEach(resetFsMocks);
 
   it("rejects with no name in non-interactive mode", async () => {
-    await expect(toolsInitCommand(["--non-interactive"], makeCtx())).rejects.toThrow(CLIError);
-    await expect(toolsInitCommand(["--non-interactive"], makeCtx())).rejects.toThrow(
-      "Module name required",
+    await expect(skillsInitCommand(["--non-interactive"], makeCtx())).rejects.toThrow(CLIError);
+    await expect(skillsInitCommand(["--non-interactive"], makeCtx())).rejects.toThrow(
+      "Skill name required",
     );
   });
 
   it("rejects invalid module name", async () => {
-    await expect(toolsInitCommand(["MyTool", "--non-interactive"], makeCtx())).rejects.toThrow(
+    await expect(skillsInitCommand(["MyTool", "--non-interactive"], makeCtx())).rejects.toThrow(
       "lowercase alphanumeric",
     );
   });
@@ -147,8 +147,8 @@ describe("toolsInitCommand — v2 scaffold", () => {
   it("rejects if module already exists", async () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
 
-    await expect(toolsInitCommand(["my-tool", "--non-interactive"], makeCtx())).rejects.toThrow(
-      "Module already exists",
+    await expect(skillsInitCommand(["my-tool", "--non-interactive"], makeCtx())).rejects.toThrow(
+      "Skill already exists",
     );
   });
 
@@ -194,7 +194,7 @@ describe("toolsInitCommand — v2 scaffold", () => {
   it("writes to .dojops/modules/<name>.dops", async () => {
     await initAndGetContent("my-tool");
     expect(fs.mkdirSync).toHaveBeenCalledWith(
-      expect.stringContaining(path.join(".dojops", "modules")),
+      expect.stringContaining(path.join(".dojops", "skills")),
       { recursive: true },
     );
     const writtenPath = String(vi.mocked(fs.writeFileSync).mock.calls[0][0]);
@@ -212,9 +212,9 @@ describe("toolsInitCommand — v2 scaffold", () => {
   });
 });
 
-// ── Tests: toolsInitCommand — LLM-powered generation ──────────────
+// ── Tests: skillsInitCommand — LLM-powered generation ──────────────
 
-describe("toolsInitCommand — LLM-powered generation", () => {
+describe("skillsInitCommand — LLM-powered generation", () => {
   beforeEach(resetFsMocks);
 
   it("uses LLM-generated content when provider responds successfully", async () => {
@@ -253,7 +253,7 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     });
 
     const ctx = makeCtxWithProvider(mockGenerate);
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     // Provider should have been called
     expect(mockGenerate).toHaveBeenCalledTimes(1);
@@ -281,7 +281,7 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     });
 
     const ctx = makeCtxWithProvider(mockGenerate);
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     // Should still write a valid v2 file with defaults
     const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
@@ -306,7 +306,7 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     });
 
     const ctx = makeCtxWithProvider(mockGenerate);
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     expect(mockGenerate).not.toHaveBeenCalled();
 
@@ -324,7 +324,7 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     mockText.mockResolvedValueOnce("my-tool.yaml");
 
     const ctx = makeCtx(); // no provider
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     // confirm should not have been called
     expect(mockConfirm).not.toHaveBeenCalled();
@@ -363,10 +363,10 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     });
 
     const ctx = makeCtxWithProvider(mockGenerate);
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     const call = mockGenerate.mock.calls[0][0];
-    expect(call.system).toContain("DevOps module designer");
+    expect(call.system).toContain("DevOps skill designer");
     expect(call.schema).toBeDefined();
   });
 
@@ -399,7 +399,7 @@ describe("toolsInitCommand — LLM-powered generation", () => {
     });
 
     const ctx = makeCtxWithProvider(mockGenerate);
-    await toolsInitCommand([], ctx);
+    await skillsInitCommand([], ctx);
 
     const content = String(vi.mocked(fs.writeFileSync).mock.calls[0][1]);
     expect(content).toContain("verification:");
@@ -408,9 +408,9 @@ describe("toolsInitCommand — LLM-powered generation", () => {
   });
 });
 
-// ── Tests: toolsInitCommand — non-interactive v2 defaults ─────────
+// ── Tests: skillsInitCommand — non-interactive v2 defaults ─────────
 
-describe("toolsInitCommand — non-interactive defaults", () => {
+describe("skillsInitCommand — non-interactive defaults", () => {
   beforeEach(resetFsMocks);
 
   it("produces valid v2 structure with just a name", async () => {

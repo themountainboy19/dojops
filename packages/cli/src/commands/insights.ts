@@ -235,17 +235,17 @@ function analyzeErrorPatterns(rootDir: string, insights: Insight[]): void {
   }
 
   // Surface module-specific failure concentrations
-  const byModule = new Map<string, number>();
+  const bySkill = new Map<string, number>();
   for (const p of unresolved) {
-    if (p.agent_or_module) {
-      byModule.set(p.agent_or_module, (byModule.get(p.agent_or_module) ?? 0) + p.occurrences);
+    if (p.agent_or_skill) {
+      bySkill.set(p.agent_or_skill, (bySkill.get(p.agent_or_skill) ?? 0) + p.occurrences);
     }
   }
-  for (const [mod, count] of byModule) {
+  for (const [mod, count] of bySkill) {
     if (count >= 3) {
       insights.push({
         category: "quality",
-        message: `Module "${mod}" has ${count} error occurrences across patterns.`,
+        message: `Skill "${mod}" has ${count} error occurrences across patterns.`,
         suggestion: `Check module compatibility or try a different model for ${mod} tasks.`,
       });
     }

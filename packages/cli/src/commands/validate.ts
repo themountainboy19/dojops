@@ -1,6 +1,6 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
-import { createModuleRegistry } from "@dojops/module-registry";
+import { createSkillRegistry } from "@dojops/skill-registry";
 import { CLIContext } from "../types";
 import { findProjectRoot, loadPlan, getLatestPlan, loadSession } from "../state";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -42,7 +42,7 @@ function validateTask(
 /** Warn about modules not found in the registry. */
 function warnUnknownTools(
   tasks: Array<{ tool: string }>,
-  registry: ReturnType<typeof createModuleRegistry>,
+  registry: ReturnType<typeof createSkillRegistry>,
 ): void {
   const unknownTools = tasks.filter((t) => t.tool && !registry.has(t.tool)).map((t) => t.tool);
   if (unknownTools.length === 0) return;
@@ -60,7 +60,7 @@ export async function validateCommand(args: string[], ctx: CLIContext): Promise<
   }
 
   const plan = resolvePlan(root, args);
-  const registry = createModuleRegistry(ctx.getProvider(), root);
+  const registry = createSkillRegistry(ctx.getProvider(), root);
   warnUnknownTools(plan.tasks, registry);
 
   if (ctx.globalOpts.output === "json") {

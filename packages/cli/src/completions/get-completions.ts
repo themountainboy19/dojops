@@ -12,7 +12,7 @@ const MODULE_ALIASES: Record<string, string[]> = {
 function getBuiltInModuleNames(): string[] {
   try {
     // require.resolve('@dojops/runtime') returns dist/index.js; go up to package root then into modules/
-    const modulesDir = join(require.resolve("@dojops/runtime"), "..", "..", "modules");
+    const modulesDir = join(require.resolve("@dojops/runtime"), "..", "..", "skills");
     const names: string[] = [];
     for (const f of readdirSync(modulesDir)) {
       if (!f.endsWith(".dops")) continue;
@@ -30,7 +30,7 @@ function getBuiltInModuleNames(): string[] {
 /** List user-installed module names from .dojops/modules/ in cwd. */
 function getUserModuleNames(): string[] {
   try {
-    const userDir = join(process.cwd(), ".dojops", "modules");
+    const userDir = join(process.cwd(), ".dojops", "skills");
     return readdirSync(userDir)
       .filter((f) => f.endsWith(".dops"))
       .map((f) => basename(f, ".dops"));
@@ -72,7 +72,7 @@ export function handleGetCompletions(type: string): never {
     case "providers":
       values = PROVIDERS;
       break;
-    case "modules":
+    case "skills":
       values = [...getBuiltInModuleNames(), ...getUserModuleNames()];
       break;
     case "agents":

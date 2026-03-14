@@ -7,7 +7,7 @@ import { DeterministicProvider } from "@dojops/core";
 import { appendActivity } from "../dojops-md";
 import { recordTask } from "../memory";
 import { SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createModuleRegistry } from "@dojops/module-registry";
+import { createSkillRegistry } from "@dojops/skill-registry";
 import { PlannerExecutor } from "@dojops/planner";
 import { CLIContext } from "../types";
 import { hasFlag, extractFlagValue } from "../parser";
@@ -48,7 +48,7 @@ import { buildFileTree } from "@dojops/session";
 // readExistingToolFile is no longer used here — existingContent is detected
 // lazily at execution time by each tool's runtime (detectContent in DopsRuntimeV2).
 
-type ToolEntry = ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>[number];
+type ToolEntry = ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>[number];
 
 interface ApplyFlags {
   autoApprove: boolean;
@@ -254,7 +254,7 @@ function displayPreFlightSummary(
 
   const toolsUsed = [...new Set(plan.tasks.map((t) => t.tool))];
   summaryLines.push(
-    `${pc.bold("Modules:")}  ${toolsUsed.join(", ")}`,
+    `${pc.bold("Skills:")}  ${toolsUsed.join(", ")}`,
     "",
     pc.bold("Task breakdown:"),
   );
@@ -328,7 +328,7 @@ async function executeDryRun(
   try {
     const provider = ctx.getProvider();
     const projectContext = buildFileTree(root);
-    const registry = createModuleRegistry(provider, root, {
+    const registry = createSkillRegistry(provider, root, {
       onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
       projectContext: projectContext || undefined,
     });
@@ -468,7 +468,7 @@ function handleReplayValidation(
   plan: PlanState,
   provider: { name: string },
   model: string | undefined,
-  registry: ReturnType<typeof createModuleRegistry>,
+  registry: ReturnType<typeof createSkillRegistry>,
   force: boolean,
   root: string,
 ): void {
@@ -497,14 +497,14 @@ function handleReplayValidation(
 
 async function handleToolIntegrityCheck(
   plan: PlanState,
-  tools: ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>,
+  tools: ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>,
   autoApprove: boolean,
   root: string,
 ): Promise<void> {
   const { mismatches: toolMismatches, hasMismatches } = checkToolIntegrity(plan.tasks, tools);
   if (!hasMismatches) return;
 
-  p.log.warn(pc.bold("Module integrity warnings:"));
+  p.log.warn(pc.bold("Skill integrity warnings:"));
   for (const msg of toolMismatches) {
     p.log.warn(`  ${pc.yellow("!")} ${msg}`);
   }
@@ -512,7 +512,7 @@ async function handleToolIntegrityCheck(
   if (autoApprove) return;
 
   const proceed = await p.confirm({
-    message: "Modules have changed since this plan was created. Continue anyway?",
+    message: "Skills have changed since this plan was created. Continue anyway?",
   });
   if (p.isCancel(proceed) || !proceed) {
     p.cancel("Aborted due to module integrity mismatch.");
@@ -539,7 +539,7 @@ function buildTaskGraph(plan: PlanState) {
 }
 
 function createExecutorWithCallbacks(
-  tools: ReturnType<ReturnType<typeof createModuleRegistry>["getAll"]>,
+  tools: ReturnType<ReturnType<typeof createSkillRegistry>["getAll"]>,
   graph: ReturnType<typeof buildTaskGraph>,
   ctx: CLIContext,
   jsonOutput: boolean,
@@ -560,7 +560,7 @@ function createExecutorWithCallbacks(
         if (ctx.globalOpts.verbose) {
           const task = graph.tasks.find((t) => t.id === id);
           p.log.info(
-            `  Module: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
+            `  Skill: ${pc.bold(task?.tool ?? "unknown")}, deps: [${task?.dependsOn.join(", ") ?? ""}]`,
           );
         }
       },
@@ -997,7 +997,7 @@ function saveApplyResults(
     status: results.status === "SUCCESS" ? "success" : "failure",
     duration_ms: 0,
     related_files: JSON.stringify(allFiles),
-    agent_or_module: "",
+    agent_or_skill: "",
     metadata: JSON.stringify({ planId: ctx.plan.id }),
   });
 
@@ -1118,7 +1118,7 @@ async function executeApplyPlan(
     provider = new DeterministicProvider(provider);
   }
   const projectContext = buildFileTree(root);
-  const registry = createModuleRegistry(provider, root, {
+  const registry = createSkillRegistry(provider, root, {
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
     projectContext: projectContext || undefined,
   });
@@ -1253,8 +1253,8 @@ export async function applyCommand(args: string[], ctx: CLIContext): Promise<voi
 
   const completedTaskIds = buildCompletedTaskIds(plan, flags);
 
-  if (ctx.globalOpts.tool) {
-    applyToolFilter(plan, completedTaskIds, ctx.globalOpts.tool, flags.jsonOutput);
+  if (ctx.globalOpts.skill) {
+    applyToolFilter(plan, completedTaskIds, ctx.globalOpts.skill, flags.jsonOutput);
   }
 
   displayPreFlightSummary(plan, completedTaskIds, flags.resume);

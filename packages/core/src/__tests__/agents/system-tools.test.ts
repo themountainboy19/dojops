@@ -183,9 +183,9 @@ describe("system-tools", () => {
     });
 
     it("all mapped tool names exist in SYSTEM_TOOLS", () => {
-      const toolNames = new Set(SYSTEM_TOOLS.map((t) => t.name));
-      for (const toolName of Object.values(BINARY_TO_SYSTEM_TOOL)) {
-        expect(toolNames.has(toolName)).toBe(true);
+      const skillNames = new Set(SYSTEM_TOOLS.map((t) => t.name));
+      for (const skillName of Object.values(BINARY_TO_SYSTEM_TOOL)) {
+        expect(skillNames.has(skillName)).toBe(true);
       }
     });
   });

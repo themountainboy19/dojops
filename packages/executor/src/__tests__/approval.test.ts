@@ -9,7 +9,7 @@ import { ApprovalRequest, ExecutionPreview } from "../types";
 
 const mockRequest: ApprovalRequest = {
   taskId: "t1",
-  toolName: "test-tool",
+  skillName: "test-tool",
   description: "Test execution",
   preview: { filesCreated: [], filesModified: [], summary: "test" },
 };

@@ -5,7 +5,7 @@ import rateLimit from "express-rate-limit";
 import crypto from "node:crypto";
 import path from "node:path";
 import { LLMProvider, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsModule } from "@dojops/sdk";
+import { DevOpsSkill } from "@dojops/sdk";
 import { HistoryStore } from "./store";
 import { errorHandler, authMiddleware, requestIdMiddleware, requestLogger } from "./middleware";
 import {
@@ -25,7 +25,7 @@ import { TokenTracker } from "./token-tracker";
 
 export interface AppDependencies {
   provider: LLMProvider;
-  tools: DevOpsModule[];
+  tools: DevOpsSkill[];
   router: AgentRouter;
   debugger: CIDebugger;
   diffAnalyzer: InfraDiffAnalyzer;
@@ -38,12 +38,12 @@ export interface AppDependencies {
   apiKey?: string | string[];
   /** Optional documentation augmenter (Context7) for injecting up-to-date docs */
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> };
-  /** Optional Context7 DocProvider for v2 .dops modules */
+  /** Optional Context7 DocProvider for v2 .dops skills */
   context7Provider?: {
     resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
     queryDocs(libraryId: string, query: string): Promise<string>;
   };
-  /** Optional project context string for v2 .dops modules */
+  /** Optional project context string for v2 .dops skills */
   projectContext?: string;
 }
 

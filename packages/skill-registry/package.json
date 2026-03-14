@@ -1,17 +1,17 @@
 {
-  "name": "@dojops/module-registry",
+  "name": "@dojops/skill-registry",
   "version": "1.1.0",
-  "description": "Tool registry with plugin system for DojOps — discovers, loads, and manages built-in and plugin tools",
+  "description": "Skill registry for DojOps — discovers, loads, and manages built-in and custom skills",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/dojops/dojops.git",
-    "directory": "packages/module-registry"
+    "directory": "packages/skill-registry"
   },
   "keywords": [
     "devops",
-    "tools",
-    "plugins",
+    "skills",
+    "dops",
     "registry"
   ],
   "engines": {

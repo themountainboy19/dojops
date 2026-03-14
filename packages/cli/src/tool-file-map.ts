@@ -63,10 +63,10 @@ function collectFiles(dir: string, extensions: string[], maxDepth = 3, depth = 0
  * Returns a formatted multi-file block with file path headers, or undefined if no files found.
  */
 function readMultiFileToolContent(
-  toolName: string,
+  skillName: string,
   cwd: string,
 ): { content: string; filePath: string } | undefined {
-  const scanConfig = TOOL_SCAN_DIRS[toolName];
+  const scanConfig = TOOL_SCAN_DIRS[skillName];
   if (!scanConfig) return undefined;
 
   const sections: string[] = [];
@@ -100,15 +100,15 @@ function readMultiFileToolContent(
  * Returns the content string and the file path, or undefined if no file exists.
  */
 export function readExistingToolFile(
-  toolName: string,
+  skillName: string,
   cwd: string,
 ): { content: string; filePath: string } | undefined {
   // Multi-file tools: scan directories and return all files
-  const multiResult = readMultiFileToolContent(toolName, cwd);
+  const multiResult = readMultiFileToolContent(skillName, cwd);
   if (multiResult) return multiResult;
 
   // Single-file tools: return first match
-  const filePaths = TOOL_FILE_MAP[toolName];
+  const filePaths = TOOL_FILE_MAP[skillName];
   if (!filePaths) return undefined;
 
   for (const fp of filePaths) {

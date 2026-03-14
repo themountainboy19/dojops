@@ -57,7 +57,7 @@ describe("recordTask", () => {
       status: "success",
       duration_ms: 1500,
       related_files: '["Dockerfile"]',
-      agent_or_module: "docker",
+      agent_or_skill: "docker",
       metadata: "{}",
     });
 
@@ -67,7 +67,7 @@ describe("recordTask", () => {
     expect(rows[0].prompt).toBe("Create a Dockerfile");
     expect(rows[0].task_type).toBe("generate");
     expect(rows[0].status).toBe("success");
-    expect(rows[0].agent_or_module).toBe("docker");
+    expect(rows[0].agent_or_skill).toBe("docker");
   });
 
   it("does not throw on repeated inserts", () => {
@@ -80,7 +80,7 @@ describe("recordTask", () => {
         status: "success",
         duration_ms: 100,
         related_files: "[]",
-        agent_or_module: "",
+        agent_or_skill: "",
         metadata: "{}",
       });
     }
@@ -101,7 +101,7 @@ function insertTasks(tasks: Array<Partial<Omit<TaskRecord, "id">>>): void {
       status: (t.status ?? "success") as TaskRecord["status"],
       duration_ms: t.duration_ms ?? 0,
       related_files: t.related_files ?? "[]",
-      agent_or_module: t.agent_or_module ?? "",
+      agent_or_skill: t.agent_or_skill ?? "",
       metadata: t.metadata ?? "{}",
     });
   }
@@ -228,7 +228,7 @@ describe("buildMemoryContextString", () => {
           status: "success",
           duration_ms: 1000,
           related_files: "[]",
-          agent_or_module: "terraform",
+          agent_or_skill: "terraform",
           metadata: "{}",
         },
       ],
@@ -243,7 +243,7 @@ describe("buildMemoryContextString", () => {
         status: "success",
         duration_ms: 1000,
         related_files: "[]",
-        agent_or_module: "terraform",
+        agent_or_skill: "terraform",
         metadata: "{}",
       },
       relevantNotes: [],
@@ -265,7 +265,7 @@ describe("buildMemoryContextString", () => {
           status: "success",
           duration_ms: 5000,
           related_files: "[]",
-          agent_or_module: "npm-audit",
+          agent_or_skill: "npm-audit",
           metadata: "{}",
         },
       ],
@@ -289,7 +289,7 @@ describe("buildMemoryContextString", () => {
       status: "success" as const,
       duration_ms: 1000,
       related_files: "[]",
-      agent_or_module: "some-agent",
+      agent_or_skill: "some-agent",
       metadata: "{}",
     }));
     const result = buildMemoryContextString({
@@ -390,7 +390,7 @@ describe("buildMemoryContextString with notes", () => {
           status: "success",
           duration_ms: 100,
           related_files: "[]",
-          agent_or_module: "",
+          agent_or_skill: "",
           metadata: "{}",
         },
       ],
@@ -481,7 +481,7 @@ describe("recordTask auto-learns errors", () => {
       status: "failure",
       duration_ms: 500,
       related_files: "[]",
-      agent_or_module: "dockerfile",
+      agent_or_skill: "dockerfile",
       metadata: "{}",
     });
     const patterns = listErrorPatterns(tmpDir);
@@ -498,7 +498,7 @@ describe("recordTask auto-learns errors", () => {
       status: "success",
       duration_ms: 500,
       related_files: "[]",
-      agent_or_module: "dockerfile",
+      agent_or_skill: "dockerfile",
       metadata: "{}",
     });
     expect(listErrorPatterns(tmpDir)).toHaveLength(0);
@@ -518,7 +518,7 @@ describe("buildMemoryContextString with error warnings", () => {
           status: "success",
           duration_ms: 100,
           related_files: "[]",
-          agent_or_module: "",
+          agent_or_skill: "",
           metadata: "{}",
         },
       ],
@@ -531,7 +531,7 @@ describe("buildMemoryContextString with error warnings", () => {
           fingerprint: "generate::timeout",
           error_message: "LLM request timed out after 60s",
           task_type: "generate",
-          agent_or_module: "",
+          agent_or_skill: "",
           occurrences: 3,
           first_seen: "2025-03-07T10:00:00Z",
           last_seen: "2025-03-08T10:00:00Z",

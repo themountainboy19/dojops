@@ -530,7 +530,7 @@ export const initCommand: CommandHandler = async (_args, cliCtx) => {
     status: "success",
     duration_ms: 0,
     related_files: '["DOJOPS.md"]',
-    agent_or_module: "",
+    agent_or_skill: "",
     metadata: "{}",
   });
 };

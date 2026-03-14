@@ -1,4 +1,4 @@
-import { ModuleOutput } from "@dojops/sdk";
+import { SkillOutput } from "@dojops/sdk";
 import { ApprovalDecision, ApprovalRequest, ExecutionPreview } from "./types";
 
 export interface ApprovalHandler {
@@ -25,9 +25,9 @@ export class CallbackApprovalHandler implements ApprovalHandler {
   }
 }
 
-export function buildPreview(toolOutput: ModuleOutput, toolName: string): ExecutionPreview {
+export function buildPreview(toolOutput: SkillOutput, skillName: string): ExecutionPreview {
   const filesCreated: string[] = [];
-  const summaryParts: string[] = [`Tool "${toolName}" wants to execute.`];
+  const summaryParts: string[] = [`Tool "${skillName}" wants to execute.`];
 
   if (toolOutput.data && typeof toolOutput.data === "object") {
     extractPreviewDetails(toolOutput.data as Record<string, unknown>, summaryParts, filesCreated);

@@ -10,7 +10,7 @@ export interface GlobalOptions {
   temperature?: number;
   timeout?: number;
   agent?: string;
-  tool?: string;
+  skill?: string;
   fallbackProvider?: string;
   /** Read prompt from a file (--file / -f). */
   file?: string;

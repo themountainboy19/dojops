@@ -1,27 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const MODULE_DIR_NAME = "modules";
-const TOOL_DIR_NAME = "tools";
+const SKILL_DIR_NAME = "skills";
 
-function getGlobalModulesDir(): string | null {
+function getGlobalSkillsDir(): string | null {
   const home = process.env.HOME ?? process.env.USERPROFILE;
   if (!home) return null;
-  return path.join(home, ".dojops", MODULE_DIR_NAME);
+  return path.join(home, ".dojops", SKILL_DIR_NAME);
 }
 
-function getGlobalToolsDir(): string | null {
-  const home = process.env.HOME ?? process.env.USERPROFILE;
-  if (!home) return null;
-  return path.join(home, ".dojops", TOOL_DIR_NAME);
-}
-
-function getProjectModulesDir(projectPath: string): string {
-  return path.join(projectPath, ".dojops", MODULE_DIR_NAME);
-}
-
-function getProjectToolsDir(projectPath: string): string {
-  return path.join(projectPath, ".dojops", TOOL_DIR_NAME);
+function getProjectSkillsDir(projectPath: string): string {
+  return path.join(projectPath, ".dojops", SKILL_DIR_NAME);
 }
 
 /**
@@ -74,16 +63,13 @@ function mergeDopsEntries(
 export function discoverUserDopsFiles(projectPath?: string): DopsFileEntry[] {
   const byName = new Map<string, DopsFileEntry>();
 
-  // Global: modules/ (primary, overrides), then tools/ (fallback, no override)
-  const globalModDir = getGlobalModulesDir();
-  if (globalModDir) mergeDopsEntries(globalModDir, "global", byName, true);
-  const globalDir = getGlobalToolsDir();
-  if (globalDir) mergeDopsEntries(globalDir, "global", byName, false);
+  // Global skills
+  const globalDir = getGlobalSkillsDir();
+  if (globalDir) mergeDopsEntries(globalDir, "global", byName, true);
 
-  // Project (overrides global): modules/ (primary, overrides), then tools/ (fallback, no override)
+  // Project (overrides global)
   if (projectPath) {
-    mergeDopsEntries(getProjectModulesDir(projectPath), "project", byName, true);
-    mergeDopsEntries(getProjectToolsDir(projectPath), "project", byName, false);
+    mergeDopsEntries(getProjectSkillsDir(projectPath), "project", byName, true);
   }
 
   return Array.from(byName.values());

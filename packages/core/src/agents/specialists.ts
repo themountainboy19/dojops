@@ -156,7 +156,7 @@ export const TERRAFORM_SPECIALIST_CONFIG: SpecialistConfig = {
 - AWS, GCP, and Azure resource provisioning
 - Terraform HCL configuration, modules, and best practices
 - State management, remote backends, and state locking
-- Module design, composition, and reusability
+- Skill design, composition, and reusability
 - Provider configuration and version constraints
 - Cost optimization and resource right-sizing
 - Import, refactoring, and state manipulation

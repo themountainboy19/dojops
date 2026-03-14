@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("@dojops/module-registry", () => ({
-  createModuleRegistry: vi.fn(),
+vi.mock("@dojops/skill-registry", () => ({
+  createSkillRegistry: vi.fn(),
   discoverUserDopsFiles: vi.fn().mockReturnValue([]),
 }));
 
@@ -20,21 +20,21 @@ describe("outputFormatted", () => {
 
   it("parses JSON content and embeds as object in json mode", () => {
     const jsonContent = JSON.stringify({ success: true, data: { generated: "hello" } });
-    outputFormatted("json", "module", "makefile", jsonContent);
+    outputFormatted("json", "skill", "makefile", jsonContent);
 
     expect(consoleSpy).toHaveBeenCalledOnce();
     const output = JSON.parse(consoleSpy.mock.calls[0][0] as string);
-    expect(output.module).toBe("makefile");
+    expect(output.skill).toBe("makefile");
     expect(output.content).toEqual({ success: true, data: { generated: "hello" } });
     expect(typeof output.content).toBe("object");
   });
 
   it("keeps plain text content as string in json mode", () => {
-    outputFormatted("json", "module", "makefile", "# Makefile\nall: build");
+    outputFormatted("json", "skill", "makefile", "# Makefile\nall: build");
 
     expect(consoleSpy).toHaveBeenCalledOnce();
     const output = JSON.parse(consoleSpy.mock.calls[0][0] as string);
-    expect(output.module).toBe("makefile");
+    expect(output.skill).toBe("makefile");
     expect(output.content).toBe("# Makefile\nall: build");
     expect(typeof output.content).toBe("string");
   });
@@ -49,12 +49,12 @@ describe("outputFormatted", () => {
   });
 
   it("outputs YAML format correctly", () => {
-    outputFormatted("yaml", "module", "nginx", "server {\n  listen 80;\n}");
+    outputFormatted("yaml", "skill", "nginx", "server {\n  listen 80;\n}");
 
     // 3 header lines + 3 content lines (one per line of content)
     expect(consoleSpy).toHaveBeenCalledTimes(6);
     expect(consoleSpy.mock.calls[0][0]).toBe("---");
-    expect(consoleSpy.mock.calls[1][0]).toBe("module: nginx");
+    expect(consoleSpy.mock.calls[1][0]).toBe("skill: nginx");
     expect(consoleSpy.mock.calls[2][0]).toBe("content: |");
     expect(consoleSpy.mock.calls[3][0]).toBe("  server {");
     expect(consoleSpy.mock.calls[4][0]).toBe("    listen 80;");

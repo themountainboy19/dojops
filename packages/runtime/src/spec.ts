@@ -199,9 +199,9 @@ export const DopsFrontmatterSchema = z.object({
 
 export type DopsFrontmatter = z.infer<typeof DopsFrontmatterSchema>;
 
-// ── Complete DOPS Module ─────────────────────────────
+// ── Complete DOPS Skill ─────────────────────────────
 
-export interface DopsModule {
+export interface DopsSkill {
   frontmatter: DopsFrontmatter;
   sections: MarkdownSections;
   raw: string;

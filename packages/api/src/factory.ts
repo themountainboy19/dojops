@@ -15,9 +15,9 @@ import {
   withRetry,
 } from "@dojops/core";
 import { NoopProvider } from "./noop-provider";
-import { DevOpsModule } from "@dojops/sdk";
-export { createModuleRegistry, ModuleRegistry } from "@dojops/module-registry";
-import { createModuleRegistry, discoverCustomAgents } from "@dojops/module-registry";
+import { DevOpsSkill } from "@dojops/sdk";
+export { createSkillRegistry, SkillRegistry } from "@dojops/skill-registry";
+import { createSkillRegistry, discoverCustomAgents } from "@dojops/skill-registry";
 
 export interface ProviderOptions {
   provider?: string;
@@ -103,21 +103,21 @@ export function createProvider(options?: ProviderOptions): LLMProvider {
   return buildKeyedProvider(providerName, model, options, allowMissing);
 }
 
-/** Duck-typed DocProvider for v2 .dops modules (avoids hard import on @dojops/context) */
+/** Duck-typed DocProvider for v2 .dops skills (avoids hard import on @dojops/context) */
 interface DocProvider {
   resolveLibrary(name: string, query: string): Promise<{ id: string; name: string } | null>;
   queryDocs(libraryId: string, query: string): Promise<string>;
 }
 
 /**
- * Creates all DevOps modules. Uses module-registry to instantiate all 13 built-in modules
- * plus any discovered custom modules.
+ * Creates all DevOps skills. Uses module-registry to instantiate all 13 built-in skills
+ * plus any discovered custom skills.
  *
  * @param provider - LLM provider for tool generation
  * @param projectPath - Optional project path for plugin discovery
  * @param docAugmenter - Optional documentation augmenter for tool prompts
- * @param context7Provider - Optional Context7 DocProvider for v2 .dops modules
- * @param projectContext - Optional project context string for v2 .dops modules
+ * @param context7Provider - Optional Context7 DocProvider for v2 .dops skills
+ * @param projectContext - Optional project context string for v2 .dops skills
  */
 export function createTools(
   provider: LLMProvider,
@@ -125,8 +125,8 @@ export function createTools(
   docAugmenter?: { augmentPrompt(s: string, kw: string[], q: string): Promise<string> },
   context7Provider?: DocProvider,
   projectContext?: string,
-): DevOpsModule[] {
-  return createModuleRegistry(provider, projectPath, {
+): DevOpsSkill[] {
+  return createSkillRegistry(provider, projectPath, {
     docAugmenter,
     context7Provider,
     projectContext,

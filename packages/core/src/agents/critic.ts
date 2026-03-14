@@ -41,7 +41,7 @@ export class CriticAgent {
   async critique(
     generatedContent: string,
     verificationResult: VerificationResult,
-    toolName: string,
+    skillName: string,
     originalPrompt?: string,
   ): Promise<CritiqueResult> {
     const verificationErrors = verificationResult.issues
@@ -75,7 +75,7 @@ Respond with JSON:
   "repairInstructions": "Precise, actionable instructions for the generator to fix all issues. Reference specific lines/sections."
 }`;
 
-    const prompt = `## Tool: ${toolName}
+    const prompt = `## Tool: ${skillName}
 ${originalPrompt ? `\n## Original Request\n${originalPrompt}\n` : ""}
 ## Generated Content (that failed validation)
 

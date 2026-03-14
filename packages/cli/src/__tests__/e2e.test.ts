@@ -12,7 +12,7 @@ import {
   AuditEntry,
 } from "../state";
 
-const CLI_BIN = path.resolve(__dirname, "..", "dist", "index.js");
+const CLI_BIN = path.resolve(__dirname, "..", "..", "dist", "index.js");
 const HAS_KEY = !!process.env.ANTHROPIC_API_KEY;
 
 function run(args: string, opts?: { cwd?: string; env?: Record<string, string> }): string {

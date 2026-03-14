@@ -8,7 +8,7 @@ import { BinaryVerificationConfig, VerificationConfig } from "./spec";
 import { getParser, SeverityMapping } from "./parsers/index";
 
 /**
- * Allowed verification binaries for .dops module binary verification.
+ * Allowed verification binaries for .dops skill binary verification.
  */
 export const ALLOWED_VERIFICATION_BINARIES = new Set([
   "terraform",
@@ -229,7 +229,7 @@ export async function verifyWithBinary(input: BinaryVerifierInput): Promise<Veri
     writeFilesToTmpDir(tmpDir, input.files, filename, content);
 
     // Resolve {entryFile} placeholder in the verification command.
-    // This allows .dops modules to reference the actual generated filename
+    // This allows .dops skills to reference the actual generated filename
     // instead of hardcoding (e.g., ansible playbooks may be named dynamically).
     // Returns null when only non-entry files are present (e.g., inventory-only output).
     const resolvedCommand = resolveCommandPlaceholders(config.command, input.files, filename);
@@ -344,7 +344,7 @@ export async function runVerification(
   verificationConfig: VerificationConfig | undefined,
   permissions: { child_process?: "required" | "none"; network?: "required" | "none" },
   structuralIssues: VerificationIssue[],
-  toolName: string,
+  skillName: string,
   files?: Record<string, string>,
   onBinaryMissing?: OnBinaryMissing,
 ): Promise<VerificationResult> {
@@ -369,7 +369,7 @@ export async function runVerification(
 
   return {
     passed: !hasErrors,
-    tool: toolName,
+    tool: skillName,
     issues: allIssues,
   };
 }

@@ -19,11 +19,11 @@ import {
   parseRawContent,
   parseMultiFileOutput,
 } from "../runtime";
-import { DopsModule } from "../spec";
+import { DopsSkill } from "../spec";
 import type { LLMProvider } from "@dojops/core";
 import * as fs from "node:fs";
 
-function createV2Module(overrides?: Partial<DopsModule["frontmatter"]>): DopsModule {
+function createV2Module(overrides?: Partial<DopsSkill["frontmatter"]>): DopsSkill {
   return {
     frontmatter: {
       dops: "v2",
@@ -63,7 +63,7 @@ function createMockProvider(content: string): LLMProvider {
 /** Create a V2 module, mock provider, and runtime in one call. */
 function createRuntime(
   content = "",
-  moduleOverrides?: Partial<DopsModule["frontmatter"]>,
+  moduleOverrides?: Partial<DopsSkill["frontmatter"]>,
   runtimeOpts?: ConstructorParameters<typeof DopsRuntimeV2>[2],
 ) {
   const module = createV2Module(moduleOverrides);
@@ -119,12 +119,12 @@ describe("DopsRuntimeV2", () => {
     });
   });
 
-  it("computes systemPromptHash and moduleHash", () => {
+  it("computes systemPromptHash and skillHash", () => {
     const { runtime } = createRuntime();
     expect(runtime.systemPromptHash).toBeDefined();
     expect(runtime.systemPromptHash.length).toBe(64); // SHA-256 hex
-    expect(runtime.moduleHash).toBeDefined();
-    expect(runtime.moduleHash.length).toBe(64);
+    expect(runtime.skillHash).toBeDefined();
+    expect(runtime.skillHash.length).toBe(64);
   });
 
   it("extracts keywords from sections", () => {

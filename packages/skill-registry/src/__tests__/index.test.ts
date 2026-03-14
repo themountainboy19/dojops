@@ -14,7 +14,7 @@ vi.mock("@dojops/runtime", () => {
   return {
     DopsRuntimeV2,
     parseDopsFile: vi.fn(),
-    validateDopsModule: vi.fn(),
+    validateDopsSkill: vi.fn(),
     DocProvider: undefined,
   };
 });
@@ -24,12 +24,12 @@ vi.mock("../dops-loader", () => ({
 }));
 
 vi.mock("../policy", () => ({
-  loadModulePolicy: vi.fn().mockReturnValue(null),
-  isModuleAllowed: vi.fn().mockReturnValue(true),
+  loadSkillPolicy: vi.fn().mockReturnValue(null),
+  isSkillAllowed: vi.fn().mockReturnValue(true),
 }));
 
-import { loadBuiltInModules, loadUserModules, createModuleRegistry } from "../index";
-import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import { loadBuiltInModules, loadUserModules, createSkillRegistry } from "../index";
+import { parseDopsFile, validateDopsSkill } from "@dojops/runtime";
 import { discoverUserDopsFiles } from "../dops-loader";
 import type { LLMProvider } from "@dojops/core";
 import type { DopsFileEntry } from "../dops-loader";
@@ -51,7 +51,7 @@ const defaultParsedModule = {
 
 function resetParseMock() {
   vi.mocked(parseDopsFile).mockReturnValue(defaultParsedModule as ReturnType<typeof parseDopsFile>);
-  vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+  vi.mocked(validateDopsSkill).mockReturnValue({ valid: true });
 }
 
 describe("loadBuiltInModules", () => {
@@ -84,7 +84,7 @@ describe("loadBuiltInModules", () => {
     vi.mocked(fs.readdirSync).mockReturnValue(["bad.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: false, errors: ["bad format"] });
+    vi.mocked(validateDopsSkill).mockReturnValue({ valid: false, errors: ["bad format"] });
 
     const result = loadBuiltInModules(mockProvider);
     expect(result).toHaveLength(0);
@@ -139,7 +139,7 @@ describe("loadUserModules", () => {
       sections: { prompt: "test", keywords: "test" },
       raw: "test",
     } as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(validateDopsSkill).mockReturnValue({ valid: true });
 
     const result = loadUserModules(mockProvider);
     expect(result.modules).toHaveLength(1);
@@ -158,7 +158,7 @@ describe("loadUserModules", () => {
       sections: { prompt: "test", keywords: "test" },
       raw: "test",
     } as ReturnType<typeof parseDopsFile>);
-    vi.mocked(validateDopsModule).mockReturnValue({
+    vi.mocked(validateDopsSkill).mockReturnValue({
       valid: false,
       errors: ["missing meta"],
     });
@@ -185,14 +185,14 @@ describe("loadUserModules", () => {
   });
 });
 
-describe("createModuleRegistry", () => {
+describe("createSkillRegistry", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("creates a registry with no modules", () => {
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
-    const registry = createModuleRegistry(mockProvider);
+    const registry = createSkillRegistry(mockProvider);
     expect(registry).toBeDefined();
     expect(registry.size).toBe(0);
   });
@@ -202,10 +202,10 @@ describe("createModuleRegistry", () => {
     vi.mocked(fs.readdirSync).mockReturnValue(["tool.dops"] as unknown as ReturnType<
       typeof fs.readdirSync
     >);
-    vi.mocked(validateDopsModule).mockReturnValue({ valid: true });
+    vi.mocked(validateDopsSkill).mockReturnValue({ valid: true });
     vi.mocked(discoverUserDopsFiles).mockReturnValue([]);
 
-    const registry = createModuleRegistry(mockProvider);
+    const registry = createSkillRegistry(mockProvider);
     expect(registry).toBeDefined();
   });
 });

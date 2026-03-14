@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const CLI_BIN = path.resolve(__dirname, "..", "dist", "index.js");
+const CLI_BIN = path.resolve(__dirname, "..", "..", "dist", "index.js");
 
 function run(
   args: string,

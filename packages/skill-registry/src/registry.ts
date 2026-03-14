@@ -1,12 +1,12 @@
-import { DevOpsModule } from "@dojops/sdk";
+import { DevOpsSkill } from "@dojops/sdk";
 
 /**
  * Interface for DopsRuntime metadata access.
  * Avoids direct dependency on @dojops/runtime from module-registry.
  */
-export interface DopsRuntimeLike extends DevOpsModule {
+export interface DopsRuntimeLike extends DevOpsSkill {
   readonly systemPromptHash: string;
-  readonly moduleHash: string;
+  readonly skillHash: string;
   readonly metadata: {
     toolType: "built-in" | "custom";
     toolVersion: string;
@@ -16,9 +16,9 @@ export interface DopsRuntimeLike extends DevOpsModule {
   };
 }
 
-function isDopsRuntime(module: DevOpsModule): module is DopsRuntimeLike {
+function isDopsRuntime(module: DevOpsSkill): module is DopsRuntimeLike {
   return (
-    "moduleHash" in module &&
+    "skillHash" in module &&
     "metadata" in module &&
     typeof (module as DopsRuntimeLike).metadata === "object"
   );
@@ -28,11 +28,11 @@ function isDopsRuntime(module: DevOpsModule): module is DopsRuntimeLike {
  * Central registry combining built-in and user .dops modules.
  * Provides a unified getAll() / get(name) interface for Planner, Executor, CLI, and API.
  */
-export class ModuleRegistry {
-  private readonly moduleMap: Map<string, DevOpsModule>;
-  private readonly builtIn: DevOpsModule[];
+export class SkillRegistry {
+  private readonly moduleMap: Map<string, DevOpsSkill>;
+  private readonly builtIn: DevOpsSkill[];
 
-  constructor(builtInModules: DevOpsModule[]) {
+  constructor(builtInModules: DevOpsSkill[]) {
     this.builtIn = builtInModules;
     this.moduleMap = new Map();
 
@@ -42,12 +42,12 @@ export class ModuleRegistry {
   }
 
   /** All modules, deduplicated by name. */
-  getAll(): DevOpsModule[] {
+  getAll(): DevOpsSkill[] {
     return Array.from(this.moduleMap.values());
   }
 
   /** Look up a module by name. */
-  get(name: string): DevOpsModule | undefined {
+  get(name: string): DevOpsSkill | undefined {
     return this.moduleMap.get(name);
   }
 
@@ -57,12 +57,12 @@ export class ModuleRegistry {
   }
 
   /** Get only built-in modules. */
-  getBuiltIn(): DevOpsModule[] {
+  getBuiltIn(): DevOpsSkill[] {
     return [...this.builtIn];
   }
 
   /** Extract module metadata by name. */
-  getModuleMetadata(name: string):
+  getSkillMetadata(name: string):
     | {
         toolType: "built-in" | "custom";
         toolVersion?: string;

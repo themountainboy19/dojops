@@ -1,17 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
 import { LLMProvider } from "@dojops/core";
-import { BaseModule, ModuleOutput, z } from "@dojops/sdk";
+import { BaseSkill, SkillOutput, z } from "@dojops/sdk";
 import { decompose } from "../decomposer";
 import { TaskGraphSchema } from "../types";
 
-class MockTool extends BaseModule<{ projectPath: string; enabled: boolean }> {
+class MockTool extends BaseSkill<{ projectPath: string; enabled: boolean }> {
   name = "mock-tool";
   description = "A mock tool for testing";
   inputSchema = z.object({
     projectPath: z.string(),
     enabled: z.boolean().default(true),
   });
-  async generate(): Promise<ModuleOutput> {
+  async generate(): Promise<SkillOutput> {
     return { success: true };
   }
 }
@@ -101,7 +101,7 @@ describe("decompose", () => {
   });
 
   it("includes schema info for terraform-shaped tool", async () => {
-    class TerraformLikeTool extends BaseModule<{
+    class TerraformLikeTool extends BaseSkill<{
       projectPath: string;
       provider: "aws" | "gcp" | "azure";
       resources: string;
@@ -115,7 +115,7 @@ describe("decompose", () => {
         resources: z.string().describe("Description of infrastructure resources to provision"),
         backendType: z.enum(["local", "s3", "gcs", "azurerm"]).default("local"),
       });
-      async generate(): Promise<ModuleOutput> {
+      async generate(): Promise<SkillOutput> {
         return { success: true };
       }
     }

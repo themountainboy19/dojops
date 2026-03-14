@@ -38,9 +38,9 @@ describe("handleGetCompletions", () => {
     expect(exitCode).toBe(0);
   });
 
-  it("returns module names for 'modules'", () => {
+  it("returns skill names for 'skills'", () => {
     try {
-      handleGetCompletions("modules");
+      handleGetCompletions("skills");
     } catch {
       /* exit mock */
     }

@@ -10,11 +10,11 @@ const DRIFT_AWARE_TOOLS = new Map<string, string>([
   ["ansible", "Host state not inspected. Run `ansible --check` to verify convergence."],
 ]);
 
-export function getDriftWarnings(toolNames: string[]): DriftWarning[] {
+export function getDriftWarnings(skillNames: string[]): DriftWarning[] {
   const warnings: DriftWarning[] = [];
   const seen = new Set<string>();
 
-  for (const tool of toolNames) {
+  for (const tool of skillNames) {
     const message = DRIFT_AWARE_TOOLS.get(tool);
     if (message && !seen.has(tool)) {
       seen.add(tool);

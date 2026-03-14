@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parseDopsFile, validateDopsModule } from "../parser";
-import type { DopsModule } from "../spec";
+import { parseDopsFile, validateDopsSkill } from "../parser";
+import type { DopsSkill } from "../spec";
 
-const MODULES_DIR = path.join(__dirname, "../../modules");
+const MODULES_DIR = path.join(__dirname, "../../skills");
 
-function parseV2Module(filename: string): DopsModule {
+function parseV2Module(filename: string): DopsSkill {
   return parseDopsFile(path.join(MODULES_DIR, filename));
 }
 
@@ -57,19 +57,19 @@ describe("Built-in .dops modules", () => {
   });
 
   for (const file of moduleFiles) {
-    const moduleName = file.replace(".dops", "");
+    const skillName = file.replace(".dops", "");
 
-    describe(moduleName, () => {
+    describe(skillName, () => {
       it("parses without errors", () => {
         const module = parseDopsFile(path.join(MODULES_DIR, file));
         expect(module).toBeDefined();
         expect(module.frontmatter.dops).toBe("v2");
-        expect(module.frontmatter.meta.name).toBe(moduleName);
+        expect(module.frontmatter.meta.name).toBe(skillName);
       });
 
       it("validates successfully", () => {
         const module = parseDopsFile(path.join(MODULES_DIR, file));
-        const result = validateDopsModule(module);
+        const result = validateDopsSkill(module);
         expect(result.valid).toBe(true);
       });
 

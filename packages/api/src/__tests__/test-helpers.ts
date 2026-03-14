@@ -1,6 +1,6 @@
 import { vi } from "vitest";
 import { LLMProvider, LLMResponse, AgentRouter, CIDebugger, InfraDiffAnalyzer } from "@dojops/core";
-import { DevOpsModule } from "@dojops/sdk";
+import { DevOpsSkill } from "@dojops/sdk";
 import { AppDependencies } from "../app";
 import { HistoryStore } from "../store";
 
@@ -18,9 +18,9 @@ export function createMockProvider(): LLMProvider {
 }
 
 /**
- * Creates a mock DevOpsModule with stubbed validate and generate.
+ * Creates a mock DevOpsSkill with stubbed validate and generate.
  */
-export function createMockTool(): DevOpsModule {
+export function createMockTool(): DevOpsSkill {
   return {
     name: "mock-tool",
     description: "A mock tool",

@@ -1,11 +1,11 @@
 import { LLMProvider } from "@dojops/core";
-import { DevOpsModule } from "@dojops/sdk";
-import { DopsRuntimeV2, parseDopsFile, validateDopsModule, DocProvider } from "@dojops/runtime";
+import { DevOpsSkill } from "@dojops/sdk";
+import { DopsRuntimeV2, parseDopsFile, validateDopsSkill, DocProvider } from "@dojops/runtime";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ModuleRegistry } from "./registry";
+import { SkillRegistry } from "./registry";
 import { discoverUserDopsFiles } from "./dops-loader";
-import { loadModulePolicy, isModuleAllowed } from "./policy";
+import { loadSkillPolicy, isSkillAllowed } from "./policy";
 
 export * from "./registry";
 export * from "./dops-loader";
@@ -17,7 +17,7 @@ export * from "./agent-loader";
 export * from "./agent-schema";
 export * from "./prompt-validator";
 
-export interface CreateModuleRegistryOptions {
+export interface CreateSkillRegistryOptions {
   /** Optional documentation augmenter for injecting up-to-date docs into module prompts */
   docAugmenter?: {
     augmentPrompt(s: string, kw: string[], q: string): Promise<string>;
@@ -31,15 +31,15 @@ export interface CreateModuleRegistryOptions {
 }
 
 /**
- * Load built-in .dops modules from @dojops/runtime/modules/.
- * Returns DopsRuntimeV2 instances for each valid v2 module.
+ * Load built-in .dops skills from @dojops/runtime/skills/.
+ * Returns DopsRuntimeV2 instances for each valid v2 skill.
  */
 export function loadBuiltInModules(
   provider: LLMProvider,
-  options?: CreateModuleRegistryOptions,
-): DevOpsModule[] {
-  const modulesDir = path.join(__dirname, "../../runtime/modules");
-  const modules: DevOpsModule[] = [];
+  options?: CreateSkillRegistryOptions,
+): DevOpsSkill[] {
+  const modulesDir = path.join(__dirname, "../../runtime/skills");
+  const modules: DevOpsSkill[] = [];
 
   try {
     if (!fs.existsSync(modulesDir)) return modules;
@@ -49,7 +49,7 @@ export function loadBuiltInModules(
       if (!file.endsWith(".dops")) continue;
       try {
         const module = parseDopsFile(path.join(modulesDir, file));
-        const validation = validateDopsModule(module);
+        const validation = validateDopsSkill(module);
         if (validation.valid) {
           modules.push(
             new DopsRuntimeV2(module, provider, {
@@ -78,16 +78,16 @@ export function loadBuiltInModules(
 export function loadUserModules(
   provider: LLMProvider,
   projectPath?: string,
-  options?: CreateModuleRegistryOptions,
-): { modules: DevOpsModule[]; warnings: string[] } {
+  options?: CreateSkillRegistryOptions,
+): { modules: DevOpsSkill[]; warnings: string[] } {
   const dopsFiles = discoverUserDopsFiles(projectPath);
-  const modules: DevOpsModule[] = [];
+  const modules: DevOpsSkill[] = [];
   const warnings: string[] = [];
 
   for (const entry of dopsFiles) {
     try {
       const module = parseDopsFile(entry.filePath);
-      const validation = validateDopsModule(module);
+      const validation = validateDopsSkill(module);
       if (validation.valid) {
         modules.push(
           new DopsRuntimeV2(module, provider, {
@@ -112,24 +112,24 @@ export function loadUserModules(
 }
 
 /**
- * Convenience factory: builds a ModuleRegistry with all built-in .dops modules
+ * Convenience factory: builds a SkillRegistry with all built-in .dops modules
  * plus any valid, policy-allowed user .dops modules.
  */
-export function createModuleRegistry(
+export function createSkillRegistry(
   provider: LLMProvider,
   projectPath?: string,
-  options?: CreateModuleRegistryOptions,
-): ModuleRegistry {
+  options?: CreateSkillRegistryOptions,
+): SkillRegistry {
   // 1. Built-in .dops modules (sole built-in module source)
-  const builtInModules: DevOpsModule[] = loadBuiltInModules(provider, options);
+  const builtInModules: DevOpsSkill[] = loadBuiltInModules(provider, options);
 
   // 2. Load user .dops files, apply policy filter
-  const policy = loadModulePolicy(projectPath);
-  const { modules: userModules } = loadUserModules(provider, projectPath, options);
-  const allowedModules = userModules.filter((m) => isModuleAllowed(m.name, policy));
+  const policy = loadSkillPolicy(projectPath);
+  const { modules: userSkills } = loadUserModules(provider, projectPath, options);
+  const allowedSkills = userSkills.filter((m) => isSkillAllowed(m.name, policy));
 
   // Add user .dops runtimes (they'll override by name in registry)
-  builtInModules.push(...allowedModules);
+  builtInModules.push(...allowedSkills);
 
-  return new ModuleRegistry(builtInModules);
+  return new SkillRegistry(builtInModules);
 }

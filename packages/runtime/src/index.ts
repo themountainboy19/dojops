@@ -1,6 +1,6 @@
 // Spec types
 export {
-  DopsModule,
+  DopsSkill,
   DopsFrontmatter,
   DopsValidationResult,
   MarkdownSections,
@@ -33,7 +33,7 @@ export {
 } from "./spec";
 
 // Parser
-export { parseDopsFile, parseDopsString, validateDopsModule } from "./parser";
+export { parseDopsFile, parseDopsString, validateDopsSkill } from "./parser";
 
 // Schema compiler
 export { compileOutputSchema, jsonSchemaToZod, JSONSchemaObject } from "./schema-compiler";

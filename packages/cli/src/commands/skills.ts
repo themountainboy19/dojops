@@ -5,8 +5,8 @@ import * as crypto from "node:crypto";
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { z } from "zod";
-import { discoverUserDopsFiles } from "@dojops/module-registry";
-import { parseDopsFile, validateDopsModule } from "@dojops/runtime";
+import { discoverUserDopsFiles } from "@dojops/skill-registry";
+import { parseDopsFile, validateDopsSkill } from "@dojops/runtime";
 import { parseAndValidate } from "@dojops/core";
 import { CommandHandler, CLIContext } from "../types";
 import { ExitCode, CLIError, toErrorMessage } from "../exit-codes";
@@ -14,16 +14,16 @@ import { extractFlagValue, hasFlag } from "../parser";
 import { findProjectRoot } from "../state";
 import { truncateNoteTitle } from "../formatter";
 
-type ModuleScope = "global" | "project";
+type SkillScope = "global" | "project";
 
 /**
- * Prompt the user to select global or project scope for module operations.
+ * Prompt the user to select global or project scope for skill operations.
  * Returns the base directory for the selected scope.
  */
-async function selectModuleScope(
+async function selectSkillScope(
   nonInteractive: boolean,
-  subDir: "modules" | "tools" = "tools",
-): Promise<{ scope: ModuleScope; baseDir: string }> {
+  subDir: string = "skills",
+): Promise<{ scope: SkillScope; baseDir: string }> {
   const globalDir = path.join(os.homedir(), ".dojops", subDir);
   const projectRoot = findProjectRoot();
   const projectDir = projectRoot
@@ -37,7 +37,7 @@ async function selectModuleScope(
   const globalLabel = pc.dim(`(${globalDir})`);
   const projectLabel = pc.dim(`(${projectDir})`);
   const scopeChoice = await p.select({
-    message: "Where should the module be saved?",
+    message: "Where should the skill be saved?",
     options: [
       {
         value: "global",
@@ -64,7 +64,7 @@ async function selectModuleScope(
 }
 
 /**
- * Converts a hyphenated module name to title case (e.g., "redis-config" → "Redis Config").
+ * Converts a hyphenated skill name to title case (e.g., "redis-config" → "Redis Config").
  */
 function titleCase(name: string): string {
   return name
@@ -73,9 +73,9 @@ function titleCase(name: string): string {
     .join(" ");
 }
 
-// ── Zod schema for LLM-generated module content ────────────────────
+// ── Zod schema for LLM-generated skill content ────────────────────
 
-const InitModuleResponseSchema = z.object({
+const InitSkillResponseSchema = z.object({
   outputGuidance: z.string().min(1),
   bestPractices: z.array(z.string().min(1)).min(3).max(10),
   context7Libraries: z
@@ -103,7 +103,7 @@ const InitModuleResponseSchema = z.object({
     .default([]),
 });
 
-type InitModuleResponse = z.infer<typeof InitModuleResponseSchema>;
+type InitSkillResponse = z.infer<typeof InitSkillResponseSchema>;
 
 const DEFAULT_HUB_URL = process.env.DOJOPS_HUB_URL || "https://hub.dojops.ai";
 
@@ -115,9 +115,9 @@ function throwHubError(err: unknown): never {
 }
 
 /**
- * `dojops modules list` — discovers and lists user .dops modules.
+ * `dojops skills list` — discovers and lists user .dops skills.
  */
-export const toolsListCommand: CommandHandler = async (_args, ctx) => {
+export const skillsListCommand: CommandHandler = async (_args, ctx) => {
   const projectRoot = findProjectRoot() ?? undefined;
 
   // Discover .dops files
@@ -132,11 +132,11 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
 
   for (const entry of dopsFiles) {
     try {
-      const module = parseDopsFile(entry.filePath);
+      const skill = parseDopsFile(entry.filePath);
       dopsEntries.push({
-        name: module.frontmatter.meta.name,
-        version: module.frontmatter.meta.version,
-        description: module.frontmatter.meta.description,
+        name: skill.frontmatter.meta.name,
+        version: skill.frontmatter.meta.version,
+        description: skill.frontmatter.meta.description,
         location: entry.location,
         filePath: entry.filePath,
       });
@@ -150,8 +150,8 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
       console.log("[]");
       return;
     }
-    p.log.info("No custom modules discovered.");
-    p.log.info(pc.dim("Place modules in ~/.dojops/modules/ or .dojops/modules/<name>.dops"));
+    p.log.info("No custom skills discovered.");
+    p.log.info(pc.dim("Place skills in ~/.dojops/skills/ or .dojops/skills/<name>.dops"));
     return;
   }
 
@@ -180,7 +180,7 @@ export const toolsListCommand: CommandHandler = async (_args, ctx) => {
     );
   }
 
-  p.note(lines.join("\n"), `Modules (${dopsEntries.length})`);
+  p.note(lines.join("\n"), `Skills (${dopsEntries.length})`);
 };
 
 /** Returns the home directory for global .dojops lookups. */
@@ -192,10 +192,8 @@ function getHomeDir(): string {
 function findDopsFileByName(toolPath: string): string | null {
   const projectRoot = findProjectRoot();
   const dopsLocations = [
-    projectRoot ? path.join(projectRoot, ".dojops", "modules", `${toolPath}.dops`) : null,
-    projectRoot ? path.join(projectRoot, ".dojops", "tools", `${toolPath}.dops`) : null,
-    path.join(getHomeDir(), ".dojops", "modules", `${toolPath}.dops`),
-    path.join(getHomeDir(), ".dojops", "tools", `${toolPath}.dops`),
+    projectRoot ? path.join(projectRoot, ".dojops", "skills", `${toolPath}.dops`) : null,
+    path.join(getHomeDir(), ".dojops", "skills", `${toolPath}.dops`),
   ].filter(Boolean) as string[];
 
   for (const loc of dopsLocations) {
@@ -205,13 +203,13 @@ function findDopsFileByName(toolPath: string): string | null {
 }
 
 /**
- * `dojops modules validate <name-or-path>` — validates a .dops module file.
+ * `dojops skills validate <name-or-path>` — validates a .dops skill file.
  */
-export const toolsValidateCommand: CommandHandler = async (args) => {
+export const skillsValidateCommand: CommandHandler = async (args) => {
   const toolPath = args[0];
   if (!toolPath) {
-    p.log.info(`  ${pc.dim("$")} dojops modules validate <name-or-path>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name or path required.");
+    p.log.info(`  ${pc.dim("$")} dojops skills validate <name-or-path>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Skill name or path required.");
   }
 
   // Check if it's a .dops file (by extension)
@@ -228,38 +226,38 @@ export const toolsValidateCommand: CommandHandler = async (args) => {
 
   throw new CLIError(
     ExitCode.VALIDATION_ERROR,
-    `No .dops file found for "${toolPath}". Provide a path to a .dops file or a module name.`,
+    `No .dops file found for "${toolPath}". Provide a path to a .dops file or a skill name.`,
   );
 };
 
 function validateDopsFile(filePath: string): void {
   try {
-    const module = parseDopsFile(filePath);
-    const result = validateDopsModule(module);
+    const skill = parseDopsFile(filePath);
+    const result = validateDopsSkill(skill);
 
     if (result.valid) {
       p.log.success(
-        `DOPS module is valid: ${module.frontmatter.meta.name} v${module.frontmatter.meta.version}`,
+        `DOPS skill is valid: ${skill.frontmatter.meta.name} v${skill.frontmatter.meta.version}`,
       );
       p.log.info(pc.dim(`  Format: .dops`));
-      p.log.info(pc.dim(`  Files: ${module.frontmatter.files.length}`));
+      p.log.info(pc.dim(`  Files: ${skill.frontmatter.files.length}`));
       p.log.info(
         pc.dim(
-          `  Sections: Prompt, ${module.sections.updatePrompt ? "Update Prompt, " : ""}Keywords`,
+          `  Sections: Prompt, ${skill.sections.updatePrompt ? "Update Prompt, " : ""}Keywords`,
         ),
       );
-      if (module.frontmatter.verification?.structural) {
+      if (skill.frontmatter.verification?.structural) {
         p.log.info(
-          pc.dim(`  Structural rules: ${module.frontmatter.verification.structural.length}`),
+          pc.dim(`  Structural rules: ${skill.frontmatter.verification.structural.length}`),
         );
       }
-      if (module.frontmatter.verification?.binary) {
-        p.log.info(pc.dim(`  Binary verifier: ${module.frontmatter.verification.binary.parser}`));
+      if (skill.frontmatter.verification?.binary) {
+        p.log.info(pc.dim(`  Binary verifier: ${skill.frontmatter.verification.binary.parser}`));
       }
     } else {
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
-        `Invalid DOPS module:\n  ${(result.errors ?? []).join("\n  ")}`,
+        `Invalid DOPS skill:\n  ${(result.errors ?? []).join("\n  ")}`,
       );
     }
   } catch (err) {
@@ -272,13 +270,13 @@ function validateDopsFile(filePath: string): void {
 }
 
 /**
- * `dojops modules init <name>` — scaffolds a v2 .dops file in .dojops/modules/
+ * `dojops skills init <name>` — scaffolds a v2 .dops skill file in .dojops/skills/
  * Uses AI to generate best practices and prompts when a provider is configured.
  */
 type FileFormatType = "yaml" | "json" | "hcl" | "raw" | "ini" | "toml";
 
 interface InitWizardResult {
-  toolName: string;
+  skillName: string;
   description: string;
   technology: string;
   fileFormat: FileFormatType;
@@ -304,7 +302,7 @@ async function promptUseLLM(ctx: CLIContext, isLegacy: boolean): Promise<boolean
     return false;
   }
   const llmInput = await p.confirm({
-    message: "Generate module content with AI?",
+    message: "Generate skill content with AI?",
     initialValue: true,
   });
   return p.isCancel(llmInput) ? false : llmInput;
@@ -314,8 +312,8 @@ async function runInitWizard(
   ctx: CLIContext,
   isLegacy: boolean,
 ): Promise<InitWizardResult | undefined> {
-  const toolName = await promptText(
-    "Module name (lowercase, hyphens allowed):",
+  const skillName = await promptText(
+    "Skill name (lowercase, hyphens allowed):",
     "my-tool",
     (val) => {
       if (!val) return "Name is required";
@@ -323,18 +321,18 @@ async function runInitWizard(
       return undefined;
     },
   );
-  if (!toolName) return undefined;
+  if (!skillName) return undefined;
 
-  const descInput = await promptText("Short description:", `${toolName} configuration generator`);
+  const descInput = await promptText("Short description:", `${skillName} configuration generator`);
   if (descInput === undefined) return undefined;
-  const description = descInput || `${toolName} configuration generator`;
+  const description = descInput || `${skillName} configuration generator`;
 
   const techInput = await promptText(
     "What technology? (e.g., Nginx, Redis, PostgreSQL, Caddy)",
-    titleCase(toolName),
+    titleCase(skillName),
   );
   if (techInput === undefined) return undefined;
-  const technology = techInput || titleCase(toolName);
+  const technology = techInput || titleCase(skillName);
 
   const formatInput = await p.select({
     message: "Output file format:",
@@ -351,34 +349,34 @@ async function runInitWizard(
   const fileFormat = formatInput as FileFormatType;
 
   const fileExt = fileFormat === "raw" ? "conf" : fileFormat;
-  const filePathInput = await promptText("Output file path:", `${toolName}.${fileExt}`);
+  const filePathInput = await promptText("Output file path:", `${skillName}.${fileExt}`);
   if (filePathInput === undefined) return undefined;
-  const outputFilePath = filePathInput || `${toolName}.${fileExt}`;
+  const outputFilePath = filePathInput || `${skillName}.${fileExt}`;
 
   const useLLM = await promptUseLLM(ctx, isLegacy);
 
-  return { toolName, description, technology, fileFormat, outputFilePath, useLLM };
+  return { skillName, description, technology, fileFormat, outputFilePath, useLLM };
 }
 
 /** Fill in default values for any unset init parameters. */
 function applyInitDefaults(params: {
-  toolName: string;
+  skillName: string;
   description: string;
   technology: string;
   fileFormat: FileFormatType;
   outputFilePath: string;
 }): { description: string; technology: string; outputFilePath: string } {
-  const description = params.description || `${params.toolName} configuration generator`;
-  const technology = params.technology || titleCase(params.toolName);
+  const description = params.description || `${params.skillName} configuration generator`;
+  const technology = params.technology || titleCase(params.skillName);
   const fileExt = params.fileFormat === "raw" ? "conf" : params.fileFormat;
-  const outputFilePath = params.outputFilePath || `${params.toolName}.${fileExt}`;
+  const outputFilePath = params.outputFilePath || `${params.skillName}.${fileExt}`;
   return { description, technology, outputFilePath };
 }
 
-/** Scaffold a v2 .dops module file, optionally using LLM-generated content. */
-async function scaffoldV2Module(
+/** Scaffold a v2 .dops skill file, optionally using LLM-generated content. */
+async function scaffoldV2Skill(
   ctx: CLIContext,
-  toolName: string,
+  skillName: string,
   description: string,
   technology: string,
   fileFormat: FileFormatType,
@@ -386,19 +384,19 @@ async function scaffoldV2Module(
   useLLM: boolean,
   baseDir?: string,
 ): Promise<void> {
-  const toolsDir = baseDir ?? path.resolve(".dojops", "modules");
-  const dopsPath = path.join(toolsDir, `${toolName}.dops`);
+  const toolsDir = baseDir ?? path.resolve(".dojops", "skills");
+  const dopsPath = path.join(toolsDir, `${skillName}.dops`);
 
   if (fs.existsSync(dopsPath)) {
-    throw new CLIError(ExitCode.VALIDATION_ERROR, `Module already exists: ${dopsPath}`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, `Skill already exists: ${dopsPath}`);
   }
 
   fs.mkdirSync(toolsDir, { recursive: true });
 
-  let llmContent: InitModuleResponse | undefined;
+  let llmContent: InitSkillResponse | undefined;
   if (useLLM) {
-    llmContent = await generateModuleWithLLM(ctx, {
-      name: toolName,
+    llmContent = await generateSkillWithLLM(ctx, {
+      name: skillName,
       description,
       technology,
       fileFormat,
@@ -407,7 +405,7 @@ async function scaffoldV2Module(
   }
 
   const dopsContent = buildV2Template({
-    name: toolName,
+    name: skillName,
     description,
     technology,
     fileFormat,
@@ -417,15 +415,15 @@ async function scaffoldV2Module(
 
   fs.writeFileSync(dopsPath, dopsContent, "utf-8");
 
-  p.log.success(`Module scaffolded at ${pc.underline(dopsPath)}`);
+  p.log.success(`Skill scaffolded at ${pc.underline(dopsPath)}`);
   if (llmContent) {
     p.log.info(`  ${pc.dim("AI-generated best practices and prompt included.")}`);
   }
-  p.log.info(`  ${pc.dim("Edit the .dops file to customize your module.")}`);
+  p.log.info(`  ${pc.dim("Edit the .dops file to customize your skill.")}`);
 }
 
-export const toolsInitCommand: CommandHandler = async (args, ctx) => {
-  let toolName = args.find((a) => !a.startsWith("-"));
+export const skillsInitCommand: CommandHandler = async (args, ctx) => {
+  let skillName = args.find((a) => !a.startsWith("-"));
   let description = "";
   let technology = "";
   let fileFormat: FileFormatType = "yaml";
@@ -433,10 +431,10 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   let useLLM = false;
   const isNonInteractive = args.includes("--non-interactive") || ctx.globalOpts.nonInteractive;
 
-  if (!toolName && !isNonInteractive) {
+  if (!skillName && !isNonInteractive) {
     const result = await runInitWizard(ctx, false);
     if (!result) return;
-    toolName = result.toolName;
+    skillName = result.skillName;
     description = result.description;
     technology = result.technology;
     fileFormat = result.fileFormat;
@@ -444,23 +442,23 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
     useLLM = result.useLLM;
   }
 
-  if (!toolName) {
-    p.log.info(`  ${pc.dim("$")} dojops modules init <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
+  if (!skillName) {
+    p.log.info(`  ${pc.dim("$")} dojops skills init <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Skill name required.");
   }
 
-  if (!/^[a-z0-9-]+$/.test(toolName)) {
+  if (!/^[a-z0-9-]+$/.test(skillName)) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      "Module name must be lowercase alphanumeric with hyphens.",
+      "Skill name must be lowercase alphanumeric with hyphens.",
     );
   }
 
   // Select scope (global or project)
-  const { baseDir } = await selectModuleScope(isNonInteractive, "modules");
+  const { baseDir } = await selectSkillScope(isNonInteractive, "skills");
 
   const defaults = applyInitDefaults({
-    toolName,
+    skillName,
     description,
     technology,
     fileFormat,
@@ -470,9 +468,9 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   technology = defaults.technology;
   outputFilePath = defaults.outputFilePath;
 
-  return scaffoldV2Module(
+  return scaffoldV2Skill(
     ctx,
-    toolName,
+    skillName,
     description,
     technology,
     fileFormat,
@@ -482,9 +480,9 @@ export const toolsInitCommand: CommandHandler = async (args, ctx) => {
   );
 };
 
-// ── LLM-powered module generation ─────────────────────────────────
+// ── LLM-powered skill generation ─────────────────────────────────
 
-interface ModuleInitParams {
+interface SkillInitParams {
   name: string;
   description: string;
   technology: string;
@@ -492,21 +490,21 @@ interface ModuleInitParams {
   outputFilePath: string;
 }
 
-async function generateModuleWithLLM(
+async function generateSkillWithLLM(
   ctx: CLIContext,
-  params: ModuleInitParams,
-): Promise<InitModuleResponse | undefined> {
+  params: SkillInitParams,
+): Promise<InitSkillResponse | undefined> {
   const spinner = p.spinner();
-  spinner.start("Generating module content with AI...");
+  spinner.start("Generating skill content with AI...");
 
   try {
     const provider = ctx.getProvider();
 
-    const systemPrompt = `You are a DevOps module designer for the DojOps AI DevOps automation engine.
-Generate a module specification for a "${params.technology}" configuration generator
+    const systemPrompt = `You are a DevOps skill designer for the DojOps AI DevOps automation engine.
+Generate a skill specification for a "${params.technology}" configuration generator
 that outputs ${params.fileFormat} files.
 
-Module name: ${params.name}
+Skill name: ${params.name}
 Description: ${params.description}
 Output file: ${params.outputFilePath}
 
@@ -516,7 +514,7 @@ Respond with JSON containing:
 - context7Libraries: Array of [{name, query}] for documentation lookups. Use 1-2 entries with the technology name and a specific documentation query.
 - prompt: A 2-3 paragraph system prompt for the LLM generator. Must include these exact placeholders: {outputGuidance}, {bestPractices}, {context7Docs}, {projectContext}
 - keywords: Array of 5-15 keywords for routing (technology names, config types, related tools)
-- scopePatterns: Array of file glob patterns this module is allowed to write (e.g., ["*.conf", "nginx/*.conf"])
+- scopePatterns: Array of file glob patterns this skill is allowed to write (e.g., ["*.conf", "nginx/*.conf"])
 - riskLevel: "LOW" for read-only configs, "MEDIUM" for service configs that affect runtime, "HIGH" for security/infra changes
 - riskRationale: One sentence explaining the risk classification
 - detectionPaths: Array of file paths or glob patterns to detect existing configs for update mode
@@ -524,13 +522,13 @@ Respond with JSON containing:
 
     const response = await provider.generate({
       system: systemPrompt,
-      prompt: `Generate the module specification JSON for a ${params.technology} configuration generator.`,
-      schema: InitModuleResponseSchema,
+      prompt: `Generate the skill specification JSON for a ${params.technology} configuration generator.`,
+      schema: InitSkillResponseSchema,
     });
 
     const parsed = response.parsed
-      ? (InitModuleResponseSchema.parse(response.parsed) as InitModuleResponse)
-      : parseAndValidate<InitModuleResponse>(response.content, InitModuleResponseSchema);
+      ? (InitSkillResponseSchema.parse(response.parsed) as InitSkillResponse)
+      : parseAndValidate<InitSkillResponse>(response.content, InitSkillResponseSchema);
 
     spinner.stop("AI content generated");
     return parsed;
@@ -549,7 +547,7 @@ interface V2TemplateParams {
   technology: string;
   fileFormat: string;
   outputFilePath: string;
-  llm?: InitModuleResponse;
+  llm?: InitSkillResponse;
 }
 
 function buildV2Template(params: V2TemplateParams): string {
@@ -693,11 +691,11 @@ function resolveDopsPath(target: string): string {
   }
   const projectRoot = findProjectRoot();
   const candidates = [
-    projectRoot ? path.join(projectRoot, ".dojops", "tools", `${target}.dops`) : null,
+    projectRoot ? path.join(projectRoot, ".dojops", "skills", `${target}.dops`) : null,
     path.join(
       process.env.HOME ?? process.env.USERPROFILE ?? "~",
       ".dojops",
-      "tools",
+      "skills",
       `${target}.dops`,
     ),
   ].filter(Boolean) as string[];
@@ -713,33 +711,33 @@ function resolveDopsPath(target: string): string {
 }
 
 /**
- * `dojops modules publish [path]` — publishes a .dops file to the DojOps Hub.
+ * `dojops skills publish [path]` — publishes a .dops file to the DojOps Hub.
  *
  * Usage:
- *   dojops modules publish <file.dops>           # publish a specific file
- *   dojops modules publish <file.dops> --changelog "Initial release"
- *   dojops modules publish <name>                 # find by name in .dojops/tools/
+ *   dojops skills publish <file.dops>           # publish a specific file
+ *   dojops skills publish <file.dops> --changelog "Initial release"
+ *   dojops skills publish <name>                 # find by name in .dojops/skills/
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  *      DOJOPS_HUB_TOKEN (auth token — obtained from hub session)
  */
-function validateAndParseModule(dopsPath: string): {
+function validateAndParseSkill(dopsPath: string): {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  module: any;
+  skill: any;
   fileBuffer: Buffer;
   hash: string;
 } {
-  const module = parseDopsFile(dopsPath);
-  const result = validateDopsModule(module);
+  const skill = parseDopsFile(dopsPath);
+  const result = validateDopsSkill(skill);
   if (!result.valid) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Invalid DOPS module:\n  ${(result.errors ?? []).join("\n  ")}`,
+      `Invalid DOPS skill:\n  ${(result.errors ?? []).join("\n  ")}`,
     );
   }
   const fileBuffer = fs.readFileSync(dopsPath);
   const hash = crypto.createHash("sha256").update(fileBuffer).digest("hex");
-  return { module, fileBuffer, hash };
+  return { skill, fileBuffer, hash };
 }
 
 function requireHubToken(): string {
@@ -798,11 +796,11 @@ async function uploadToHub(
   return { data, ok: res.ok, status: res.status };
 }
 
-export const toolsPublishCommand: CommandHandler = async (args) => {
+export const skillsPublishCommand: CommandHandler = async (args) => {
   const target = args[0];
   if (!target) {
-    p.log.info(`  ${pc.dim("$")} dojops modules publish <file.dops | name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or module name required.");
+    p.log.info(`  ${pc.dim("$")} dojops skills publish <file.dops | name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file or skill name required.");
   }
 
   let changelog: string | undefined;
@@ -815,16 +813,16 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
   const spinner = p.spinner();
   spinner.start("Validating .dops file...");
 
-  let module, fileBuffer: Buffer, hash: string;
+  let skill, fileBuffer: Buffer, hash: string;
   try {
-    ({ module, fileBuffer, hash } = validateAndParseModule(dopsPath));
+    ({ skill, fileBuffer, hash } = validateAndParseSkill(dopsPath));
   } catch (err) {
     spinner.stop("Validation failed");
     if (err instanceof CLIError) throw err;
     throw new CLIError(ExitCode.VALIDATION_ERROR, `Failed to parse: ${toErrorMessage(err)}`);
   }
 
-  const { meta } = module.frontmatter;
+  const { meta } = skill.frontmatter;
   spinner.stop(`Validated: ${pc.cyan(meta.name)} v${meta.version}`);
 
   const token = requireHubToken();
@@ -857,7 +855,7 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
         `${pc.dim("SHA256:")}  ${hash}`,
         `${pc.dim("URL:")}     ${DEFAULT_HUB_URL}/packages/${data.slug}`,
       ].join("\n"),
-      data.created ? "Published new module" : "Published new version",
+      data.created ? "Published new skill" : "Published new version",
     );
   } catch (err) {
     if (err instanceof CLIError) throw err;
@@ -867,20 +865,20 @@ export const toolsPublishCommand: CommandHandler = async (args) => {
 };
 
 /**
- * `dojops modules install <name>` — downloads a .dops module from the DojOps Hub.
+ * `dojops skills install <name>` — downloads a .dops skill from the DojOps Hub.
  *
  * Usage:
- *   dojops modules install <name>                  # install latest version
- *   dojops modules install <name> --version 1.0.0  # install specific version
- *   dojops modules install <name> --global         # install to ~/.dojops/tools/
+ *   dojops skills install <name>                  # install latest version
+ *   dojops skills install <name> --version 1.0.0  # install specific version
+ *   dojops skills install <name> --global         # install to ~/.dojops/skills/
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
-async function resolveLatestVersion(slug: string, toolName: string): Promise<string> {
+async function resolveLatestVersion(slug: string, skillName: string): Promise<string> {
   const infoRes = await fetch(`${DEFAULT_HUB_URL}/api/packages/${slug}`);
   if (!infoRes.ok) {
     if (infoRes.status === 404) {
-      throw new CLIError(ExitCode.VALIDATION_ERROR, `Module "${toolName}" not found on hub.`);
+      throw new CLIError(ExitCode.VALIDATION_ERROR, `Skill "${skillName}" not found on hub.`);
     }
     const data = await infoRes.json().catch(() => ({}));
     throw new CLIError(
@@ -892,7 +890,7 @@ async function resolveLatestVersion(slug: string, toolName: string): Promise<str
   if (!info.latestVersion) {
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Module "${toolName}" has no published versions.`,
+      `Skill "${skillName}" has no published versions.`,
     );
   }
   return info.latestVersion.semver;
@@ -901,14 +899,14 @@ async function resolveLatestVersion(slug: string, toolName: string): Promise<str
 async function downloadAndVerify(
   slug: string,
   version: string,
-  toolName: string,
+  skillName: string,
 ): Promise<{ fileBuffer: Buffer; actualHash: string; expectedHash: string | null }> {
   const downloadRes = await fetch(`${DEFAULT_HUB_URL}/api/download/${slug}/${version}`);
   if (!downloadRes.ok) {
     if (downloadRes.status === 404) {
       throw new CLIError(
         ExitCode.VALIDATION_ERROR,
-        `Version ${version} not found for "${toolName}".`,
+        `Version ${version} not found for "${skillName}".`,
       );
     }
     throw new CLIError(ExitCode.GENERAL_ERROR, `Download failed (${downloadRes.status})`);
@@ -934,33 +932,30 @@ async function downloadAndVerify(
   return { fileBuffer, actualHash, expectedHash };
 }
 
-/** @deprecated Use selectModuleScope instead. Kept for --global flag backward compat. */
 function resolveInstallDir(isGlobal: boolean): string {
   if (isGlobal) {
-    return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "tools");
+    return path.join(process.env.HOME ?? process.env.USERPROFILE ?? "~", ".dojops", "skills");
   }
   const projectRoot = findProjectRoot();
   return projectRoot
-    ? path.join(projectRoot, ".dojops", "tools")
-    : path.resolve(".dojops", "tools");
+    ? path.join(projectRoot, ".dojops", "skills")
+    : path.resolve(".dojops", "skills");
 }
 
-async function parseDownloadedModule(
-  fileBuffer: Buffer,
-): Promise<ReturnType<typeof parseDopsFile>> {
+async function parseDownloadedSkill(fileBuffer: Buffer): Promise<ReturnType<typeof parseDopsFile>> {
   try {
-    const { parseDopsString, validateDopsModule } = await import("@dojops/runtime");
-    const module = parseDopsString(fileBuffer.toString("utf-8"));
-    const result = validateDopsModule(module);
+    const { parseDopsString, validateDopsSkill } = await import("@dojops/runtime");
+    const skill = parseDopsString(fileBuffer.toString("utf-8"));
+    const result = validateDopsSkill(skill);
     if (!result.valid) {
       throw new Error(`Validation failed: ${(result.errors ?? []).join(", ")}`);
     }
-    return module;
+    return skill;
   } catch (err) {
     if (err instanceof CLIError) throw err;
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Downloaded file is not a valid .dops module: ${toErrorMessage(err)}`,
+      `Downloaded file is not a valid .dops skill: ${toErrorMessage(err)}`,
     );
   }
 }
@@ -979,11 +974,11 @@ function logUpgradeIfExists(destPath: string, version: string): void {
   }
 }
 
-export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
-  const toolName = args[0];
-  if (!toolName) {
-    p.log.info(`  ${pc.dim("$")} dojops modules install <name>`);
-    throw new CLIError(ExitCode.VALIDATION_ERROR, "Module name required.");
+export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
+  const skillName = args[0];
+  if (!skillName) {
+    p.log.info(`  ${pc.dim("$")} dojops skills install <name>`);
+    throw new CLIError(ExitCode.VALIDATION_ERROR, "Skill name required.");
   }
 
   let version: string | undefined;
@@ -1003,33 +998,33 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
     destDir = resolveInstallDir(true);
     loc = "global";
   } else {
-    const { scope, baseDir } = await selectModuleScope(false);
+    const { scope, baseDir } = await selectSkillScope(false);
     destDir = baseDir;
     loc = scope;
   }
 
   const spinner = p.spinner();
-  spinner.start(`Fetching ${pc.cyan(toolName)} from hub...`);
+  spinner.start(`Fetching ${pc.cyan(skillName)} from hub...`);
 
-  const slug = toolName.toLowerCase().replace(/[^a-z0-9-]/g, "-"); // NOSONAR - character class pattern
+  const slug = skillName.toLowerCase().replace(/[^a-z0-9-]/g, "-"); // NOSONAR - character class pattern
 
   try {
     if (!version) {
-      version = await resolveLatestVersion(slug, toolName);
+      version = await resolveLatestVersion(slug, skillName);
     }
 
-    spinner.message(`Downloading ${pc.cyan(toolName)} v${version}...`);
+    spinner.message(`Downloading ${pc.cyan(skillName)} v${version}...`);
     const { fileBuffer, actualHash, expectedHash } = await downloadAndVerify(
       slug,
       version,
-      toolName,
+      skillName,
     );
 
     spinner.message("Validating...");
-    const module = await parseDownloadedModule(fileBuffer);
+    const skill = await parseDownloadedSkill(fileBuffer);
 
     fs.mkdirSync(destDir, { recursive: true });
-    const destPath = path.join(destDir, `${module.frontmatter.meta.name}.dops`);
+    const destPath = path.join(destDir, `${skill.frontmatter.meta.name}.dops`);
 
     logUpgradeIfExists(destPath, version);
     fs.writeFileSync(destPath, fileBuffer);
@@ -1037,7 +1032,7 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
 
     p.note(
       [
-        `${pc.dim("Name:")}    ${pc.cyan(module.frontmatter.meta.name)}`,
+        `${pc.dim("Name:")}    ${pc.cyan(skill.frontmatter.meta.name)}`,
         `${pc.dim("Version:")} v${version}`,
         `${pc.dim("Path:")}    ${pc.underline(destPath)}`,
         `${pc.dim("Scope:")}   ${loc}`,
@@ -1046,7 +1041,7 @@ export const toolsInstallCommand: CommandHandler = async (args, ctx) => {
       ]
         .filter(Boolean)
         .join("\n"),
-      "Module installed",
+      "Skill installed",
     );
   } catch (err) {
     if (err instanceof CLIError) throw err;
@@ -1071,7 +1066,7 @@ function displaySearchResults(packages: SearchPackage[], query: string, isJson: 
     if (isJson) {
       console.log(JSON.stringify([]));
     } else {
-      p.log.info(`No modules found for "${query}".`);
+      p.log.info(`No skills found for "${query}".`);
     }
     return;
   }
@@ -1092,23 +1087,23 @@ function displaySearchResults(packages: SearchPackage[], query: string, isJson: 
   });
 
   p.note(lines.join("\n"), truncateNoteTitle(`Search results for "${query}" (${packages.length})`));
-  p.log.info(pc.dim(`Install with: dojops modules install <name>`));
+  p.log.info(pc.dim(`Install with: dojops skills install <name>`));
 }
 
 /**
- * `dojops modules search <query>` — searches the DojOps Hub for modules.
+ * `dojops skills search <query>` — searches the DojOps Hub for skills.
  *
  * Usage:
- *   dojops modules search docker           # search for docker-related modules
- *   dojops modules search terraform --limit 5
- *   dojops modules search k8s --output json
+ *   dojops skills search docker           # search for docker-related skills
+ *   dojops skills search terraform --limit 5
+ *   dojops skills search k8s --output json
  *
  * Env: DOJOPS_HUB_URL (default: https://hub.dojops.ai)
  */
-export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
+export const skillsSearchCommand: CommandHandler = async (args, ctx) => {
   const query = args.filter((a) => !a.startsWith("-")).join(" ");
   if (!query) {
-    p.log.info(`  ${pc.dim("$")} dojops modules search <query>`);
+    p.log.info(`  ${pc.dim("$")} dojops skills search <query>`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Search query required.");
   }
 
@@ -1152,13 +1147,13 @@ export const toolsSearchCommand: CommandHandler = async (args, ctx) => {
 // ── modules dev ─────────────────────────────────────────────────────
 
 /**
- * `dojops modules dev <path>` — validate a .dops file and optionally watch for changes.
+ * `dojops skills dev <path>` — validate a .dops file and optionally watch for changes.
  * Provides real-time feedback during module development.
  */
-export const toolsDevCommand: CommandHandler = async (args) => {
+export const skillsDevCommand: CommandHandler = async (args) => {
   const toolPath = args[0];
   if (!toolPath) {
-    p.log.info(`  ${pc.dim("$")} dojops modules dev <path.dops> [--watch]`);
+    p.log.info(`  ${pc.dim("$")} dojops skills dev <path.dops> [--watch]`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Path to .dops file required.");
   }
 
@@ -1192,20 +1187,20 @@ export const toolsDevCommand: CommandHandler = async (args) => {
 
 function runDevValidation(filePath: string): void {
   try {
-    const module = parseDopsFile(filePath);
-    const result = validateDopsModule(module);
+    const skill = parseDopsFile(filePath);
+    const result = validateDopsSkill(skill);
 
     if (result.valid) {
       p.log.success(
-        `${pc.bold(module.frontmatter.meta.name)} v${module.frontmatter.meta.version} — valid`,
+        `${pc.bold(skill.frontmatter.meta.name)} v${skill.frontmatter.meta.version} — valid`,
       );
       const stats = {
-        files: module.frontmatter.files.length,
-        sections: ["Prompt", module.sections.updatePrompt ? "Update" : null, "Keywords"]
+        files: skill.frontmatter.files.length,
+        sections: ["Prompt", skill.sections.updatePrompt ? "Update" : null, "Keywords"]
           .filter(Boolean)
           .join(", "),
-        risk: module.frontmatter.risk?.level ?? "unknown",
-        rules: module.frontmatter.verification?.structural?.length ?? 0,
+        risk: skill.frontmatter.risk?.level ?? "unknown",
+        rules: skill.frontmatter.verification?.structural?.length ?? 0,
       };
       p.log.info(
         pc.dim(

@@ -92,7 +92,7 @@ export async function scanCommand(args: string[], ctx: CLIContext): Promise<void
     status: "success",
     duration_ms: Date.now() - startTime,
     related_files: "[]",
-    agent_or_module: flags.scanType ?? "all",
+    agent_or_skill: flags.scanType ?? "all",
     metadata: JSON.stringify({ total, critical, high }),
   });
 

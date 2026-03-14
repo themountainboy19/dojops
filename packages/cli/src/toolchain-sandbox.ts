@@ -721,14 +721,14 @@ export function createAutoInstallHandler(
   log?: (message: string) => void,
 ): (binaryName: string) => Promise<boolean> {
   return async (binaryName: string): Promise<boolean> => {
-    const toolName = BINARY_TO_SYSTEM_TOOL[binaryName];
-    if (!toolName) return false;
+    const skillName = BINARY_TO_SYSTEM_TOOL[binaryName];
+    if (!skillName) return false;
 
-    const tool = findSystemTool(toolName);
+    const tool = findSystemTool(skillName);
     if (!tool) return false;
 
     try {
-      log?.(`Auto-installing ${toolName} for verification...`);
+      log?.(`Auto-installing ${skillName} for verification...`);
       const installed = await installSystemTool(tool);
       prependToolchainBinToPath();
 
@@ -741,10 +741,10 @@ export function createAutoInstallHandler(
         }
       }
 
-      log?.(`${toolName} installed successfully`);
+      log?.(`${skillName} installed successfully`);
       return true;
     } catch {
-      log?.(`Failed to auto-install ${toolName}`);
+      log?.(`Failed to auto-install ${skillName}`);
       return false;
     }
   };

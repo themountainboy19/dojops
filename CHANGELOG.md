@@ -13,13 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Visible Auto-Compaction**: When conversation history exceeds the context window, a visible "Conversation compacted" notification shows how many messages were summarized and retained, replacing the previously silent compaction
 - **LLM-Based Chat Routing**: Chat sessions now use LLM intent classification (`routeWithLLM()`) to select the best specialist agent instead of keyword matching. Falls back to keyword-based `route()` when LLM routing fails
 - **Chat Project File Context**: Chat agents now receive actual DevOps file contents (CI/CD, Dockerfile, Terraform, Ansible, etc.) from the project, enabling specific file-level analysis instead of generic advice. Files are discovered via `discoverDevOpsFiles()` and injected into the system prompt
-- **Analysis Intent Detection**: `dojops "prompt"` now detects analysis/review questions (e.g., "what do you think about our workflows?") and routes them to specialist agents for natural language analysis instead of incorrectly triggering module file generation
-- **Formatted File Output**: When modules generate `{ "files": { ... } }` JSON output, the CLI now renders each file as a labeled code block with syntax highlighting instead of dumping raw JSON
+- **Analysis Intent Detection**: `dojops "prompt"` now detects analysis/review questions (e.g., "what do you think about our workflows?") and routes them to specialist agents for natural language analysis instead of incorrectly triggering skill file generation
+- **Formatted File Output**: When skills generate `{ "files": { ... } }` JSON output, the CLI now renders each file as a labeled code block with syntax highlighting instead of dumping raw JSON
 
 ### Fixed
 
 - **Chat Agents Missing Project Context**: System messages containing project context, chat-mode instructions, and conversation summaries were silently stripped by all LLM providers (OpenAI, Anthropic, Ollama, Gemini, DeepSeek). `SpecialistAgent` now merges system messages from the messages array into the system prompt before sending to providers
-- **Analysis Questions Triggering File Generation**: Prompts like "what do you think about our github workflows?" matched MODULE_KEYWORDS and routed to the github-actions module (which generates new files) instead of a specialist agent. Intent detection now skips module auto-detection for analysis/review questions
+- **Analysis Questions Triggering File Generation**: Prompts like "what do you think about our github workflows?" matched SKILL_KEYWORDS and routed to the github-actions skill (which generates new files) instead of a specialist agent. Intent detection now skips skill auto-detection for analysis/review questions
+
+### Breaking Changes
+
+- **Renamed "modules" to "skills" across the entire platform** — `.dops` files are now called "skills" instead of "modules"
+- **Renamed `@dojops/module-registry` to `@dojops/skill-registry`** — package name, all exports, and types updated
+- **Renamed types** — `BaseModule` → `BaseSkill`, `ModuleRegistry` → `SkillRegistry`, `ModuleEntry` → `SkillEntry`, `ModulePolicy` → `SkillPolicy`, `ModuleOutput` → `SkillOutput`, `DopsModule` → `DopsSkill`
+- **CLI command rename** — `dojops modules` → `dojops skills` (no legacy alias)
+- **CLI flag rename** — `--module` / `--tool` → `--skill`
+- **Directory paths** — `.dojops/modules/` and `.dojops/tools/` → `.dojops/skills/`, `packages/runtime/modules/` → `packages/runtime/skills/`
+- **Hub, docs, and marketing site** updated to use "skills" terminology throughout
 - **Token Usage Analytics** (`dojops tokens`): Track and analyze LLM token usage per provider, command, and time period with daily and total summaries
 - **Smart Output Compression**: Intelligent output formatting that compresses verbose LLM responses while preserving key information
 - **Model Aliases**: Configure short model aliases (e.g., `fast`, `smart`) mapping to provider-specific models via `~/.dojops/config.json`
@@ -39,10 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Shell Auto-Completion**: Tab completion for Bash, Zsh, and Fish shells. Covers all 31 commands, subcommands, global/command-specific flags, and dynamic value completions for `--provider`, `--agent`, and `--module`/`--tool` flags
+- **Shell Auto-Completion**: Tab completion for Bash, Zsh, and Fish shells. Covers all 31 commands, subcommands, global/command-specific flags, and dynamic value completions for `--provider`, `--agent`, and `--skill` flags
   - `dojops completion bash|zsh|fish` — print completion script to stdout
   - `dojops completion install [shell]` — auto-detect shell and install to standard location
-  - Hidden `--get-completions <type>` flag for dynamic provider/agent/module lookups at tab-completion time
+  - Hidden `--get-completions <type>` flag for dynamic provider/agent/skill lookups at tab-completion time
   - 3-level nesting support (`config profile create|use|delete|list`)
   - Command-specific flag completions for `plan`, `apply`, `scan`, `serve`, `chat`, `auto`
   - 2-second timeout on dynamic completions to prevent shell hang

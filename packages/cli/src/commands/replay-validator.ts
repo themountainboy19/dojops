@@ -1,4 +1,4 @@
-import { ModuleRegistry } from "@dojops/module-registry";
+import { SkillRegistry } from "@dojops/skill-registry";
 import { PlanState, getDojopsVersion } from "../state";
 
 export interface ReplayMismatch {
@@ -51,12 +51,12 @@ function checkContextMismatches(
 /** Check custom module system prompt hashes for mismatches. */
 function checkToolPromptHashes(
   tasks: PlanState["tasks"],
-  registry: ModuleRegistry,
+  registry: SkillRegistry,
   mismatches: ReplayMismatch[],
 ): void {
   for (const task of tasks) {
     if (task.toolType !== "custom" || !task.systemPromptHash) continue;
-    const metadata = registry.getModuleMetadata(task.tool);
+    const metadata = registry.getSkillMetadata(task.tool);
     if (metadata?.toolType !== "custom" || !metadata.systemPromptHash) continue;
     if (task.systemPromptHash !== metadata.systemPromptHash) {
       mismatches.push({
@@ -73,7 +73,7 @@ export function validateReplayIntegrity(
   plan: PlanState,
   currentProvider: string,
   currentModel: string | undefined,
-  registry: ModuleRegistry,
+  registry: SkillRegistry,
 ): ReplayValidationResult {
   const mismatches: ReplayMismatch[] = [];
 
@@ -103,7 +103,7 @@ export function checkToolIntegrity(
 
     const currentTool = currentTools.find((t) => t.name === task.tool);
     if (!currentTool) {
-      mismatches.push(`Module "${task.tool}" no longer available (was v${task.toolVersion})`);
+      mismatches.push(`Skill "${task.tool}" no longer available (was v${task.toolVersion})`);
     }
   }
 

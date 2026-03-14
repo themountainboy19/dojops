@@ -16,7 +16,7 @@ export interface TaskRecord {
   status: TaskStatus;
   duration_ms: number;
   related_files: string;
-  agent_or_module: string;
+  agent_or_skill: string;
   metadata: string;
 }
 
@@ -33,7 +33,7 @@ export interface ErrorPattern {
   fingerprint: string;
   error_message: string;
   task_type: string;
-  agent_or_module: string;
+  agent_or_skill: string;
   occurrences: number;
   first_seen: string;
   last_seen: string;
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS tasks_history (
   status           TEXT    NOT NULL,
   duration_ms      INTEGER NOT NULL DEFAULT 0,
   related_files    TEXT    NOT NULL DEFAULT '[]',
-  agent_or_module  TEXT    NOT NULL DEFAULT '',
+  agent_or_skill  TEXT    NOT NULL DEFAULT '',
   metadata         TEXT    NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_history_type_ts
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS error_patterns (
   fingerprint      TEXT    NOT NULL UNIQUE,
   error_message    TEXT    NOT NULL,
   task_type        TEXT    NOT NULL,
-  agent_or_module  TEXT    NOT NULL DEFAULT '',
+  agent_or_skill  TEXT    NOT NULL DEFAULT '',
   occurrences      INTEGER NOT NULL DEFAULT 1,
   first_seen       TEXT    NOT NULL,
   last_seen        TEXT    NOT NULL,
@@ -178,7 +178,7 @@ export function recordTask(rootDir: string, record: Omit<TaskRecord, "id">): voi
       `
       INSERT INTO tasks_history
         (timestamp, task_type, prompt, result_summary, status,
-         duration_ms, related_files, agent_or_module, metadata)
+         duration_ms, related_files, agent_or_skill, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     ).run(
@@ -189,13 +189,13 @@ export function recordTask(rootDir: string, record: Omit<TaskRecord, "id">): voi
       record.status,
       record.duration_ms,
       record.related_files,
-      record.agent_or_module,
+      record.agent_or_skill,
       record.metadata,
     );
 
     // Auto-learn error patterns from failures
     if (record.status === "failure" && record.result_summary) {
-      recordError(rootDir, record.result_summary, record.task_type, record.agent_or_module);
+      recordError(rootDir, record.result_summary, record.task_type, record.agent_or_skill);
     }
   } catch {
     // silent — memory is non-critical
@@ -333,7 +333,7 @@ export function recordError(
     const truncated = errorMsg.length > 500 ? errorMsg.slice(0, 497) + "..." : errorMsg;
 
     db.prepare(
-      `INSERT INTO error_patterns (fingerprint, error_message, task_type, agent_or_module, occurrences, first_seen, last_seen)
+      `INSERT INTO error_patterns (fingerprint, error_message, task_type, agent_or_skill, occurrences, first_seen, last_seen)
        VALUES (?, ?, ?, ?, 1, ?, ?)
        ON CONFLICT(fingerprint) DO UPDATE SET
          occurrences = occurrences + 1,
@@ -397,7 +397,7 @@ export function findMatchingErrors(
       return db
         .prepare(
           `SELECT * FROM error_patterns
-           WHERE task_type = ? AND agent_or_module = ?
+           WHERE task_type = ? AND agent_or_skill = ?
            ORDER BY occurrences DESC, last_seen DESC
            LIMIT ?`,
         )
@@ -555,7 +555,7 @@ function truncate(str: string, max: number): string {
 function summarizeTask(t: TaskRecord): string {
   const failureVerb = t.status === "failure" ? "Failed" : "Cancelled";
   const verb = t.status === "success" ? "Completed" : failureVerb;
-  const module = t.agent_or_module ? ` via ${t.agent_or_module}` : "";
+  const module = t.agent_or_skill ? ` via ${t.agent_or_skill}` : "";
   const prompt = t.prompt ? truncate(t.prompt, 80) : t.task_type;
 
   // Use result_summary if available, otherwise fall back to prompt

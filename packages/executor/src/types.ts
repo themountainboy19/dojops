@@ -84,7 +84,7 @@ export type ApprovalDecision = "approved" | "denied" | "skipped";
 
 export interface ApprovalRequest {
   taskId: string;
-  toolName: string;
+  skillName: string;
   description: string;
   preview: ExecutionPreview;
 }
@@ -108,7 +108,7 @@ export interface ExecutionResult {
 
 export interface ExecutionAuditEntry {
   taskId: string;
-  toolName: string;
+  skillName: string;
   timestamp: string;
   policy: ExecutionPolicy;
   approval: ApprovalDecision;

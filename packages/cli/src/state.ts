@@ -273,7 +273,7 @@ export function saveSession(rootDir: string, session: SessionState): void {
 export interface LastGeneration {
   timestamp: string;
   prompt: string;
-  toolName?: string;
+  skillName?: string;
   agentName?: string;
   content: string;
   filesWritten: string[];

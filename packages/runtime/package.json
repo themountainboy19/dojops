@@ -24,7 +24,7 @@
   },
   "files": [
     "dist",
-    "modules"
+    "skills"
   ],
   "scripts": {
     "build": "tsc",

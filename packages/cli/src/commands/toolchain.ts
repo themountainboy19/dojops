@@ -169,9 +169,9 @@ export const toolchainLoadCommand: CommandHandler = async (_args, ctx) => {
 
 export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
   const tcCtx = await selectToolchainScope(ctx.globalOpts.nonInteractive);
-  const toolName = args[0];
+  const skillName = args[0];
 
-  if (!toolName) {
+  if (!skillName) {
     // Interactive selection
     const available = SYSTEM_TOOLS.filter(
       (t) =>
@@ -209,7 +209,7 @@ export const toolchainInstallCommand: CommandHandler = async (args, ctx) => {
     return;
   }
 
-  await doInstall(toolName, tcCtx);
+  await doInstall(skillName, tcCtx);
 };
 
 async function doInstall(name: string, ctx?: ToolchainContext): Promise<void> {

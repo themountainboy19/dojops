@@ -5,7 +5,7 @@ import * as p from "@clack/prompts";
 import { createRouter } from "@dojops/api";
 import { sanitizeUserInput, scanRepo } from "@dojops/core";
 import { isDevOpsFile, SafeExecutor, AutoApproveHandler } from "@dojops/executor";
-import { createModuleRegistry, discoverUserDopsFiles } from "@dojops/module-registry";
+import { createSkillRegistry, discoverUserDopsFiles } from "@dojops/skill-registry";
 import { CLIContext } from "../types";
 import { preflightCheck } from "../preflight";
 import { ExitCode, CLIError } from "../exit-codes";
@@ -179,8 +179,8 @@ export function outputFormatted(
   }
 }
 
-/** Module name → prompt keywords for auto-detection. */
-const MODULE_KEYWORDS: Record<string, string[]> = {
+/** Skill name → prompt keywords for auto-detection. */
+const SKILL_KEYWORDS: Record<string, string[]> = {
   jenkinsfile: ["jenkinsfile", "jenkins pipeline", "jenkins ci", "jenkins cd"],
   "github-actions": ["github actions", "github workflow", "github ci"],
   "gitlab-ci": ["gitlab ci", "gitlab pipeline", "gitlab-ci"],
@@ -218,12 +218,12 @@ function isAnalysisIntent(prompt: string): boolean {
  * Returns the module name if a strong match is found, undefined otherwise.
  * Skips detection when the prompt is an analysis/review question.
  */
-export function autoDetectModule(prompt: string): string | undefined {
+export function autoDetectSkill(prompt: string): string | undefined {
   if (isAnalysisIntent(prompt)) return undefined;
   const lower = prompt.toLowerCase();
-  for (const [moduleName, keywords] of Object.entries(MODULE_KEYWORDS)) {
+  for (const [skillName, keywords] of Object.entries(SKILL_KEYWORDS)) {
     for (const kw of keywords) {
-      if (lower.includes(kw)) return moduleName;
+      if (lower.includes(kw)) return skillName;
     }
   }
   return undefined;
@@ -231,9 +231,9 @@ export function autoDetectModule(prompt: string): string | undefined {
 
 /**
  * Auto-detect an installed (hub/custom) module by matching .dops filenames against the prompt.
- * Only checks names not already covered by MODULE_KEYWORDS.
+ * Only checks names not already covered by SKILL_KEYWORDS.
  */
-export function autoDetectInstalledModule(
+export function autoDetectInstalledSkill(
   prompt: string,
   projectRoot: string | undefined,
 ): string | undefined {
@@ -243,7 +243,7 @@ export function autoDetectInstalledModule(
   const lower = prompt.toLowerCase();
   for (const entry of dopsFiles) {
     const name = path.basename(entry.filePath, ".dops");
-    if (MODULE_KEYWORDS[name]) continue;
+    if (SKILL_KEYWORDS[name]) continue;
     const lowerName = name.toLowerCase();
     if (lower.includes(lowerName) || lower.includes(lowerName.replaceAll("-", " "))) {
       return name;
@@ -252,7 +252,7 @@ export function autoDetectInstalledModule(
   return undefined;
 }
 
-interface ToolDirectContext {
+interface SkillDirectContext {
   provider: ReturnType<CLIContext["getProvider"]>;
   projectRoot: string | undefined;
   docAugmenter?: DocAugmenter;
@@ -260,11 +260,11 @@ interface ToolDirectContext {
   projectContextStr?: string;
 }
 
-function resolveToolOrThrow(
-  registry: ReturnType<typeof createModuleRegistry>,
-  toolName: string,
-): NonNullable<ReturnType<ReturnType<typeof createModuleRegistry>["get"]>> {
-  const tool = registry.get(toolName);
+function resolveSkillOrThrow(
+  registry: ReturnType<typeof createSkillRegistry>,
+  skillName: string,
+): NonNullable<ReturnType<ReturnType<typeof createSkillRegistry>["get"]>> {
+  const tool = registry.get(skillName);
   if (tool) return tool;
 
   const available = registry
@@ -273,7 +273,7 @@ function resolveToolOrThrow(
     .join(", ");
   throw new CLIError(
     ExitCode.VALIDATION_ERROR,
-    `Module "${toolName}" not found. Available: ${available}`,
+    `Skill "${skillName}" not found. Available: ${available}`,
   );
 }
 
@@ -295,7 +295,7 @@ function injectMemoryContext(prompt: string, projectRoot: string | undefined): s
   return memoryStr ? `${prompt}\n\n${memoryStr}` : prompt;
 }
 
-function buildSafeExecutorForTool(
+function buildSafeExecutorForSkill(
   ctx: CLIContext,
   writePath: string | undefined,
   allowAllPaths: boolean,
@@ -345,22 +345,22 @@ function extractContentFromResult(execResult: { output?: unknown }): string {
 function trackToolActivity(
   projectRoot: string,
   prompt: string,
-  toolName: string,
+  skillName: string,
   writePath: string | undefined,
   durationMs: number | undefined,
 ): void {
   const files = writePath ? ` \`${writePath}\`` : "";
   const filesWritten = writePath ? [writePath] : [];
-  appendActivity(projectRoot, `Generated${files} (${toolName})`);
+  appendActivity(projectRoot, `Generated${files} (${skillName})`);
   recordTask(projectRoot, {
     timestamp: new Date().toISOString(),
     task_type: "generate",
     prompt,
-    result_summary: `Generated${files} (${toolName})`,
+    result_summary: `Generated${files} (${skillName})`,
     status: "success",
     duration_ms: durationMs ?? 0,
     related_files: JSON.stringify(filesWritten),
-    agent_or_module: toolName,
+    agent_or_skill: skillName,
     metadata: "{}",
   });
 }
@@ -369,18 +369,18 @@ function outputWriteResult(
   ctx: CLIContext,
   writePath: string,
   allowAllPaths: boolean,
-  toolName: string,
+  skillName: string,
   content: string,
 ): void {
   validateWritePath(writePath, allowAllPaths);
   if (ctx.globalOpts.dryRun) {
     p.log.info(`${pc.yellow("[dry-run]")} Would write to ${pc.underline(writePath)}`);
-    outputFormatted(ctx.globalOpts.output, "module", toolName, content);
+    outputFormatted(ctx.globalOpts.output, "skill", skillName, content);
     return;
   }
   const action = writeFileContent(writePath, content);
   if (ctx.globalOpts.output === "json") {
-    console.log(JSON.stringify({ module: toolName, content, written: writePath, action }));
+    console.log(JSON.stringify({ skill: skillName, content, written: writePath, action }));
     return;
   }
   if (action === "unchanged") {
@@ -391,37 +391,37 @@ function outputWriteResult(
   p.log.success(`${label} ${pc.underline(writePath)}`);
 }
 
-async function handleToolDirect(
+async function handleSkillDirect(
   ctx: CLIContext,
   args: string[],
   prompt: string,
   writePath: string | undefined,
   allowAllPaths: boolean,
-  toolName: string,
-  toolCtx: ToolDirectContext,
+  skillName: string,
+  skillCtx: SkillDirectContext,
 ): Promise<void> {
-  const registry = createModuleRegistry(toolCtx.provider, toolCtx.projectRoot, {
-    docAugmenter: toolCtx.docAugmenter,
-    context7Provider: toolCtx.context7Provider,
-    projectContext: toolCtx.projectContextStr,
+  const registry = createSkillRegistry(skillCtx.provider, skillCtx.projectRoot, {
+    docAugmenter: skillCtx.docAugmenter,
+    context7Provider: skillCtx.context7Provider,
+    projectContext: skillCtx.projectContextStr,
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
   });
-  const tool = resolveToolOrThrow(registry, toolName);
+  const tool = resolveSkillOrThrow(registry, skillName);
 
   if (ctx.globalOpts.output !== "json") {
-    const reason = ctx.globalOpts.tool ? "forced via --module" : "auto-detected";
-    p.log.info(`Using module: ${pc.bold(toolName)} (${reason})`);
+    const reason = ctx.globalOpts.skill ? "forced via --skill" : "auto-detected";
+    p.log.info(`Using skill: ${pc.bold(skillName)} (${reason})`);
   }
 
   const structured = isStructuredOutput(ctx);
-  const taskRisk = classifyTaskRisk({ tool: toolName, description: prompt });
+  const taskRisk = classifyTaskRisk({ tool: skillName, description: prompt });
   const repairAttempts = extractFlagValue(args, "--repair-attempts");
   const maxRepairAttempts = repairAttempts ? Number.parseInt(repairAttempts, 10) : 3;
 
-  const critic = await buildCritic(toolCtx.provider);
-  const memoryPrompt = injectMemoryContext(prompt, toolCtx.projectRoot);
+  const critic = await buildCritic(skillCtx.provider);
+  const memoryPrompt = injectMemoryContext(prompt, skillCtx.projectRoot);
 
-  const safeExecutor = buildSafeExecutorForTool(
+  const safeExecutor = buildSafeExecutorForSkill(
     ctx,
     writePath,
     allowAllPaths,
@@ -433,7 +433,7 @@ async function handleToolDirect(
   const s = p.spinner();
   if (!structured) s.start("Generating...");
 
-  const taskId = `gen-${toolName}-${Date.now()}`;
+  const taskId = `gen-${skillName}-${Date.now()}`;
   const execResult = await safeExecutor.executeTask(
     taskId,
     tool,
@@ -459,10 +459,10 @@ async function handleToolDirect(
 
   // Persist generation for cross-command memory
   const filesWritten = writePath ? [writePath] : [];
-  persistGeneration(toolCtx.projectRoot, prompt, content, { toolName, filesWritten });
+  persistGeneration(skillCtx.projectRoot, prompt, content, { skillName, filesWritten });
 
-  if (toolCtx.projectRoot) {
-    trackToolActivity(toolCtx.projectRoot, prompt, toolName, writePath, execResult.durationMs);
+  if (skillCtx.projectRoot) {
+    trackToolActivity(skillCtx.projectRoot, prompt, skillName, writePath, execResult.durationMs);
   }
 
   if (ctx.globalOpts.raw) {
@@ -471,11 +471,11 @@ async function handleToolDirect(
   }
 
   if (writePath) {
-    outputWriteResult(ctx, writePath, allowAllPaths, toolName, content);
+    outputWriteResult(ctx, writePath, allowAllPaths, skillName, content);
     return;
   }
 
-  outputFormatted(ctx.globalOpts.output, "module", toolName, content);
+  outputFormatted(ctx.globalOpts.output, "skill", skillName, content);
 }
 
 function resolveForcedAgent(
@@ -652,7 +652,7 @@ function augmentPromptWithLastGeneration(
   if (age > LAST_GEN_MAX_AGE_MS) return prompt;
 
   if (verbose) {
-    const source = lastGen.toolName ?? lastGen.agentName ?? "unknown";
+    const source = lastGen.skillName ?? lastGen.agentName ?? "unknown";
     p.log.info(`Injecting previous generation context (${source}, ${Math.round(age / 1000)}s ago)`);
   }
 
@@ -674,13 +674,13 @@ function persistGeneration(
   projectRoot: string | undefined,
   prompt: string,
   content: string,
-  opts: { toolName?: string; agentName?: string; filesWritten?: string[] },
+  opts: { skillName?: string; agentName?: string; filesWritten?: string[] },
 ): void {
   if (!projectRoot) return;
   saveLastGeneration(projectRoot, {
     timestamp: new Date().toISOString(),
     prompt,
-    toolName: opts.toolName,
+    skillName: opts.skillName,
     agentName: opts.agentName,
     content,
     filesWritten: opts.filesWritten ?? [],
@@ -737,7 +737,7 @@ function runPreGenerateHook(
   if (!hookOk) throw new CLIError(ExitCode.GENERAL_ERROR, "Pre-generate hook failed.");
 }
 
-function tryToolDirectPath(
+function trySkillDirectPath(
   ctx: CLIContext,
   prompt: string,
   projectRoot: string | undefined,
@@ -745,21 +745,21 @@ function tryToolDirectPath(
   docAugmenter: DocAugmenter | undefined,
   context7Provider: Context7Provider | undefined,
   projectContextStr: string | undefined,
-): { toolName: string; toolCtx: ToolDirectContext; registryHasTool: boolean } | null {
-  const toolName =
-    ctx.globalOpts.tool ??
-    autoDetectModule(prompt) ??
-    autoDetectInstalledModule(prompt, projectRoot);
-  if (!toolName) return null;
+): { skillName: string; skillCtx: SkillDirectContext; registryHasSkill: boolean } | null {
+  const skillName =
+    ctx.globalOpts.skill ??
+    autoDetectSkill(prompt) ??
+    autoDetectInstalledSkill(prompt, projectRoot);
+  if (!skillName) return null;
 
-  const toolCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
-  const registry = createModuleRegistry(provider, projectRoot, {
+  const skillCtx = { provider, projectRoot, docAugmenter, context7Provider, projectContextStr };
+  const registry = createSkillRegistry(provider, projectRoot, {
     docAugmenter,
     context7Provider,
     projectContext: projectContextStr,
     onBinaryMissing: createAutoInstallHandler((msg) => p.log.info(msg)),
   });
-  return { toolName, toolCtx, registryHasTool: !!registry.get(toolName) };
+  return { skillName, skillCtx, registryHasSkill: !!registry.get(skillName) };
 }
 
 function buildAugmentedPrompt(
@@ -789,7 +789,7 @@ function trackAgentActivity(
     status: "success",
     duration_ms: genDuration,
     related_files: JSON.stringify(writePath ? [writePath] : []),
-    agent_or_module: agentName,
+    agent_or_skill: agentName,
     metadata: "{}",
   });
 }
@@ -827,7 +827,7 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
   const { docAugmenter, context7Provider } = await initContext7();
   const projectContextStr = buildProjectContextString(projectRoot);
 
-  const toolDirect = tryToolDirectPath(
+  const skillDirect = trySkillDirectPath(
     ctx,
     prompt,
     projectRoot,
@@ -836,15 +836,15 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     context7Provider,
     projectContextStr,
   );
-  if (toolDirect?.registryHasTool) {
-    await handleToolDirect(
+  if (skillDirect?.registryHasSkill) {
+    await handleSkillDirect(
       ctx,
       args,
       prompt,
       writePath,
       allowAllPaths,
-      toolDirect.toolName,
-      toolDirect.toolCtx,
+      skillDirect.skillName,
+      skillDirect.skillCtx,
     );
     return;
   }

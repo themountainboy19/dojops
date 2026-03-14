@@ -531,7 +531,7 @@ describe("saveLastGeneration / loadLastGeneration", () => {
     const gen = {
       timestamp: new Date().toISOString(),
       prompt: "create terraform config",
-      toolName: "terraform",
+      skillName: "terraform",
       content: 'resource "aws_s3_bucket" "b" {}',
       filesWritten: ["main.tf"],
       contentHash: "abc123",
@@ -540,7 +540,7 @@ describe("saveLastGeneration / loadLastGeneration", () => {
     const loaded = loadLastGeneration(tmpDir);
     expect(loaded).not.toBeNull();
     expect(loaded!.prompt).toBe("create terraform config");
-    expect(loaded!.toolName).toBe("terraform");
+    expect(loaded!.skillName).toBe("terraform");
     expect(loaded!.content).toContain("aws_s3_bucket");
   });
 

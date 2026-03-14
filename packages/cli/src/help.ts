@@ -37,7 +37,7 @@ export function printHelp(): void {
   console.log(`  ${pc.cyan("chat")}               Interactive AI DevOps session`);
   console.log(`  ${pc.cyan("check")}              LLM-powered DevOps config quality check`);
   console.log(`  ${pc.cyan("scan")}               Security scan: vulns, deps, IaC, secrets`);
-  console.log(`  ${pc.cyan("modules")}            Manage DevOps modules (custom + marketplace)`);
+  console.log(`  ${pc.cyan("skills")}            Manage DevOps skills (custom + marketplace)`);
   console.log(`  ${pc.cyan("toolchain")}          Manage system toolchain (~/.dojops/toolchain/)`);
   console.log(
     `  ${pc.cyan("status")}             System health diagnostics ${pc.dim("(alias: doctor)")}`,
@@ -860,25 +860,24 @@ export function printCommandHelp(command: string): void {
       console.log();
       break;
 
-    case "modules":
-    case "tools":
-      console.log(`\n${pc.bold("dojops modules")} — Manage DevOps modules (custom + marketplace)`);
+    case "skills":
+      console.log(`\n${pc.bold("dojops skills")} — Manage DevOps skills (custom + marketplace)`);
       console.log(`\n${pc.bold("USAGE")}`);
       console.log(
-        `  ${pc.dim("$")} dojops modules [list|init|validate|load|publish|install|search|dev]`,
+        `  ${pc.dim("$")} dojops skills [list|init|validate|load|publish|install|search|dev]`,
       );
       console.log(`\n${pc.bold("SUBCOMMANDS")}`);
       console.log(
-        `  ${pc.cyan("list")}              List all custom modules ${pc.dim("(default)")}`,
+        `  ${pc.cyan("list")}              List all custom skills ${pc.dim("(default)")}`,
       );
       console.log(
-        `  ${pc.cyan("init <name>")}      Scaffold a new v2 .dops module (AI-powered when provider is configured)`,
+        `  ${pc.cyan("init <name>")}      Scaffold a new v2 .dops skill (AI-powered when provider is configured)`,
       );
-      console.log(`  ${pc.cyan("validate <name>")}  Validate a module manifest`);
-      console.log(`  ${pc.cyan("load <path>")}      Load a module from a local directory`);
-      console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops module to the DojOps Hub`);
-      console.log(`  ${pc.cyan("install <name>")}   Install a .dops module from the DojOps Hub`);
-      console.log(`  ${pc.cyan("search <query>")}   Search the DojOps Hub for modules`);
+      console.log(`  ${pc.cyan("validate <name>")}  Validate a skill manifest`);
+      console.log(`  ${pc.cyan("load <path>")}      Load a skill from a local directory`);
+      console.log(`  ${pc.cyan("publish <file>")}   Publish a .dops skill to the DojOps Hub`);
+      console.log(`  ${pc.cyan("install <name>")}   Install a .dops skill from the DojOps Hub`);
+      console.log(`  ${pc.cyan("search <query>")}   Search the DojOps Hub for skills`);
       console.log(
         `  ${pc.cyan("dev <file.dops>")}  Validate and watch a .dops file during development`,
       );
@@ -887,35 +886,33 @@ export function printCommandHelp(command: string): void {
       console.log(`  ${pc.cyan("--changelog")}     Changelog message for publish`);
       console.log(`  ${pc.cyan("--version")}       Specific version to install`);
       console.log(`  ${pc.cyan("--global")}        Install to ~/.dojops/ (skips scope prompt)`);
-      console.log(`  ${pc.cyan("--legacy")}        Generate legacy v1 .dops format (init only)`);
       console.log(
         `  ${pc.cyan("--watch")}         Watch mode: re-validate on file changes (dev only)`,
       );
       console.log(`\n${pc.bold("DESCRIPTION")}`);
-      console.log(`  Modules are v2 .dops files that define LLM-powered configuration generators.`);
+      console.log(`  Skills are v2 .dops files that define LLM-powered configuration generators.`);
       console.log(
         `  When a provider is configured, ${pc.cyan("init")} uses AI to generate best practices,`,
       );
-      console.log(`  prompts, keywords, and risk classification for your module.`);
-      console.log(`  Modules are discovered from:`);
-      console.log(`    - ~/.dojops/modules/<name>/    (global)`);
-      console.log(`    - .dojops/modules/<name>/      (project, overrides global)`);
+      console.log(`  prompts, keywords, and risk classification for your skill.`);
+      console.log(`  Skills are discovered from:`);
+      console.log(`    - ~/.dojops/skills/<name>/    (global)`);
+      console.log(`    - .dojops/skills/<name>/      (project, overrides global)`);
       console.log(`\n${pc.bold("EXAMPLES")}`);
-      console.log(`  ${pc.dim("$")} dojops modules`);
-      console.log(`  ${pc.dim("$")} dojops modules list`);
-      console.log(`  ${pc.dim("$")} dojops modules init my-module`);
-      console.log(`  ${pc.dim("$")} dojops modules init my-module --legacy`);
-      console.log(`  ${pc.dim("$")} dojops modules validate my-module`);
-      console.log(`  ${pc.dim("$")} dojops modules load /path/to/module`);
+      console.log(`  ${pc.dim("$")} dojops skills`);
+      console.log(`  ${pc.dim("$")} dojops skills list`);
+      console.log(`  ${pc.dim("$")} dojops skills init my-skill`);
+      console.log(`  ${pc.dim("$")} dojops skills validate my-skill`);
+      console.log(`  ${pc.dim("$")} dojops skills load /path/to/skill`);
       console.log(
-        `  ${pc.dim("$")} dojops modules publish my-module.dops --changelog "Initial release"`,
+        `  ${pc.dim("$")} dojops skills publish my-skill.dops --changelog "Initial release"`,
       );
-      console.log(`  ${pc.dim("$")} dojops modules install nginx-config`);
-      console.log(`  ${pc.dim("$")} dojops modules install nginx-config --version 1.0.0 --global`);
-      console.log(`  ${pc.dim("$")} dojops modules search docker`);
-      console.log(`  ${pc.dim("$")} dojops modules list --output json`);
-      console.log(`  ${pc.dim("$")} dojops modules dev my-module.dops`);
-      console.log(`  ${pc.dim("$")} dojops modules dev my-module.dops --watch`);
+      console.log(`  ${pc.dim("$")} dojops skills install nginx-config`);
+      console.log(`  ${pc.dim("$")} dojops skills install nginx-config --version 1.0.0 --global`);
+      console.log(`  ${pc.dim("$")} dojops skills search docker`);
+      console.log(`  ${pc.dim("$")} dojops skills list --output json`);
+      console.log(`  ${pc.dim("$")} dojops skills dev my-skill.dops`);
+      console.log(`  ${pc.dim("$")} dojops skills dev my-skill.dops --watch`);
       console.log();
       break;
 

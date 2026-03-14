@@ -42,14 +42,14 @@ import { agentsCommand } from "./commands/agents";
 import { historyCommand } from "./commands/history";
 import { statusCommand } from "./commands/doctor";
 import {
-  toolsListCommand,
-  toolsInitCommand,
-  toolsValidateCommand,
-  toolsPublishCommand,
-  toolsInstallCommand,
-  toolsSearchCommand,
-  toolsDevCommand,
-} from "./commands/tools";
+  skillsListCommand,
+  skillsInitCommand,
+  skillsValidateCommand,
+  skillsPublishCommand,
+  skillsInstallCommand,
+  skillsSearchCommand,
+  skillsDevCommand,
+} from "./commands/skills";
 import {
   toolchainListCommand,
   toolchainLoadCommand,
@@ -128,29 +128,14 @@ registerSubcommand("history", "audit", (args, ctx) => historyCommand(["audit", .
 registerSubcommand("history", "repair", (args, ctx) => historyCommand(["repair", ...args], ctx));
 registerCommand("provider", providerCommand);
 
-// Nested: modules <sub> (.dops modules)
-registerSubcommand("modules", "list", toolsListCommand);
-registerSubcommand("modules", "init", toolsInitCommand);
-registerSubcommand("modules", "validate", toolsValidateCommand);
-registerSubcommand("modules", "publish", toolsPublishCommand);
-registerSubcommand("modules", "install", toolsInstallCommand);
-registerSubcommand("modules", "search", toolsSearchCommand);
-registerSubcommand("modules", "dev", toolsDevCommand);
-
-// Backward compat: "tools" alias → modules (with deprecation warning)
-function withToolsDeprecation(handler: typeof toolsListCommand): typeof toolsListCommand {
-  return async (args, ctx) => {
-    console.warn(pc.yellow('⚠ "dojops tools" is deprecated. Use "dojops modules" instead.'));
-    return handler(args, ctx);
-  };
-}
-registerSubcommand("tools", "list", withToolsDeprecation(toolsListCommand));
-registerSubcommand("tools", "init", withToolsDeprecation(toolsInitCommand));
-registerSubcommand("tools", "validate", withToolsDeprecation(toolsValidateCommand));
-registerSubcommand("tools", "publish", withToolsDeprecation(toolsPublishCommand));
-registerSubcommand("tools", "install", withToolsDeprecation(toolsInstallCommand));
-registerSubcommand("tools", "search", withToolsDeprecation(toolsSearchCommand));
-registerSubcommand("tools", "dev", withToolsDeprecation(toolsDevCommand));
+// Nested: skills <sub> (.dops skills)
+registerSubcommand("skills", "list", skillsListCommand);
+registerSubcommand("skills", "init", skillsInitCommand);
+registerSubcommand("skills", "validate", skillsValidateCommand);
+registerSubcommand("skills", "publish", skillsPublishCommand);
+registerSubcommand("skills", "install", skillsInstallCommand);
+registerSubcommand("skills", "search", skillsSearchCommand);
+registerSubcommand("skills", "dev", skillsDevCommand);
 
 // Nested: toolchain <sub> (system binaries)
 registerSubcommand("toolchain", "list", toolchainListCommand);
@@ -281,7 +266,7 @@ const QUIET_COMMANDS = new Set([
   "init",
   "doctor",
   "status",
-  "tools",
+  "skills",
   "toolchain",
   "scan",
   "version",
@@ -289,7 +274,7 @@ const QUIET_COMMANDS = new Set([
   "check",
   "verify",
   "upgrade",
-  "modules",
+  "skills",
   "agents",
   "history",
   "serve",
@@ -306,7 +291,7 @@ const NESTED_COMMAND_PARENTS = new Set([
   "analyze",
   "agents",
   "history",
-  "tools",
+  "skills",
   "toolchain",
   "inspect",
   "scan",

@@ -1,7 +1,7 @@
 import pc from "picocolors";
 import * as p from "@clack/prompts";
 import { decompose, TaskGraph } from "@dojops/planner";
-import { createModuleRegistry, ModuleRegistry } from "@dojops/module-registry";
+import { createSkillRegistry, SkillRegistry } from "@dojops/skill-registry";
 import { scanRepo } from "@dojops/core";
 import { CLIContext } from "../types";
 import { hasFlag, stripFlags, extractFlagValue } from "../parser";
@@ -28,9 +28,9 @@ import {
 } from "../state";
 
 /** Enrich each task with tool metadata from the registry. */
-function enrichTasksWithMetadata(graph: TaskGraph, registry: ModuleRegistry): void {
+function enrichTasksWithMetadata(graph: TaskGraph, registry: SkillRegistry): void {
   for (const task of graph.tasks) {
-    const meta = registry.getModuleMetadata(task.tool);
+    const meta = registry.getSkillMetadata(task.tool);
     if (!meta) continue;
     task.toolType = meta.toolType;
     if (meta.toolType === "custom") {
@@ -56,7 +56,7 @@ function displayTaskGraph(graph: TaskGraph): void {
 function buildPlanState(
   planId: string,
   graph: TaskGraph,
-  registry: ModuleRegistry,
+  registry: SkillRegistry,
   ctx: CLIContext,
   providerName: string,
   skipVerify: boolean,
@@ -92,7 +92,7 @@ function buildPlanState(
         .slice(0, 16),
       toolVersions: Object.fromEntries(
         graph.tasks.map((t) => {
-          const meta = registry.getModuleMetadata(t.tool);
+          const meta = registry.getSkillMetadata(t.tool);
           return [t.tool, meta?.toolVersion ?? "built-in"];
         }),
       ),
@@ -143,20 +143,20 @@ function parsePlanArgs(
 
 /** Filter modules to a single module if --module flag is set. */
 function applyToolFilter(
-  tools: ReturnType<ModuleRegistry["getAll"]>,
-  toolName: string | undefined,
+  tools: ReturnType<SkillRegistry["getAll"]>,
+  skillName: string | undefined,
   isJson: boolean,
-): ReturnType<ModuleRegistry["getAll"]> {
-  if (!toolName) return tools;
-  const match = tools.find((t) => t.name === toolName);
+): ReturnType<SkillRegistry["getAll"]> {
+  if (!skillName) return tools;
+  const match = tools.find((t) => t.name === skillName);
   if (!match) {
     const available = tools.map((t) => t.name).join(", ");
     throw new CLIError(
       ExitCode.VALIDATION_ERROR,
-      `Module "${toolName}" not found. Available: ${available}`,
+      `Skill "${skillName}" not found. Available: ${available}`,
     );
   }
-  if (!isJson) p.log.info(`Using module: ${pc.bold(toolName)}`);
+  if (!isJson) p.log.info(`Using module: ${pc.bold(skillName)}`);
   return [match];
 }
 
@@ -164,7 +164,7 @@ function applyToolFilter(
 async function runDecomposition(
   prompt: string,
   provider: ReturnType<CLIContext["getProvider"]>,
-  tools: ReturnType<ModuleRegistry["getAll"]>,
+  tools: ReturnType<SkillRegistry["getAll"]>,
   repoContext: ReturnType<typeof loadContext> | null,
   ctx: CLIContext,
   isJson: boolean,
@@ -201,7 +201,7 @@ async function runDecomposition(
 /** Save the plan and update session state. Returns the plan ID. */
 function persistPlan(
   graph: TaskGraph,
-  registry: ModuleRegistry,
+  registry: SkillRegistry,
   ctx: CLIContext,
   providerName: string,
   skipVerify: boolean,
@@ -291,11 +291,11 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   runPrePlanHook(projectRoot, prompt, ctx.globalOpts.verbose);
 
   const provider = ctx.getProvider();
-  const registry = createModuleRegistry(provider, projectRoot ?? undefined);
+  const registry = createSkillRegistry(provider, projectRoot ?? undefined);
   const repoContext = loadRepoContext(projectRoot);
   const isJson = ctx.globalOpts.output === "json";
 
-  const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.tool, isJson);
+  const tools = applyToolFilter(registry.getAll(), ctx.globalOpts.skill, isJson);
   const executionMemory = await loadExecutionMemory(projectRoot, prompt);
   const fileTree = projectRoot ? buildFileTree(projectRoot) : undefined;
 
