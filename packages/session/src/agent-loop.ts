@@ -58,72 +58,35 @@ export class AgentLoop {
 
     for (let iteration = 0; iteration < this.maxIterations; iteration++) {
       iterationCount++;
-      // 1. Call LLM with tools
       const response = await this.generateWithTools(messages);
 
-      // 2. Track token usage
       if (response.usage) {
         this.totalTokens += response.usage.totalTokens;
       }
 
-      // 3. Append assistant message
-      const assistantMsg: AgentMessage = {
-        role: "assistant",
-        content: response.content,
-        toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
-      };
-      messages.push(assistantMsg);
-      this.opts.onIteration?.(iteration, assistantMsg);
+      this.appendAssistantMessage(messages, response, iteration);
 
-      // 4. If LLM produced text with no tool calls, report thinking and check for end
       if (response.content && this.opts.onThinking) {
         this.opts.onThinking(response.content);
       }
 
-      // 5. Check stop conditions
-      if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
-        summary = response.content || "Task completed (no summary provided).";
-        success = true;
+      // Check stop conditions
+      const stopResult = this.checkStopConditions(response, allToolCalls);
+      if (stopResult) {
+        summary = stopResult.summary;
+        success = stopResult.success;
         break;
       }
 
-      if (response.stopReason === "max_tokens") {
-        summary = "Stopped: LLM response hit max tokens limit.";
-        break;
-      }
+      // Execute tool calls
+      await this.executeToolCalls(response.toolCalls, messages, allToolCalls);
 
-      // 6. Check for "done" tool
-      const doneCall = response.toolCalls.find((tc) => tc.name === "done");
-      if (doneCall) {
-        summary = (doneCall.arguments.summary as string) || "Task completed.";
-        success = true;
-        allToolCalls.push({ name: doneCall.name, arguments: doneCall.arguments });
-        break;
-      }
-
-      // 7. Execute tool calls
-      for (const call of response.toolCalls) {
-        this.opts.onToolCall?.(call);
-        allToolCalls.push({ name: call.name, arguments: call.arguments });
-
-        const result = await this.opts.toolExecutor.execute(call);
-        this.opts.onToolResult?.(result);
-
-        messages.push({
-          role: "tool",
-          callId: call.id,
-          content: result.output,
-          isError: result.isError,
-        });
-      }
-
-      // 8. Check token budget
+      // Check token budget
       if (this.totalTokens >= this.maxTotalTokens) {
         summary = `Stopped: token budget exhausted (${this.totalTokens}/${this.maxTotalTokens}).`;
         break;
       }
 
-      // 9. Context management: summarize old tool results to prevent context overflow
       this.compactMessages(messages);
     }
 
@@ -140,6 +103,71 @@ export class AgentLoop {
       filesWritten: this.opts.toolExecutor.getFilesWritten(),
       filesModified: this.opts.toolExecutor.getFilesModified(),
     };
+  }
+
+  /** Append assistant message to conversation history. */
+  private appendAssistantMessage(
+    messages: AgentMessage[],
+    response: LLMToolResponse,
+    iteration: number,
+  ): void {
+    const assistantMsg: AgentMessage = {
+      role: "assistant",
+      content: response.content,
+      toolCalls: response.toolCalls.length > 0 ? response.toolCalls : undefined,
+    };
+    messages.push(assistantMsg);
+    this.opts.onIteration?.(iteration, assistantMsg);
+  }
+
+  /** Check if the loop should stop based on the LLM response. Returns null to continue. */
+  private checkStopConditions(
+    response: LLMToolResponse,
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  ): { summary: string; success: boolean } | null {
+    if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
+      return {
+        summary: response.content || "Task completed (no summary provided).",
+        success: true,
+      };
+    }
+
+    if (response.stopReason === "max_tokens") {
+      return { summary: "Stopped: LLM response hit max tokens limit.", success: false };
+    }
+
+    const doneCall = response.toolCalls.find((tc) => tc.name === "done");
+    if (doneCall) {
+      allToolCalls.push({ name: doneCall.name, arguments: doneCall.arguments });
+      return {
+        summary: (doneCall.arguments.summary as string) || "Task completed.",
+        success: true,
+      };
+    }
+
+    return null;
+  }
+
+  /** Execute all tool calls in a response and append results to messages. */
+  private async executeToolCalls(
+    toolCalls: ToolCall[],
+    messages: AgentMessage[],
+    allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+  ): Promise<void> {
+    for (const call of toolCalls) {
+      this.opts.onToolCall?.(call);
+      allToolCalls.push({ name: call.name, arguments: call.arguments });
+
+      const result = await this.opts.toolExecutor.execute(call);
+      this.opts.onToolResult?.(result);
+
+      messages.push({
+        role: "tool",
+        callId: call.id,
+        content: result.output,
+        isError: result.isError,
+      });
+    }
   }
 
   /**

@@ -63,11 +63,6 @@ function findLocalConfigFile(): string | null {
   return null;
 }
 
-/** @deprecated Use globalConfigDir instead */
-function configDir(): string {
-  return globalConfigDir();
-}
-
 /** Returns the path to the active config file (local if exists, else global). */
 export function getConfigPath(): string {
   const local = findLocalConfigFile();
@@ -275,11 +270,11 @@ export function resolveToken(provider: string, config: DojOpsConfig): string | u
 // ── Profile management ─────────────────────────────────────────────
 
 function profilesDir(): string {
-  return path.join(configDir(), "profiles");
+  return path.join(globalConfigDir(), "profiles");
 }
 
 function metaFile(): string {
-  return path.join(configDir(), "meta.json");
+  return path.join(globalConfigDir(), "meta.json");
 }
 
 const SAFE_PROFILE_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -354,7 +349,7 @@ export function getActiveProfile(): string | undefined {
 }
 
 export function setActiveProfile(name: string | undefined): void {
-  const dir = configDir();
+  const dir = globalConfigDir();
   if (!fs.existsSync(dir)) {
     mkdirOwnerOnly(dir);
   }

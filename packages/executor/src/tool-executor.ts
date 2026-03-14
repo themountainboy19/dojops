@@ -24,6 +24,62 @@ function truncateOutput(output: string): string {
   return `${truncated}\n\n[truncated — output exceeded ${MAX_OUTPUT_BYTES} bytes]`;
 }
 
+/** Search for files by name pattern using find. Falls back to -path for glob patterns. */
+function searchByFilePattern(pattern: string, searchPath: string): string[] {
+  try {
+    const output = execFileSync(
+      "/bin/sh",
+      [
+        "-c",
+        `find ${JSON.stringify(searchPath)} -type f -name ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
+      ],
+      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
+    );
+    if (output.trim()) return [`Files matching "${pattern}":\n${output.trim()}`];
+    return [];
+  } catch {
+    return searchByPathPattern(pattern, searchPath);
+  }
+}
+
+/** Fallback file search using -path for glob/wildcard patterns. */
+function searchByPathPattern(pattern: string, searchPath: string): string[] {
+  try {
+    const output = execFileSync(
+      "/bin/sh",
+      [
+        "-c",
+        `find ${JSON.stringify(searchPath)} -type f -path ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
+      ],
+      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
+    );
+    if (output.trim()) return [`Files matching "${pattern}":\n${output.trim()}`];
+    return [];
+  } catch {
+    return [`No files found matching "${pattern}"`];
+  }
+}
+
+/** Search for files containing a given content pattern using grep. */
+function searchByContent(contentPattern: string, searchPath: string): string[] {
+  try {
+    const output = execFileSync(
+      "/bin/sh",
+      [
+        "-c",
+        `grep -rl ${JSON.stringify(contentPattern)} ${JSON.stringify(searchPath)} 2>/dev/null | head -30`,
+      ],
+      { encoding: "utf-8", timeout: 10_000, maxBuffer: MAX_OUTPUT_BYTES },
+    );
+    if (output.trim()) {
+      return [`Files containing "${contentPattern}":\n${output.trim()}`];
+    }
+    return [`No files containing "${contentPattern}"`];
+  } catch {
+    return [`No files containing "${contentPattern}"`];
+  }
+}
+
 /**
  * Dispatches tool calls to sandboxed operations, enforced by ExecutionPolicy.
  * Each tool call maps to a specific file system or process operation.
@@ -255,65 +311,11 @@ export class ToolExecutor {
     const results: string[] = [];
 
     if (pattern) {
-      // File name search using find-like approach
-      try {
-        const output = execFileSync(
-          "/bin/sh",
-          [
-            "-c",
-            `find ${JSON.stringify(searchPath)} -type f -name ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
-          ],
-          {
-            encoding: "utf-8",
-            timeout: 10_000,
-            maxBuffer: MAX_OUTPUT_BYTES,
-          },
-        );
-        if (output.trim()) results.push(`Files matching "${pattern}":\n${output.trim()}`);
-      } catch {
-        // Glob pattern — try with -path for ** patterns
-        try {
-          const output = execFileSync(
-            "/bin/sh",
-            [
-              "-c",
-              `find ${JSON.stringify(searchPath)} -type f -path ${JSON.stringify(pattern)} 2>/dev/null | head -50`,
-            ],
-            {
-              encoding: "utf-8",
-              timeout: 10_000,
-              maxBuffer: MAX_OUTPUT_BYTES,
-            },
-          );
-          if (output.trim()) results.push(`Files matching "${pattern}":\n${output.trim()}`);
-        } catch {
-          results.push(`No files found matching "${pattern}"`);
-        }
-      }
+      results.push(...searchByFilePattern(pattern, searchPath));
     }
 
     if (contentPattern) {
-      try {
-        const output = execFileSync(
-          "/bin/sh",
-          [
-            "-c",
-            `grep -rl ${JSON.stringify(contentPattern)} ${JSON.stringify(searchPath)} 2>/dev/null | head -30`,
-          ],
-          {
-            encoding: "utf-8",
-            timeout: 10_000,
-            maxBuffer: MAX_OUTPUT_BYTES,
-          },
-        );
-        if (output.trim()) {
-          results.push(`Files containing "${contentPattern}":\n${output.trim()}`);
-        } else {
-          results.push(`No files containing "${contentPattern}"`);
-        }
-      } catch {
-        results.push(`No files containing "${contentPattern}"`);
-      }
+      results.push(...searchByContent(contentPattern, searchPath));
     }
 
     if (results.length === 0) {

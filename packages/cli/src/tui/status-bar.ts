@@ -32,8 +32,9 @@ const THIN_DIVIDER = "╌";
 
 /** Build a single-line status bar string (no newlines). */
 export function renderStatusBar(state: StatusBarState): string {
+  const sessionIdShort = pc.dim(`(${state.sessionId.slice(0, 8)})`);
   const sessionLabel = state.sessionName
-    ? `${pc.cyan(state.sessionName)} ${pc.dim(`(${state.sessionId.slice(0, 8)})`)}`
+    ? `${pc.cyan(state.sessionName)} ${sessionIdShort}`
     : pc.cyan(state.sessionId.slice(0, 12));
 
   const agentLabel = state.agent === "auto-route" ? pc.dim("auto") : pc.magenta(state.agent);
@@ -71,11 +72,8 @@ export function renderTurnStats(stats: TurnStats): string {
 
   const parts: string[] = [];
 
-  // Agent
-  parts.push(pc.magenta(stats.agent));
-
-  // Duration
-  parts.push(pc.dim(formatDuration(stats.durationMs)));
+  // Agent + Duration
+  parts.push(pc.magenta(stats.agent), pc.dim(formatDuration(stats.durationMs)));
 
   // Per-turn tokens (from LLM provider if available)
   if (stats.usage) {
@@ -138,11 +136,10 @@ function estimateCost(promptTokens: number, completionTokens: number, model: str
     inputPer1M = 0.1;
     outputPer1M = 0.4;
   } else if (lower.includes("gpt-4.1")) {
-    inputPer1M = 2.0;
-    outputPer1M = 8.0;
+    inputPer1M = 2;
+    outputPer1M = 8;
   } else if (lower.includes("gpt-4o")) {
-    inputPer1M = 2.5;
-    outputPer1M = 10;
+    // GPT-4o matches defaults (2.5 / 10) — no assignment needed
   } else if (lower.includes("claude") || lower.includes("anthropic")) {
     inputPer1M = 3;
     outputPer1M = 15;
@@ -199,7 +196,7 @@ export function renderContextBar(state: ContextBarState): string {
   // Pad between left and right to fill the bar width
   // Strip ANSI for length calculation
   // eslint-disable-next-line no-control-regex
-  const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
+  const stripAnsi = (s: string) => s.replaceAll(/\x1b\[[0-9;]*m/g, "");
   const leftLen = stripAnsi(left).length;
   const rightLen = stripAnsi(right).length;
   const gap = Math.max(1, barWidth - leftLen - rightLen);
@@ -235,10 +232,10 @@ export function renderCompactionNotice(info: {
   messagesSummarized: number;
   messagesRetained: number;
 }): string {
-  return (
-    `${pc.yellow("✳")} ${pc.bold("Conversation compacted")}\n` +
-    `  ${pc.dim("↳")} ${pc.dim(`Summarized ${info.messagesSummarized} messages, ${info.messagesRetained} retained`)}`
+  const detail = pc.dim(
+    `Summarized ${info.messagesSummarized} messages, ${info.messagesRetained} retained`,
   );
+  return `${pc.yellow("✳")} ${pc.bold("Conversation compacted")}\n` + `  ${pc.dim("↳")} ${detail}`;
 }
 
 /** Get terminal width, defaulting to 80. */

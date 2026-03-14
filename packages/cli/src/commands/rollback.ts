@@ -118,49 +118,23 @@ function resolveRollbackTargets(
   return { planId, filesToDelete: latest.filesCreated, filesToRestore: latest.filesModified ?? [] };
 }
 
-export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const root = findProjectRoot();
-  if (!root)
-    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
-
-  const dryRun = ctx.globalOpts.dryRun;
-  const { planId, filesToDelete, filesToRestore } = resolveRollbackTargets(root, args);
-
-  if (filesToDelete.length === 0 && filesToRestore.length === 0) {
-    if (ctx.globalOpts.output === "json") {
-      console.log(JSON.stringify({ planId, status: "noop", filesDeleted: 0, filesRestored: 0 }));
-    } else {
-      p.log.info("No files to roll back.");
-    }
-    return;
-  }
-
-  if (ctx.globalOpts.output === "json" && dryRun) {
-    console.log(JSON.stringify({ planId, dryRun: true, filesToDelete, filesToRestore }, null, 2));
-    return;
-  }
-
+/** Build the preview lines for the rollback note display. */
+function buildRollbackPreviewLines(filesToDelete: string[], filesToRestore: string[]): string[] {
   const lines: string[] = [];
   for (const f of filesToDelete) lines.push(`  ${pc.red("-")} ${f}`);
   for (const f of filesToRestore)
     lines.push(`  ${pc.yellow("↩")} ${f} ${pc.dim("(restore from git)")}`);
-  p.note(lines.join("\n"), pc.yellow(`Rollback plan ${planId}`));
+  return lines;
+}
 
-  if (dryRun) {
-    displayDryRun(filesToDelete, filesToRestore);
-    return;
-  }
-
-  const skipPrompt = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
-  if (!skipPrompt) {
-    const totalActions = filesToDelete.length + filesToRestore.length;
-    const confirm = await p.confirm({ message: `Roll back ${totalActions} file(s)?` });
-    if (p.isCancel(confirm) || !confirm) {
-      p.cancel("Cancelled.");
-      process.exit(0);
-    }
-  }
-
+/** Execute the rollback under a lock: delete, restore, audit, report. */
+function executeRollback(
+  root: string,
+  planId: string,
+  filesToDelete: string[],
+  filesToRestore: string[],
+  outputFormat: string | undefined,
+): void {
   if (!acquireLock(root, "rollback")) {
     const { info } = isLocked(root);
     throw new CLIError(
@@ -182,7 +156,7 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
       status: "success",
       durationMs: Date.now() - startTime,
     });
-    if (ctx.globalOpts.output === "json") {
+    if (outputFormat === "json") {
       console.log(
         JSON.stringify(
           {
@@ -205,4 +179,47 @@ export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<
   } finally {
     releaseLock(root);
   }
+}
+
+export async function rollbackCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const root = findProjectRoot();
+  if (!root)
+    throw new CLIError(ExitCode.NO_PROJECT, "No .dojops/ project found. Run `dojops init` first.");
+
+  const dryRun = ctx.globalOpts.dryRun;
+  const { planId, filesToDelete, filesToRestore } = resolveRollbackTargets(root, args);
+
+  if (filesToDelete.length === 0 && filesToRestore.length === 0) {
+    if (ctx.globalOpts.output === "json") {
+      console.log(JSON.stringify({ planId, status: "noop", filesDeleted: 0, filesRestored: 0 }));
+    } else {
+      p.log.info("No files to roll back.");
+    }
+    return;
+  }
+
+  if (ctx.globalOpts.output === "json" && dryRun) {
+    console.log(JSON.stringify({ planId, dryRun: true, filesToDelete, filesToRestore }, null, 2));
+    return;
+  }
+
+  const lines = buildRollbackPreviewLines(filesToDelete, filesToRestore);
+  p.note(lines.join("\n"), pc.yellow(`Rollback plan ${planId}`));
+
+  if (dryRun) {
+    displayDryRun(filesToDelete, filesToRestore);
+    return;
+  }
+
+  const skipPrompt = hasFlag(args, "--yes") || ctx.globalOpts.nonInteractive;
+  if (!skipPrompt) {
+    const totalActions = filesToDelete.length + filesToRestore.length;
+    const confirm = await p.confirm({ message: `Roll back ${totalActions} file(s)?` });
+    if (p.isCancel(confirm) || !confirm) {
+      p.cancel("Cancelled.");
+      process.exit(0);
+    }
+  }
+
+  executeRollback(root, planId, filesToDelete, filesToRestore, ctx.globalOpts.output);
 }

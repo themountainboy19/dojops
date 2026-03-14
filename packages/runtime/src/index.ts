@@ -52,6 +52,7 @@ export {
   verifyWithBinary,
   runVerification,
   BinaryVerifierInput,
+  RunVerificationOptions,
   ALLOWED_VERIFICATION_BINARIES,
 } from "./binary-verifier";
 

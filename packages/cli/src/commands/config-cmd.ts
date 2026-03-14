@@ -715,10 +715,10 @@ function handleApplySubcommand(args: string[], ctx: CLIContext): void {
 
   saveConfig(merged);
   p.log.success(`Applied config patch from ${pc.bold(filePath)}`);
-  if (ctx.globalOpts.output !== "json") {
-    showConfig(merged);
-  } else {
+  if (ctx.globalOpts.output === "json") {
     console.log(JSON.stringify(merged, null, 2));
+  } else {
+    showConfig(merged);
   }
 }
 

@@ -671,7 +671,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
     const consumedLlmKeys = new Set<string>();
     const outputPath = typeof input.outputPath === "string" ? input.outputPath : "";
 
-    this.writeDeclaredFileSpecs(
+    this.writeDeclaredFileSpecs({
       input,
       generated,
       isUpdate,
@@ -680,7 +680,7 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
       normalizedContents,
       consumedLlmKeys,
       tracker,
-    );
+    });
 
     this.writeDynamicFiles(
       input,
@@ -738,16 +738,26 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
   }
 
   /** Process all declared file specs and write their content. */
-  private writeDeclaredFileSpecs(
-    input: Record<string, unknown>,
-    generated: string,
-    isUpdate: boolean,
-    basePath: string,
-    outputPath: string,
-    normalizedContents: Record<string, string> | null,
-    consumedLlmKeys: Set<string>,
-    tracker: FileWriteTracker,
-  ): void {
+  private writeDeclaredFileSpecs(opts: {
+    input: Record<string, unknown>;
+    generated: string;
+    isUpdate: boolean;
+    basePath: string;
+    outputPath: string;
+    normalizedContents: Record<string, string> | null;
+    consumedLlmKeys: Set<string>;
+    tracker: FileWriteTracker;
+  }): void {
+    const {
+      input,
+      generated,
+      isUpdate,
+      basePath,
+      outputPath,
+      normalizedContents,
+      consumedLlmKeys,
+      tracker,
+    } = opts;
     for (const fileSpec of this.skill.frontmatter.files) {
       const resolvedPath = resolveFilePath(fileSpec.path, input);
       const content = this.resolveFileSpecContent(
@@ -963,17 +973,17 @@ export class DopsRuntimeV2 implements DevOpsSkill<Record<string, unknown>> {
 
     const { verifyFiles, filename } = this.resolveVerifyFilesAndFilename(rawContent, peerFiles);
 
-    const verificationResult = await runVerification(
-      parsed ?? data,
-      rawContent,
+    const verificationResult = await runVerification({
+      data: parsed ?? data,
+      serializedContent: rawContent,
       filename,
       verificationConfig,
       permissions,
       structuralIssues,
-      this.name,
-      verifyFiles,
-      this.options?.onBinaryMissing,
-    );
+      skillName: this.name,
+      files: verifyFiles,
+      onBinaryMissing: this.options?.onBinaryMissing,
+    });
 
     this.appendDocAuditIssues(rawContent, verificationResult);
 

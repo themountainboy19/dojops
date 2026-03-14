@@ -238,12 +238,9 @@ export async function openaiCompatGenerateWithTools(
     };
   });
 
-  const stopReason: LLMToolResponse["stopReason"] =
-    choice.finish_reason === "tool_calls"
-      ? "tool_use"
-      : choice.finish_reason === "length"
-        ? "max_tokens"
-        : "end_turn";
+  let stopReason: LLMToolResponse["stopReason"] = "end_turn";
+  if (choice.finish_reason === "tool_calls") stopReason = "tool_use";
+  else if (choice.finish_reason === "length") stopReason = "max_tokens";
 
   const usage = completion.usage
     ? {

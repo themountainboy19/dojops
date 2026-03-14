@@ -28,7 +28,7 @@ import { printHelp, printCommandHelp, printBanner } from "./help";
 import { resolveCommand, registerCommand, registerSubcommand } from "./commands";
 import { CLIContext } from "./types";
 import { ExitCode, CLIError, toErrorMessage } from "./exit-codes";
-import { getDojopsVersion } from "./state";
+import { getDojopsVersion, findProjectRoot } from "./state";
 
 // ── Late-registered commands (Phases 2-6) ──────────────────────────
 import { initCommand } from "./commands/init";
@@ -77,7 +77,6 @@ import { memoryCommand } from "./commands/memory";
 import { recordCommandError } from "./memory";
 import { prependToolchainBinToPath } from "./toolchain-sandbox";
 import { withTracking } from "./tracking-provider";
-import { findProjectRoot } from "./state";
 
 registerCommand("init", initCommand);
 registerCommand("apply", applyCommand);

@@ -43,7 +43,7 @@ export function parseToolCallsFromContent(content: string): LLMToolResponse {
 
   // Try to extract JSON from the content (may be wrapped in markdown fences)
   let jsonStr = trimmed;
-  const fenceMatch = /```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/.exec(trimmed);
+  const fenceMatch = /```(?:json)?[ \t]*\n([\s\S]*?)\n[ \t]*```/.exec(trimmed);
   if (fenceMatch) {
     jsonStr = fenceMatch[1].trim();
   }

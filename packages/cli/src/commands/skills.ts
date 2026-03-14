@@ -373,17 +373,21 @@ function applyInitDefaults(params: {
   return { description, technology, outputFilePath };
 }
 
+interface ScaffoldV2SkillOptions {
+  ctx: CLIContext;
+  skillName: string;
+  description: string;
+  technology: string;
+  fileFormat: FileFormatType;
+  outputFilePath: string;
+  useLLM: boolean;
+  baseDir?: string;
+}
+
 /** Scaffold a v2 .dops skill file, optionally using LLM-generated content. */
-async function scaffoldV2Skill(
-  ctx: CLIContext,
-  skillName: string,
-  description: string,
-  technology: string,
-  fileFormat: FileFormatType,
-  outputFilePath: string,
-  useLLM: boolean,
-  baseDir?: string,
-): Promise<void> {
+async function scaffoldV2Skill(opts: ScaffoldV2SkillOptions): Promise<void> {
+  const { ctx, skillName, description, technology, fileFormat, outputFilePath, useLLM, baseDir } =
+    opts;
   const toolsDir = baseDir ?? path.resolve(".dojops", "skills");
   const dopsPath = path.join(toolsDir, `${skillName}.dops`);
 
@@ -468,7 +472,7 @@ export const skillsInitCommand: CommandHandler = async (args, ctx) => {
   technology = defaults.technology;
   outputFilePath = defaults.outputFilePath;
 
-  return scaffoldV2Skill(
+  return scaffoldV2Skill({
     ctx,
     skillName,
     description,
@@ -477,7 +481,7 @@ export const skillsInitCommand: CommandHandler = async (args, ctx) => {
     outputFilePath,
     useLLM,
     baseDir,
-  );
+  });
 };
 
 // ── LLM-powered skill generation ─────────────────────────────────
@@ -991,10 +995,7 @@ export const skillsInstallCommand: CommandHandler = async (args, ctx) => {
   const hasGlobalFlag = args.includes("--global");
   let destDir: string;
   let loc: string;
-  if (hasGlobalFlag) {
-    destDir = resolveInstallDir(true);
-    loc = "global";
-  } else if (ctx.globalOpts.nonInteractive) {
+  if (hasGlobalFlag || ctx.globalOpts.nonInteractive) {
     destDir = resolveInstallDir(true);
     loc = "global";
   } else {

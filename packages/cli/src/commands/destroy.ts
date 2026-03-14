@@ -56,6 +56,66 @@ async function showAvailablePlans(root: string): Promise<void> {
   if (plans.length > 10) p.log.info(pc.dim(`  ...and ${plans.length - 10} more`));
 }
 
+/** Collect all files associated with a plan (plan files + execution files). */
+function collectPlanFiles(root: string, planId: string): string[] {
+  const plan = loadPlan(root, planId);
+  if (!plan) throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
+
+  const execFiles = listExecutions(root)
+    .filter((e) => e.planId === planId)
+    .flatMap((e) => e.filesCreated);
+  return [...new Set([...plan.files, ...execFiles])];
+}
+
+/** Execute the clean operation under a lock: delete files, audit, report. */
+function executeClean(
+  root: string,
+  planId: string,
+  allFiles: string[],
+  outputFormat: string | undefined,
+): void {
+  if (!acquireLock(root, "clean")) {
+    const { info } = isLocked(root);
+    throw new CLIError(
+      ExitCode.LOCK_CONFLICT,
+      `Operation locked by PID ${info?.pid} (${info?.operation})`,
+    );
+  }
+
+  const startTime = Date.now();
+  try {
+    const deleted = deleteProjectFiles(allFiles, root);
+    appendAudit(root, {
+      timestamp: new Date().toISOString(),
+      user: getCurrentUser(),
+      command: `clean ${planId}`,
+      action: "clean",
+      planId,
+      status: "success",
+      durationMs: Date.now() - startTime,
+    });
+    if (outputFormat === "json") {
+      console.log(
+        JSON.stringify(
+          {
+            planId,
+            status: "success",
+            filesDeleted: deleted,
+            total: allFiles.length,
+            durationMs: Date.now() - startTime,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
+    }
+  } finally {
+    releaseLock(root);
+  }
+}
+
 export async function cleanCommand(
   args: string[],
   ctx: CLIContext,
@@ -77,13 +137,7 @@ export async function cleanCommand(
     throw new CLIError(ExitCode.VALIDATION_ERROR, "Plan ID required for clean (safety measure).");
   }
 
-  const plan = loadPlan(root, planId);
-  if (!plan) throw new CLIError(ExitCode.VALIDATION_ERROR, `Plan "${planId}" not found.`);
-
-  const execFiles = listExecutions(root)
-    .filter((e) => e.planId === planId)
-    .flatMap((e) => e.filesCreated);
-  const allFiles = [...new Set([...plan.files, ...execFiles])];
+  const allFiles = collectPlanFiles(root, planId);
 
   if (allFiles.length === 0) {
     if (ctx.globalOpts.output === "json") {
@@ -101,7 +155,7 @@ export async function cleanCommand(
 
   p.note(
     allFiles.map((f) => `  ${pc.red("-")} ${f}`).join("\n"),
-    pc.red(`Clean artifacts from ${plan.id}`),
+    pc.red(`Clean artifacts from ${planId}`),
   );
 
   if (dryRun) {
@@ -120,44 +174,5 @@ export async function cleanCommand(
     }
   }
 
-  if (!acquireLock(root, "clean")) {
-    const { info } = isLocked(root);
-    throw new CLIError(
-      ExitCode.LOCK_CONFLICT,
-      `Operation locked by PID ${info?.pid} (${info?.operation})`,
-    );
-  }
-
-  const startTime = Date.now();
-  try {
-    const deleted = deleteProjectFiles(allFiles, root);
-    appendAudit(root, {
-      timestamp: new Date().toISOString(),
-      user: getCurrentUser(),
-      command: `clean ${planId}`,
-      action: "clean",
-      planId,
-      status: "success",
-      durationMs: Date.now() - startTime,
-    });
-    if (ctx.globalOpts.output === "json") {
-      console.log(
-        JSON.stringify(
-          {
-            planId,
-            status: "success",
-            filesDeleted: deleted,
-            total: allFiles.length,
-            durationMs: Date.now() - startTime,
-          },
-          null,
-          2,
-        ),
-      );
-    } else {
-      p.log.success(`Cleaned ${deleted}/${allFiles.length} artifacts.`);
-    }
-  } finally {
-    releaseLock(root);
-  }
+  executeClean(root, planId, allFiles, ctx.globalOpts.output);
 }

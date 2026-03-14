@@ -186,16 +186,16 @@ function highlightLine(line: string, keywords: Set<string>): string {
 
   // Highlight strings
   let result = line;
-  result = result.replace(/(["'`])(?:(?!\1).)*?\1/g, (m) => pc.green(m));
+  result = result.replaceAll(/(["'`])(?:(?!\1).)*?\1/g, (m) => pc.green(m));
 
   // Highlight keywords (word boundaries)
   for (const kw of keywords) {
-    const re = new RegExp(`\\b(${kw})\\b`, "g");
-    result = result.replace(re, pc.cyan("$1"));
+    const re = new RegExp(String.raw`\b(${kw})\b`, "g");
+    result = result.replaceAll(re, pc.cyan("$1"));
   }
 
   // Highlight numbers
-  result = result.replace(/\b(\d+(?:\.\d+)?)\b/g, pc.yellow("$1"));
+  result = result.replaceAll(/\b(\d+(?:\.\d+)?)\b/g, pc.yellow("$1"));
 
   return result;
 }

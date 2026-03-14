@@ -170,17 +170,20 @@ function buildAgentList(): AgentInfo[] {
   }));
 }
 
+interface DecompositionOptions {
+  prompt: string;
+  provider: ReturnType<CLIContext["getProvider"]>;
+  tools: ReturnType<SkillRegistry["getAll"]>;
+  repoContext: ReturnType<typeof loadContext> | null;
+  ctx: CLIContext;
+  isJson: boolean;
+  executionMemory?: string;
+  fileTree?: string;
+}
+
 /** Run the decomposition and display verbose output if enabled. */
-async function runDecomposition(
-  prompt: string,
-  provider: ReturnType<CLIContext["getProvider"]>,
-  tools: ReturnType<SkillRegistry["getAll"]>,
-  repoContext: ReturnType<typeof loadContext> | null,
-  ctx: CLIContext,
-  isJson: boolean,
-  executionMemory?: string,
-  fileTree?: string,
-): Promise<TaskGraph> {
+async function runDecomposition(opts: DecompositionOptions): Promise<TaskGraph> {
+  const { prompt, provider, tools, repoContext, ctx, isJson, executionMemory, fileTree } = opts;
   const s = p.spinner();
   if (!isJson) s.start("Decomposing goal into tasks...");
   if (ctx.globalOpts.verbose) {
@@ -311,7 +314,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
   const executionMemory = await loadExecutionMemory(projectRoot, prompt);
   const fileTree = projectRoot ? buildFileTree(projectRoot) : undefined;
 
-  const graph = await runDecomposition(
+  const graph = await runDecomposition({
     prompt,
     provider,
     tools,
@@ -320,7 +323,7 @@ export async function planCommand(args: string[], ctx: CLIContext): Promise<void
     isJson,
     executionMemory,
     fileTree,
-  );
+  });
 
   enrichTasksWithMetadata(graph, registry);
   if (!isJson) displayTaskGraph(graph);

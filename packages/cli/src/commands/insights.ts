@@ -133,7 +133,7 @@ function analyzeScanPatterns(rootDir: string, insights: Insight[]): void {
   if (recent.length >= 3) {
     const totals = recent.map((r) => (r as { summary?: { total?: number } }).summary?.total ?? 0);
     const increasing = totals.every((t, i) => i === 0 || t >= totals[i - 1]);
-    if (increasing && totals[0] > totals[totals.length - 1]) {
+    if (increasing && totals[0] > totals.at(-1)!) {
       insights.push({
         category: "security",
         message: `Scan findings have been increasing across recent scans.`,

@@ -135,11 +135,13 @@ function tryRenderFileBlocks(content: string): string | null {
     for (const [filePath, fileContent] of entries) {
       if (typeof fileContent !== "string") continue;
       const ext = filePath.split(".").pop() ?? "";
-      blocks.push(`${pc.cyan("─")} ${pc.bold(filePath)}`);
-      blocks.push(`${pc.dim("```" + ext)}`);
-      blocks.push(fileContent);
-      blocks.push(pc.dim("```"));
-      blocks.push("");
+      blocks.push(
+        `${pc.cyan("─")} ${pc.bold(filePath)}`,
+        `${pc.dim("```" + ext)}`,
+        fileContent,
+        pc.dim("```"),
+        "",
+      );
     }
     return blocks.join("\n");
   } catch {
@@ -794,13 +796,11 @@ function trackAgentActivity(
   });
 }
 
-export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const writePath = extractFlagValue(args, "--write");
-  const allowAllPaths = hasFlag(args, "--allow-all-paths");
+/** Parse and validate the prompt from CLI args + optional file. */
+function resolvePrompt(args: string[], ctx: CLIContext, writePath: string | undefined): string {
   const inlinePrompt = args.filter((a) => !a.startsWith("-") && a !== writePath).join(" ");
-
-  // Build prompt: file content + inline args
   let prompt = inlinePrompt;
+
   if (ctx.globalOpts.file) {
     try {
       const fileContent = readPromptFile(ctx.globalOpts.file);
@@ -819,6 +819,56 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     p.log.info(`  ${pc.dim("$")} dojops -f task.md`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
+
+  return prompt;
+}
+
+/** Handle the agent-routed generation result: persist, output, hooks. */
+async function handleAgentResult(
+  ctx: CLIContext,
+  result: { content: string },
+  route: { agent: { name: string } },
+  prompt: string,
+  projectRoot: string | undefined,
+  writePath: string | undefined,
+  allowAllPaths: boolean,
+  genDuration: number,
+): Promise<void> {
+  persistGeneration(projectRoot, prompt, result.content, {
+    agentName: route.agent.name,
+    filesWritten: writePath ? [writePath] : [],
+  });
+
+  if (projectRoot) {
+    trackAgentActivity(projectRoot, prompt, route.agent.name, writePath, genDuration);
+  }
+
+  if (ctx.globalOpts.raw) {
+    writeRawOutput(result.content);
+    return;
+  }
+
+  if (writePath) {
+    await handleWriteOutput(ctx, writePath, allowAllPaths, result.content, route.agent.name);
+    return;
+  }
+
+  outputFormatted(ctx.globalOpts.output, "agent", route.agent.name, result.content);
+
+  if (projectRoot) {
+    runHooks(
+      projectRoot,
+      "post-generate",
+      { prompt, agent: route.agent.name, outputPath: writePath },
+      { verbose: ctx.globalOpts.verbose },
+    );
+  }
+}
+
+export async function generateCommand(args: string[], ctx: CLIContext): Promise<void> {
+  const writePath = extractFlagValue(args, "--write");
+  const allowAllPaths = hasFlag(args, "--allow-all-paths");
+  const prompt = resolvePrompt(args, ctx, writePath);
 
   const projectRoot = findProjectRoot() ?? undefined;
   runPreGenerateHook(projectRoot, prompt, ctx.globalOpts.verbose);
@@ -877,33 +927,14 @@ export async function generateCommand(args: string[], ctx: CLIContext): Promise<
     p.log.info(`Generation completed in ${genDuration}ms (${result.content.length} chars)`);
   }
 
-  persistGeneration(projectRoot, prompt, result.content, {
-    agentName: route.agent.name,
-    filesWritten: writePath ? [writePath] : [],
-  });
-
-  if (projectRoot) {
-    trackAgentActivity(projectRoot, prompt, route.agent.name, writePath, genDuration);
-  }
-
-  if (ctx.globalOpts.raw) {
-    writeRawOutput(result.content);
-    return;
-  }
-
-  if (writePath) {
-    await handleWriteOutput(ctx, writePath, allowAllPaths, result.content, route.agent.name);
-    return;
-  }
-
-  outputFormatted(ctx.globalOpts.output, "agent", route.agent.name, result.content);
-
-  if (projectRoot) {
-    runHooks(
-      projectRoot,
-      "post-generate",
-      { prompt, agent: route.agent.name, outputPath: writePath },
-      { verbose: ctx.globalOpts.verbose },
-    );
-  }
+  await handleAgentResult(
+    ctx,
+    result,
+    route,
+    prompt,
+    projectRoot,
+    writePath,
+    allowAllPaths,
+    genDuration,
+  );
 }

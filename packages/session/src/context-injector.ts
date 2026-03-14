@@ -147,8 +147,8 @@ function loadDevOpsFileContents(rootDir: string, parts: string[]): void {
     const files = discoverDevOpsFiles(rootDir);
     if (files.length === 0) return;
 
-    parts.push(`\n## Project DevOps Files`);
     parts.push(
+      `\n## Project DevOps Files`,
       "The following are the actual contents of DevOps configuration files in the project.",
       "Use these to provide specific analysis when asked about the project's CI/CD, infrastructure, or configuration.",
     );
@@ -180,10 +180,7 @@ export function buildSessionContext(rootDir: string): string {
   // Add file tree so LLM knows actual project structure
   const tree = buildFileTree(rootDir);
   if (tree) {
-    parts.push(`\n## Project File Tree`);
-    parts.push("```");
-    parts.push(tree);
-    parts.push("```");
+    parts.push(`\n## Project File Tree`, "```", tree, "```");
   }
 
   // Inject actual DevOps file contents for analysis

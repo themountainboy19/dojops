@@ -334,20 +334,32 @@ function resolveCommandPlaceholders(
   return command.replaceAll("{entryFile}", entryFile);
 }
 
+export interface RunVerificationOptions {
+  data: unknown;
+  serializedContent: string;
+  filename: string;
+  verificationConfig: VerificationConfig | undefined;
+  permissions: { child_process?: "required" | "none"; network?: "required" | "none" };
+  structuralIssues: VerificationIssue[];
+  skillName: string;
+  files?: Record<string, string>;
+  onBinaryMissing?: OnBinaryMissing;
+}
+
 /**
  * Run full verification: structural rules + optional binary verification.
  */
-export async function runVerification(
-  data: unknown,
-  serializedContent: string,
-  filename: string,
-  verificationConfig: VerificationConfig | undefined,
-  permissions: { child_process?: "required" | "none"; network?: "required" | "none" },
-  structuralIssues: VerificationIssue[],
-  skillName: string,
-  files?: Record<string, string>,
-  onBinaryMissing?: OnBinaryMissing,
-): Promise<VerificationResult> {
+export async function runVerification(opts: RunVerificationOptions): Promise<VerificationResult> {
+  const {
+    serializedContent,
+    filename,
+    verificationConfig,
+    permissions,
+    structuralIssues,
+    skillName,
+    files,
+    onBinaryMissing,
+  } = opts;
   const allIssues: VerificationIssue[] = [...structuralIssues];
 
   // Binary verification

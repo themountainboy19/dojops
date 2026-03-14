@@ -12,6 +12,23 @@ const MockInputSchema = z.object({ value: z.string() });
 type MockInput = z.infer<typeof MockInputSchema>;
 
 // ---------------------------------------------------------------------------
+// Shared helper functions
+// ---------------------------------------------------------------------------
+
+/** Shared generate logic for repairable tool tests. */
+function repairableGenerate(
+  input: MockInput & { _verificationFeedback?: string },
+  state: { generateCount: number; lastFeedback: string | undefined },
+): SkillOutput {
+  state.generateCount++;
+  state.lastFeedback = input._verificationFeedback;
+  if (state.generateCount >= 2) {
+    return { success: true, data: { result: "fixed" } };
+  }
+  return { success: true, data: { result: input.value } };
+}
+
+// ---------------------------------------------------------------------------
 // Base tool classes (reduced from 11 via shared base classes)
 // ---------------------------------------------------------------------------
 
@@ -969,19 +986,6 @@ describe("SafeExecutor", () => {
   });
 
   describe("critic-powered repair", () => {
-    /** Shared generate logic for repairable tool tests. */
-    function repairableGenerate(
-      input: MockInput & { _verificationFeedback?: string },
-      state: { generateCount: number; lastFeedback: string | undefined },
-    ): SkillOutput {
-      state.generateCount++;
-      state.lastFeedback = input._verificationFeedback;
-      if (state.generateCount >= 2) {
-        return { success: true, data: { result: "fixed" } };
-      }
-      return { success: true, data: { result: input.value } };
-    }
-
     it("uses critic feedback in repair loop", async () => {
       const state = { generateCount: 0, lastFeedback: undefined as string | undefined };
 

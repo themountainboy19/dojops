@@ -229,7 +229,10 @@ function showWelcome(session: ChatSession, ctx: CLIContext, contextInfo: unknown
 
   // Status indicators
   const indicators: string[] = [];
-  if (msgCount > 0) indicators.push(`${pc.green("●")} ${pc.dim(`History: ${msgCount} messages`)}`);
+  if (msgCount > 0) {
+    const historyLabel = pc.dim(`History: ${msgCount} messages`);
+    indicators.push(`${pc.green("●")} ${historyLabel}`);
+  }
   if (contextInfo) indicators.push(`${pc.green("●")} ${pc.dim("Project context loaded")}`);
   if (indicators.length > 0) p.log.message(indicators.join("  "));
 
