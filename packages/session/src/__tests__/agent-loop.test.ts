@@ -62,8 +62,44 @@ describe("AgentLoop", () => {
     expect(result.iterations).toBe(1);
   });
 
-  it("completes on end_turn with no tool calls", async () => {
+  it("re-prompts when first response has no tool calls, then completes", async () => {
     const provider = mockProvider([
+      // First response: LLM dumps text without using tools
+      {
+        content: "Here is a Helm chart...",
+        toolCalls: [],
+        stopReason: "end_turn",
+      },
+      // After nudge: LLM uses tools properly
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "done", arguments: { summary: "Created files." } }],
+        stopReason: "tool_use",
+      },
+    ]);
+
+    const loop = new AgentLoop({
+      provider,
+      toolExecutor: mockToolExecutor(),
+      tools,
+      systemPrompt: "Test",
+    });
+
+    const result = await loop.run("Task");
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("Created files.");
+    expect(result.iterations).toBe(2);
+  });
+
+  it("completes on end_turn with no tool calls after tools were already used", async () => {
+    const provider = mockProvider([
+      // First: use a tool
+      {
+        content: "",
+        toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "x.ts" } }],
+        stopReason: "tool_use",
+      },
+      // Second: end_turn with summary text, no more tool calls
       {
         content: "I finished the task.",
         toolCalls: [],

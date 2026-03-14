@@ -35,8 +35,33 @@ export interface AgentLoopResult {
 }
 
 /**
+ * Extract a human-readable summary from LLM content.
+ * Some models return the "done" tool call as JSON text instead of a native tool call.
+ * This extracts the summary from that JSON, falling back to the raw content.
+ */
+function extractSummaryFromContent(content: string): string {
+  if (!content) return "Task completed (no summary provided).";
+  const trimmed = content.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      // Handle {"tool_calls":[{"name":"done","arguments":{"summary":"..."}}]}
+      if (Array.isArray(parsed.tool_calls)) {
+        const done = parsed.tool_calls.find((tc: { name?: string }) => tc.name === "done");
+        if (done?.arguments?.summary) return done.arguments.summary;
+      }
+      // Handle {"summary":"..."} directly
+      if (typeof parsed.summary === "string") return parsed.summary;
+    } catch {
+      // Not valid JSON, use as-is
+    }
+  }
+  return content;
+}
+
+/**
  * ReAct agent loop controller.
- * Iteratively: calls LLM with tools → executes tool calls → appends results → repeats.
+ * Iteratively: calls LLM with tools -> executes tool calls -> appends results -> repeats.
  * Terminates on: "done" tool, end_turn with no tool calls, max iterations, or token budget.
  */
 export class AgentLoop {
@@ -71,11 +96,22 @@ export class AgentLoop {
       }
 
       // Check stop conditions
-      const stopResult = this.checkStopConditions(response, allToolCalls);
+      const stopResult = this.checkStopConditions(response, allToolCalls, iteration);
       if (stopResult) {
         summary = stopResult.summary;
         success = stopResult.success;
         break;
+      }
+
+      // If LLM returned text-only without using tools, nudge it to use tools
+      if (response.toolCalls.length === 0 && allToolCalls.length === 0) {
+        messages.push({
+          role: "user",
+          content:
+            "You must use the provided tools (write_file, edit_file, run_command, etc.) to complete this task. " +
+            "Do not output file contents as text. Use write_file to create each file on disk.",
+        });
+        continue;
       }
 
       // Execute tool calls
@@ -124,10 +160,16 @@ export class AgentLoop {
   private checkStopConditions(
     response: LLMToolResponse,
     allToolCalls: Array<{ name: string; arguments: Record<string, unknown> }>,
+    iteration?: number,
   ): { summary: string; success: boolean } | null {
     if (response.stopReason === "end_turn" && response.toolCalls.length === 0) {
+      // If no tools have been called yet, the LLM likely dumped text instead of using tools.
+      // Return null to let the loop re-prompt with a nudge (handled in run()).
+      if (allToolCalls.length === 0 && (iteration ?? 0) === 0) {
+        return null;
+      }
       return {
-        summary: response.content || "Task completed (no summary provided).",
+        summary: extractSummaryFromContent(response.content),
         success: true,
       };
     }

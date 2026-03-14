@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-03-14
+
+### Added
+
+- **`-f` / `--file` support for `dojops auto`**: The `auto` command now accepts `-f <file>` to read prompts from files, matching the behavior of `plan` and `generate`. Inline and file prompts can be combined
+
+### Fixed
+
+- **`dojops serve` exits immediately after startup**: The HTTP server shut down as soon as it started because `process.exit(0)` fired when the non-blocking `app.listen()` returned. `serveCommand` now awaits a never-resolving promise to keep the process alive until SIGINT/SIGTERM
+- **`dojops auto` outputs text instead of creating files**: When the LLM returned all content as text without using tools (0 tool calls, 1 iteration), the agent loop treated it as success. The system prompt now explicitly requires tool use, and the loop re-prompts the LLM if the first response has no tool calls
+- **`dojops auto` blocks writes to non-allowlisted paths**: File writes failed with "not a recognized DevOps file" for project-specific directories (e.g. Helm charts in `nextjs-app/`). Autonomous mode now allows writes anywhere under the working directory since the user explicitly opted in
+- **`dojops auto` summary displays raw JSON**: When the LLM returned the `done` tool call as JSON text instead of a native function call, the raw JSON was shown as the summary. The agent loop now parses JSON content and extracts the human-readable summary
+- **`dojops auto` displays absolute file paths**: Created/Modified file lists showed full absolute paths. Now displays paths relative to the working directory
+- **`dojops auto` shows JSON in progress output**: Raw JSON from the LLM was printed in the "thinking" progress line. The callback now skips JSON content
+
 ## [1.1.0] - 2026-03-14
 
 ### Added

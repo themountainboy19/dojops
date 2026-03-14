@@ -6,8 +6,9 @@ import { ToolExecutor } from "@dojops/executor";
 import { AgentLoop } from "@dojops/session";
 import { createTools } from "@dojops/api";
 import { CLIContext } from "../types";
-import { hasFlag, stripFlags, extractFlagValue } from "../parser";
+import { stripFlags, extractFlagValue } from "../parser";
 import { ExitCode, CLIError } from "../exit-codes";
+import { readPromptFile } from "../stdin";
 import { findProjectRoot } from "../state";
 
 /** Summarize tool call arguments for display. */
@@ -37,21 +38,26 @@ function summarizeArgs(call: ToolCall): string {
 function buildAutoSystemPrompt(cwd: string): string {
   return `You are DojOps, an autonomous DevOps AI agent. You operate in the directory: ${cwd}
 
-Your job is to complete the user's task by iteratively:
-1. Reading files to understand the project structure and existing code
-2. Making targeted changes using write_file or edit_file
-3. Running commands to build, test, or verify your changes
-4. Using run_skill for generating DevOps configurations (Terraform, Dockerfile, CI/CD, etc.)
-5. Calling "done" when the task is complete
+CRITICAL: You MUST use tools to complete tasks. NEVER output file contents as text in your response.
+When the task requires creating or modifying files, you MUST call write_file or edit_file.
+When the task requires running commands, you MUST call run_command.
+Text-only responses are NOT acceptable when the user asks you to create, modify, or generate anything.
 
-Guidelines:
+Workflow:
+1. Use search_files and read_file to understand the project structure
+2. Create files with write_file or modify them with edit_file
+3. Run commands (build, test, lint, validate) to verify your changes
+4. Use run_skill for generating DevOps configurations (Terraform, Dockerfile, CI/CD, Helm, K8s, etc.)
+5. Call "done" with a summary when the task is complete
+
+Rules:
 - Always read relevant files before making changes
 - Prefer edit_file over write_file for modifying existing files
-- Run tests or build commands to verify your changes work
-- Use search_files to discover project structure
-- Be precise with edits — the old_string must match exactly
+- Create directories with run_command (mkdir -p) before writing files into them
+- Be precise with edits: old_string must match the file content exactly
 - If a command fails, read the error output and adapt your approach
-- When done, provide a clear summary of what was accomplished`;
+- Verify your changes work by running build/test/lint commands
+- Call "done" when finished, with a clear summary of what was created or changed`;
 }
 
 /**
@@ -61,19 +67,26 @@ Guidelines:
  * Usage: dojops auto "Create CI for Node app"
  */
 export async function autoCommand(args: string[], ctx: CLIContext): Promise<void> {
-  const prompt = stripFlags(
+  const inlinePrompt = stripFlags(
     args,
     new Set(["--skip-verify", "--force", "--allow-all-paths", "--commit"]),
     new Set(["--timeout", "--repair-attempts", "--max-iterations"]),
   ).join(" ");
 
+  // Build prompt: file content + inline args (same pattern as plan command)
+  let prompt = inlinePrompt;
+  if (ctx.globalOpts.file) {
+    const fileContent = readPromptFile(ctx.globalOpts.file);
+    prompt = inlinePrompt ? `${inlinePrompt}\n\n${fileContent}` : fileContent;
+  }
+
   if (!prompt) {
     p.log.info(`  ${pc.dim("$")} dojops auto <prompt>`);
+    p.log.info(`  ${pc.dim("$")} dojops auto -f prompt.md`);
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
   const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "20", 10);
-  const allowAllPaths = hasFlag(args, "--allow-all-paths");
 
   p.log.info(
     `${pc.bold(pc.cyan("Autonomous agent mode"))} — iterative tool-use (max ${maxIterations} iterations)`,
@@ -99,9 +112,9 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
   const toolExecutor = new ToolExecutor({
     policy: {
       allowWrite: true,
-      allowedWritePaths: allowAllPaths ? [cwd] : [],
+      allowedWritePaths: [cwd],
       deniedWritePaths: [],
-      enforceDevOpsAllowlist: !allowAllPaths,
+      enforceDevOpsAllowlist: false,
       allowNetwork: false,
       allowEnvVars: [],
       timeoutMs: 30_000,
@@ -133,8 +146,10 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     maxIterations,
     onThinking: (text) => {
       if (text) {
-        // Show first line of thinking
-        const firstLine = text.split("\n")[0];
+        // Skip raw JSON output (e.g. LLM returning tool calls as text)
+        const trimmed = text.trim();
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return;
+        const firstLine = trimmed.split("\n")[0];
         if (firstLine.length > 0) {
           p.log.info(pc.dim(firstLine.length > 100 ? firstLine.slice(0, 97) + "..." : firstLine));
         }
@@ -153,12 +168,13 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     console.log();
     p.log.message(result.summary);
 
-    // Display file changes
+    // Display file changes (relative to cwd for readability)
+    const rel = (f: string) => (f.startsWith(cwd) ? f.slice(cwd.length + 1) : f);
     if (result.filesWritten.length > 0) {
-      p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(f)).join(", ")}`);
+      p.log.success(`Created: ${result.filesWritten.map((f) => pc.green(rel(f))).join(", ")}`);
     }
     if (result.filesModified.length > 0) {
-      p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(f)).join(", ")}`);
+      p.log.success(`Modified: ${result.filesModified.map((f) => pc.yellow(rel(f))).join(", ")}`);
     }
 
     // Display stats
