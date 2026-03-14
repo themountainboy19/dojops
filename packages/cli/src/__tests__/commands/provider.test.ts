@@ -97,10 +97,10 @@ describe("provider command", () => {
   });
 
   afterEach(() => {
-    if (originalVaultKey !== undefined) {
-      process.env.DOJOPS_VAULT_KEY = originalVaultKey;
-    } else {
+    if (originalVaultKey === undefined) {
       delete process.env.DOJOPS_VAULT_KEY;
+    } else {
+      process.env.DOJOPS_VAULT_KEY = originalVaultKey;
     }
   });
 

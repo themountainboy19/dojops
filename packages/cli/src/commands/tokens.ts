@@ -69,8 +69,11 @@ function formatCost(cost: number): string {
 
 function displayOverview(summary: TokenSummary, days: number): void {
   const period = days > 0 ? `last ${days} day(s)` : "all time";
+  const tokenBreakdown = pc.dim(
+    `(${formatTokens(summary.totalPromptTokens)} in / ${formatTokens(summary.totalCompletionTokens)} out)`,
+  );
   const lines = [
-    `${pc.bold("Total tokens:")}  ${formatTokens(summary.totalTokens)}  ${pc.dim(`(${formatTokens(summary.totalPromptTokens)} in / ${formatTokens(summary.totalCompletionTokens)} out)`)}`,
+    `${pc.bold("Total tokens:")}  ${formatTokens(summary.totalTokens)}  ${tokenBreakdown}`,
     `${pc.bold("Total calls:")}   ${summary.totalCalls}`,
     `${pc.bold("Est. cost:")}     ${formatCost(summary.estimatedCost)}`,
   ];
@@ -83,7 +86,9 @@ function displayByProvider(summary: TokenSummary): void {
 
   const lines = providers.map(([name, data]) => {
     const pct = summary.totalTokens > 0 ? Math.round((data.tokens / summary.totalTokens) * 100) : 0;
-    return `  ${pc.cyan(name.padEnd(16))} ${formatTokens(data.tokens).padStart(8)}  ${pc.dim(`${data.calls} calls`)}  ${formatCost(data.cost).padStart(8)}  ${pc.dim(`${pct}%`)}`;
+    const callsLabel = pc.dim(`${data.calls} calls`);
+    const pctLabel = pc.dim(`${pct}%`);
+    return `  ${pc.cyan(name.padEnd(16))} ${formatTokens(data.tokens).padStart(8)}  ${callsLabel}  ${formatCost(data.cost).padStart(8)}  ${pctLabel}`;
   });
 
   p.note(lines.join("\n"), "By Provider");
@@ -94,7 +99,8 @@ function displayByCommand(summary: TokenSummary): void {
   if (commands.length === 0) return;
 
   const lines = commands.map(([name, data]) => {
-    return `  ${pc.cyan(name.padEnd(16))} ${formatTokens(data.tokens).padStart(8)}  ${pc.dim(`${data.calls} calls`)}  ${formatCost(data.cost).padStart(8)}`;
+    const callsLabel = pc.dim(`${data.calls} calls`);
+    return `  ${pc.cyan(name.padEnd(16))} ${formatTokens(data.tokens).padStart(8)}  ${callsLabel}  ${formatCost(data.cost).padStart(8)}`;
   });
 
   p.note(lines.join("\n"), "By Command");

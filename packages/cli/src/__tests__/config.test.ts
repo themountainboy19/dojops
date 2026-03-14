@@ -96,7 +96,7 @@ describe("config", () => {
       expect(fs.mkdirSync).toHaveBeenCalledWith(configDir, { recursive: true, mode: 0o700 });
       expect(fs.writeFileSync).toHaveBeenCalled();
       // Verify tokens are encrypted at rest
-      const writtenJson = (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      const writtenJson = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
       const written = JSON.parse(writtenJson);
       expect(written.defaultProvider).toBe("openai");
       expect(written.tokens.openai).toMatch(/^enc:v1:/);
@@ -315,7 +315,7 @@ describe("config", () => {
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(profilesPath, { recursive: true, mode: 0o700 });
       expect(fs.writeFileSync).toHaveBeenCalled();
-      const writtenJson = (fs.writeFileSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+      const writtenJson = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
       const written = JSON.parse(writtenJson);
       expect(written.defaultProvider).toBe("openai");
       expect(written.tokens.openai).toMatch(/^enc:v1:/);

@@ -304,11 +304,11 @@ export function errorFingerprint(
   agentOrModule: string,
 ): string {
   const normalized = errorMsg
-    .replace(/\/[\w./\\-]+/g, "<path>") // paths
-    .replace(/\b[0-9a-f]{8,}\b/gi, "<id>") // hex IDs
-    .replace(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}[:\d.Z]*/g, "<ts>") // timestamps
-    .replace(/\d+/g, "<n>") // remaining numbers
-    .replace(/\s+/g, " ")
+    .replaceAll(/\/[\w./\\-]+/g, "<path>") // paths
+    .replaceAll(/\b[0-9a-f]{8,}\b/gi, "<id>") // hex IDs
+    .replaceAll(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}[:\d.Z]*/g, "<ts>") // timestamps
+    .replaceAll(/\d+/g, "<n>") // remaining numbers
+    .replaceAll(/\s+/g, " ")
     .trim()
     .toLowerCase()
     .slice(0, 200);
@@ -603,6 +603,57 @@ function formatSuccessEntry(
   return { lines, charCount, overBudget: false };
 }
 
+/** Format continuation header lines. */
+function formatContinuation(ctx: MemoryContext): string[] {
+  if (!ctx.isContinuation || !ctx.continuationOf) return [];
+  return [`Continuing previous work: "${truncate(ctx.continuationOf.prompt, 80)}"`, ""];
+}
+
+/** Format successful operations section. */
+function formatSuccessfulOps(tasks: TaskRecord[]): string[] {
+  const successful = tasks.filter((t) => t.status === "success").slice(0, 5);
+  if (successful.length === 0) return [];
+
+  const lines: string[] = ["Recent successful operations:"];
+  let charCount = lines[0].length;
+  for (let i = 0; i < successful.length; i++) {
+    const entry = formatSuccessEntry(successful[i], i, charCount);
+    if (entry.overBudget) break;
+    lines.push(...entry.lines);
+    charCount = entry.charCount;
+  }
+  return lines;
+}
+
+/** Format failed operations section. */
+function formatFailedOps(tasks: TaskRecord[]): string[] {
+  const failed = tasks.filter((t) => t.status === "failure").slice(0, 3);
+  if (failed.length === 0) return [];
+  return ["", "Recent failures (avoid repeating):", ...failed.map((t) => `- ${summarizeTask(t)}`)];
+}
+
+/** Format error warnings section. */
+function formatErrorWarnings(warnings: ErrorPattern[] | undefined): string[] {
+  if (!warnings || warnings.length === 0) return [];
+  const lines: string[] = ["", "Known error patterns (watch out for these):"];
+  for (const ep of warnings.slice(0, 3)) {
+    const count = ep.occurrences > 1 ? ` (occurred ${ep.occurrences}x)` : "";
+    lines.push(`- ${truncate(ep.error_message, 100)}${count}`);
+  }
+  return lines;
+}
+
+/** Format project notes section. */
+function formatRelevantNotes(notes: NoteRecord[] | undefined): string[] {
+  if (!notes || notes.length === 0) return [];
+  const lines: string[] = ["", "Project notes:"];
+  for (const note of notes) {
+    const tag = note.category === "general" ? "" : ` [${note.category}]`;
+    lines.push(`- ${truncate(note.content, 120)}${tag}`);
+  }
+  return lines;
+}
+
 /**
  * Build a summarized operational memory string for LLM prompt injection.
  * Produces concise, actionable summaries instead of raw log lines.
@@ -611,55 +662,15 @@ function formatSuccessEntry(
 export function buildMemoryContextString(ctx: MemoryContext): string | null {
   if (ctx.recentTasks.length === 0) return null;
 
-  const lines: string[] = [];
-
-  if (ctx.isContinuation && ctx.continuationOf) {
-    lines.push(`Continuing previous work: "${truncate(ctx.continuationOf.prompt, 80)}"`);
-    lines.push("");
-  }
-
-  const successful = ctx.recentTasks.filter((t) => t.status === "success").slice(0, 5);
-  const failed = ctx.recentTasks.filter((t) => t.status === "failure").slice(0, 3);
-
-  if (successful.length > 0) {
-    lines.push("Recent successful operations:");
-    let charCount = lines.join("\n").length;
-    for (let i = 0; i < successful.length; i++) {
-      const entry = formatSuccessEntry(successful[i], i, charCount);
-      if (entry.overBudget) break;
-      lines.push(...entry.lines);
-      charCount = entry.charCount;
-    }
-  }
-
-  if (failed.length > 0) {
-    lines.push("");
-    lines.push("Recent failures (avoid repeating):");
-    for (const t of failed) {
-      lines.push(`- ${summarizeTask(t)}`);
-    }
-  }
-
-  if (ctx.errorWarnings && ctx.errorWarnings.length > 0) {
-    lines.push("");
-    lines.push("Known error patterns (watch out for these):");
-    for (const ep of ctx.errorWarnings.slice(0, 3)) {
-      const count = ep.occurrences > 1 ? ` (occurred ${ep.occurrences}x)` : "";
-      lines.push(`- ${truncate(ep.error_message, 100)}${count}`);
-    }
-  }
-
-  if (ctx.relevantNotes && ctx.relevantNotes.length > 0) {
-    lines.push("");
-    lines.push("Project notes:");
-    for (const note of ctx.relevantNotes) {
-      const tag = note.category !== "general" ? ` [${note.category}]` : "";
-      lines.push(`- ${truncate(note.content, 120)}${tag}`);
-    }
-  }
-
-  lines.push("");
-  lines.push("Avoid repeating tasks already completed successfully.");
+  const lines: string[] = [
+    ...formatContinuation(ctx),
+    ...formatSuccessfulOps(ctx.recentTasks),
+    ...formatFailedOps(ctx.recentTasks),
+    ...formatErrorWarnings(ctx.errorWarnings),
+    ...formatRelevantNotes(ctx.relevantNotes),
+    "",
+    "Avoid repeating tasks already completed successfully.",
+  ];
 
   return lines.join("\n");
 }

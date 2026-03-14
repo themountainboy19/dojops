@@ -39,6 +39,31 @@ vi.mock("../state", () => ({
   dojopsDir: vi.fn((r: string) => `${r}/.dojops`),
 }));
 
+/** Simulate the deep merge logic directly. */
+function deepMerge(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...target };
+  for (const key of Object.keys(source)) {
+    const sv = source[key];
+    const tv = result[key];
+    if (
+      sv != null &&
+      typeof sv === "object" &&
+      !Array.isArray(sv) &&
+      tv != null &&
+      typeof tv === "object" &&
+      !Array.isArray(tv)
+    ) {
+      result[key] = deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
+    } else {
+      result[key] = sv;
+    }
+  }
+  return result;
+}
+
 describe("config apply (deep-merge)", () => {
   let tmpDir: string;
 
@@ -52,31 +77,6 @@ describe("config apply (deep-merge)", () => {
   });
 
   it("deep-merges nested objects without overwriting siblings", () => {
-    // Simulate the deep merge logic directly
-    function deepMerge(
-      target: Record<string, unknown>,
-      source: Record<string, unknown>,
-    ): Record<string, unknown> {
-      const result = { ...target };
-      for (const key of Object.keys(source)) {
-        const sv = source[key];
-        const tv = result[key];
-        if (
-          sv != null &&
-          typeof sv === "object" &&
-          !Array.isArray(sv) &&
-          tv != null &&
-          typeof tv === "object" &&
-          !Array.isArray(tv)
-        ) {
-          result[key] = deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
-        } else {
-          result[key] = sv;
-        }
-      }
-      return result;
-    }
-
     const base = {
       defaultProvider: "openai",
       tokens: { openai: "sk-old", anthropic: "sk-ant" },
@@ -97,30 +97,6 @@ describe("config apply (deep-merge)", () => {
   });
 
   it("replaces arrays instead of merging", () => {
-    function deepMerge(
-      target: Record<string, unknown>,
-      source: Record<string, unknown>,
-    ): Record<string, unknown> {
-      const result = { ...target };
-      for (const key of Object.keys(source)) {
-        const sv = source[key];
-        const tv = result[key];
-        if (
-          sv != null &&
-          typeof sv === "object" &&
-          !Array.isArray(sv) &&
-          tv != null &&
-          typeof tv === "object" &&
-          !Array.isArray(tv)
-        ) {
-          result[key] = deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
-        } else {
-          result[key] = sv;
-        }
-      }
-      return result;
-    }
-
     const base = { tags: ["a", "b"] };
     const patch = { tags: ["c"] };
     const merged = deepMerge(base, patch);

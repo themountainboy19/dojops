@@ -72,7 +72,7 @@ export async function autoCommand(args: string[], ctx: CLIContext): Promise<void
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No prompt provided.");
   }
 
-  const maxIterations = parseInt(extractFlagValue(args, "--max-iterations") ?? "20", 10);
+  const maxIterations = Number.parseInt(extractFlagValue(args, "--max-iterations") ?? "20", 10);
   const allowAllPaths = hasFlag(args, "--allow-all-paths");
 
   p.log.info(

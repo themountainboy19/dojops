@@ -353,10 +353,14 @@ function handleGetSubcommand(args: string[]): void {
   // Mask token values by default
   if (key.startsWith("tokens.") && typeof value === "string") {
     console.log(maskToken(value));
-  } else if (typeof value === "object") {
+  } else if (typeof value === "object" && value !== null) {
     console.log(JSON.stringify(value, null, 2));
   } else {
-    console.log(String(value));
+    console.log(
+      typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? String(value)
+        : JSON.stringify(value),
+    );
   }
 }
 
@@ -574,7 +578,7 @@ function handleBackupSubcommand(args: string[], ctx: CLIContext): void {
     throw new CLIError(ExitCode.VALIDATION_ERROR, "No .dojops directory found. Run: dojops init");
   }
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const timestamp = new Date().toISOString().replaceAll(/[:.]/g, "-").slice(0, 19);
   const outFlag = extractFlagValue(args, "--output");
   const outPath = outFlag ?? path.join(root, `dojops-backup-${timestamp}.tar.gz`);
 

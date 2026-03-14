@@ -77,17 +77,17 @@ describe("AGENT_TOOLS", () => {
   it("each tool has valid JSON Schema parameters", () => {
     for (const tool of AGENT_TOOLS) {
       expect(tool.parameters).toBeDefined();
-      expect((tool.parameters as Record<string, unknown>).type).toBe("object");
-      expect((tool.parameters as Record<string, unknown>).properties).toBeDefined();
+      expect(tool.parameters.type).toBe("object");
+      expect(tool.parameters.properties).toBeDefined();
     }
   });
 
   it("read_file requires path", () => {
-    expect((READ_FILE_TOOL.parameters as Record<string, unknown>).required).toContain("path");
+    expect(READ_FILE_TOOL.parameters.required).toContain("path");
   });
 
   it("done requires summary", () => {
-    expect((DONE_TOOL.parameters as Record<string, unknown>).required).toContain("summary");
+    expect(DONE_TOOL.parameters.required).toContain("summary");
   });
 });
 

@@ -119,7 +119,7 @@ describe("AgentLoop", () => {
   it("respects maxIterations", async () => {
     // Provider always returns a tool call (never done)
     const provider = mockProvider(
-      Array(5).fill({
+      new Array(5).fill({
         content: "",
         toolCalls: [{ id: "c1", name: "read_file", arguments: { path: "x.ts" } }],
         stopReason: "tool_use",

@@ -8,6 +8,10 @@ import type { ExecutionPolicy } from "../types";
 import type { ToolCall } from "@dojops/core";
 import type { DevOpsSkill } from "@dojops/sdk";
 
+function makeCall(name: string, args: Record<string, unknown>): ToolCall {
+  return { id: `test-${name}`, name, arguments: args };
+}
+
 describe("ToolExecutor", () => {
   let tmpDir: string;
   let policy: ExecutionPolicy;
@@ -27,10 +31,6 @@ describe("ToolExecutor", () => {
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-
-  function makeCall(name: string, args: Record<string, unknown>): ToolCall {
-    return { id: `test-${name}`, name, arguments: args };
-  }
 
   describe("read_file", () => {
     it("reads existing file contents", async () => {

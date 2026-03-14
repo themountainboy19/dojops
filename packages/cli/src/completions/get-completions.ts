@@ -1,5 +1,5 @@
-import { readdirSync } from "fs";
-import { join, basename, extname } from "path";
+import { readdirSync } from "node:fs";
+import { join, basename, extname } from "node:path";
 
 const PROVIDERS = ["openai", "anthropic", "ollama", "deepseek", "gemini", "github-copilot"];
 

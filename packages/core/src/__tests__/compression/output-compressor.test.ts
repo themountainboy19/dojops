@@ -106,7 +106,9 @@ describe("compressOutput", () => {
   });
 
   it("deduplicates repeated lines", () => {
-    const lines = Array(50).fill("WARNING: deprecated API call").concat(["ERROR: build failed"]);
+    const lines = new Array(50)
+      .fill("WARNING: deprecated API call")
+      .concat(["ERROR: build failed"]);
     const result = compressOutput(lines.join("\n"));
     expect(result.output).toContain("WARNING: deprecated API call (×50)");
     expect(result.output).toContain("ERROR: build failed");

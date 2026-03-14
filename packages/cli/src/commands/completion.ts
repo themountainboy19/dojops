@@ -4,10 +4,10 @@ import {
   ZSH_COMPLETION_SCRIPT,
   FISH_COMPLETION_SCRIPT,
 } from "../completions";
-import { mkdirSync, writeFileSync, existsSync } from "fs";
-import { join } from "path";
-import { execFileSync } from "child_process";
-import { homedir } from "os";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
 import pc from "picocolors";
 
 export const completionBashCommand: CommandHandler = async () => {

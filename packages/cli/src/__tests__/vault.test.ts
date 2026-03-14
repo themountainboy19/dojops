@@ -10,10 +10,10 @@ describe("vault", () => {
   });
 
   afterEach(() => {
-    if (originalEnv !== undefined) {
-      process.env.DOJOPS_VAULT_KEY = originalEnv;
-    } else {
+    if (originalEnv === undefined) {
       delete process.env.DOJOPS_VAULT_KEY;
+    } else {
+      process.env.DOJOPS_VAULT_KEY = originalEnv;
     }
   });
 

@@ -95,10 +95,10 @@ function insertTasks(tasks: Array<Partial<Omit<TaskRecord, "id">>>): void {
   for (const t of tasks) {
     recordTask(tmpDir, {
       timestamp: t.timestamp ?? new Date().toISOString(),
-      task_type: (t.task_type ?? "generate") as TaskRecord["task_type"],
+      task_type: t.task_type ?? "generate",
       prompt: t.prompt ?? "",
       result_summary: t.result_summary ?? "",
-      status: (t.status ?? "success") as TaskRecord["status"],
+      status: t.status ?? "success",
       duration_ms: t.duration_ms ?? 0,
       related_files: t.related_files ?? "[]",
       agent_or_skill: t.agent_or_skill ?? "",

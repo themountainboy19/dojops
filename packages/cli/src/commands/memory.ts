@@ -12,9 +12,10 @@ function getRoot(): string {
 }
 
 function formatNote(note: NoteRecord): string {
-  const cat = note.category !== "general" ? pc.dim(` [${note.category}]`) : "";
+  const cat = note.category === "general" ? "" : pc.dim(` [${note.category}]`);
   const date = note.timestamp.slice(0, 10);
-  return `${pc.cyan(`#${note.id}`)} ${pc.dim(date)}${cat}  ${note.content}`;
+  const idLabel = pc.cyan(`#${note.id}`);
+  return `${idLabel} ${pc.dim(date)}${cat}  ${note.content}`;
 }
 
 function handleList(args: string[], ctx: CLIContext): void {
@@ -56,7 +57,8 @@ function handleAdd(args: string[], ctx: CLIContext): void {
     console.log(JSON.stringify({ id, category, content, keywords }));
     return;
   }
-  p.log.success(`Saved note ${pc.cyan(`#${id}`)} [${category}]`);
+  const idLabel = pc.cyan(`#${id}`);
+  p.log.success(`Saved note ${idLabel} [${category}]`);
 }
 
 function handleRemove(args: string[]): void {

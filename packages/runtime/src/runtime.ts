@@ -206,7 +206,7 @@ function processStringChar(
   }
 
   // Raw control character — escape it
-  const code = ch.charCodeAt(0);
+  const code = ch.codePointAt(0)!;
   if (code < 0x20) {
     out.push(escapeControlChar(code));
     return { endString: false, advance: 0 };

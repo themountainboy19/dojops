@@ -124,7 +124,7 @@ function findLatestVersionInDocs(docs: string, searchKey: string): string | null
 
   let match: RegExpExecArray | null;
   while ((match = versionRegex.exec(docs)) !== null) {
-    versions.push(parseInt(match.groups!.ver, 10));
+    versions.push(Number.parseInt(match.groups!.ver, 10));
   }
 
   if (versions.length === 0) return null;
@@ -166,8 +166,8 @@ export function auditAgainstDocs(
     const refVersionMatch = /@v(\d+)/.exec(ref.ref);
     if (!refVersionMatch) continue;
 
-    const refVersion = parseInt(refVersionMatch[1], 10);
-    const docsVersion = parseInt(latestInDocs.slice(1), 10);
+    const refVersion = Number.parseInt(refVersionMatch[1], 10);
+    const docsVersion = Number.parseInt(latestInDocs.slice(1), 10);
 
     if (refVersion < docsVersion) {
       issues.push({
