@@ -266,7 +266,7 @@ export function createApp(deps: AppDependencies): Express {
   const debugCIRouter = createDebugCIRouter(deps.debugger, deps.store);
   const diffRouter = createDiffRouter(deps.diffAnalyzer, deps.store);
   const agentsRouter = createAgentsRouter(deps.router, deps.customAgentNames);
-  const historyRouter = createHistoryRouter(deps.store);
+  const historyRouter = createHistoryRouter(deps.store, deps.rootDir);
   const scanRouter = createScanRouter(deps.store, deps.rootDir);
   const chatRouter = createChatRouter(deps.provider, deps.router, deps.store, deps.rootDir);
   const reviewRouter = createReviewRouter(

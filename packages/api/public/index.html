@@ -4,7 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DojOps — DevOps Command Center</title>
-    <link rel="icon" type="image/png" href="icons/official-dojops-icon.png" />
+    <link rel="icon" type="image/png" href="icons/dojops-favicon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -18,7 +24,7 @@
       <aside class="sidebar" id="sidebar">
         <div class="sidebar__brand">
           <a class="logo" id="sidebar-logo" style="cursor: pointer">
-            <img src="logo/official-dojops-logo.png" alt="DojOps" />
+            <img src="logo/dojops-new-logo.png" alt="DojOps" />
           </a>
         </div>
 
@@ -116,7 +122,7 @@
 
         <div class="sidebar__footer">
           <div class="status-chip" id="provider-badge">
-            <img src="icons/official-dojops-icon.png" alt="" class="status-chip__icon" />
+            <img src="logo/dojops-new-logo-sm.png" alt="" class="status-chip__icon" />
             <span class="status-dot"></span>
             <span class="status-text">connecting...</span>
           </div>
@@ -142,7 +148,7 @@
         </button>
         <div class="topbar__brand">
           <img
-            src="logo/official-dojops-logo.png"
+            src="logo/dojops-new-logo.png"
             alt="DojOps"
             class="topbar__logo"
             id="topbar-logo"
@@ -150,7 +156,7 @@
           />
         </div>
         <div class="status-chip status-chip--sm" id="provider-badge-mobile">
-          <img src="icons/official-dojops-icon.png" alt="" class="status-chip__icon" />
+          <img src="logo/dojops-new-logo-sm.png" alt="" class="status-chip__icon" />
           <span class="status-dot"></span>
           <span class="status-text">...</span>
         </div>
@@ -291,8 +297,12 @@
                 <option value="">All types</option>
                 <option value="generate">Generate</option>
                 <option value="plan">Plan</option>
+                <option value="auto">Auto</option>
                 <option value="debug-ci">Debug CI</option>
                 <option value="diff">Diff</option>
+                <option value="scan">Scan</option>
+                <option value="chat">Chat</option>
+                <option value="review">Review</option>
               </select>
               <svg
                 width="14"

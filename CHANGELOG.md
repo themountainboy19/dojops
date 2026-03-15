@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`-f` / `--file` support for `dojops auto`**: The `auto` command now accepts `-f <file>` to read prompts from files, matching the behavior of `plan` and `generate`. Inline and file prompts can be combined
+- **Dashboard: history shows executed commands**: History entries now display the prompt/command text alongside type and status. Supports all entry types (generate, plan, auto, debug-ci, diff, scan, chat, review)
+- **Dashboard: pagination on all tables**: Every table and list across all dashboard tabs now has pagination controls — Overview (recent activity, most used commands, failure reasons), Security (issues, scan history), Audit (command distribution, recent entries), and History
+- **Dashboard: all entry types in history filter**: The history type dropdown now includes Auto, Scan, Chat, and Review filters
 
 ### Fixed
 
@@ -19,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`dojops auto` summary displays raw JSON**: When the LLM returned the `done` tool call as JSON text instead of a native function call, the raw JSON was shown as the summary. The agent loop now parses JSON content and extracts the human-readable summary
 - **`dojops auto` displays absolute file paths**: Created/Modified file lists showed full absolute paths. Now displays paths relative to the working directory
 - **`dojops auto` shows JSON in progress output**: Raw JSON from the LLM was printed in the "thinking" progress line. The callback now skips JSON content
+- **Dashboard sidebar logo too large**: Reduced logo max-width from 140px to 100px
+- **Dashboard history route missing "auto" type**: The `ALLOWED_TYPES` set in the history route handler now includes "auto" entries
+- **Dashboard history empty after CLI usage**: The history tab only showed API-originated entries because it read from the in-memory `HistoryStore`. CLI commands write to `.dojops/history/audit.jsonl` instead. The history route now reads both sources and merges them, so CLI-executed commands (generate, plan, apply, auto, scan) appear in the dashboard
 
 ## [1.1.0] - 2026-03-14
 

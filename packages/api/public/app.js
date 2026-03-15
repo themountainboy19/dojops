@@ -9,6 +9,18 @@ let _state = {
   filteredIssues: [],
   scanHistoryData: [],
   scanHistoryPage: 1,
+  recentActivityData: [],
+  recentActivityPage: 1,
+  commandsData: [],
+  commandsPage: 1,
+  failureReasonsData: [],
+  failureReasonsPage: 1,
+  cmdDistData: [],
+  cmdDistPage: 1,
+  auditTimelineData: [],
+  auditTimelinePage: 1,
+  historyData: [],
+  historyPage: 1,
 };
 
 // ── Auth Helpers ─────────────────────────────────────────
@@ -676,6 +688,29 @@ function renderAgents(agents) {
 
 // ── History ──────────────────────────────────────────────
 
+function getEntryPrompt(entry) {
+  const r = entry.request;
+  if (!r) return "";
+  if (typeof r === "string") return r;
+  if (r.prompt) return r.prompt;
+  if (r.goal) return r.goal;
+  if (r.message) return r.message;
+  if (r.log) return r.log;
+  if (r.diff) return r.diff;
+  if (r.target) return "scan: " + r.target;
+  if (r.files) return "review: " + (Array.isArray(r.files) ? r.files.join(", ") : r.files);
+  return "";
+}
+
+function truncatePrompt(text, maxLen) {
+  if (!text) return "";
+  const single = text.replace(/\n/g, " ").trim();
+  if (single.length <= maxLen) return single;
+  return single.slice(0, maxLen) + "...";
+}
+
+let HISTORY_PER_PAGE = 10;
+
 async function loadHistory() {
   const container = $("history-table");
   const type = $("history-type").value;
@@ -683,45 +718,100 @@ async function loadHistory() {
 
   try {
     const data = await apiCall(`/history${query}`);
-    container.innerHTML = renderHistory(data.entries);
+    _state.historyData = data.entries || [];
+    _state.historyPage = 1;
+    if (!_state.historyData.length) {
+      container.textContent = "";
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.innerHTML =
+        '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>';
+      const msg = document.createElement("div");
+      msg.textContent = "No history entries";
+      empty.appendChild(msg);
+      container.appendChild(empty);
+      return;
+    }
+    // Create shell containers for paginated list
+    container.textContent = "";
+    const listWrap = document.createElement("div");
+    listWrap.id = "history-list-wrap";
+    const pagWrap = document.createElement("div");
+    pagWrap.id = "history-pagination";
+    pagWrap.className = "pagination";
+    container.appendChild(listWrap);
+    container.appendChild(pagWrap);
+    renderHistoryPage();
   } catch (err) {
-    container.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+    container.textContent = "";
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = err.message;
+    container.appendChild(empty);
   }
 }
 
-function renderHistory(entries) {
-  if (!entries.length) {
-    return `<div class="empty-state">
-      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
-      <div>No history entries</div>
-    </div>`;
-  }
+function renderHistoryPage() {
+  let items = _state.historyData || [];
+  let page = _state.historyPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / HISTORY_PER_PAGE));
+  if (page > totalPages) page = totalPages;
 
+  let start = (page - 1) * HISTORY_PER_PAGE;
+  let pageItems = items.slice(start, start + HISTORY_PER_PAGE);
+
+  let wrap = $("history-list-wrap");
+  if (!wrap) return;
+
+  // All values passed to escapeHtml are from our own API — safe HTML rendering
   let html = '<div class="history-list">';
-
-  for (const e of entries) {
+  for (const e of pageItems) {
     const time = new Date(e.timestamp).toLocaleString();
     const statusChip = e.success
       ? '<span class="chip chip--success">ok</span>'
       : '<span class="chip chip--error">error</span>';
+    const prompt = truncatePrompt(getEntryPrompt(e), 80);
 
-    html += `
-      <div>
-        <div class="history-row" data-action="toggleDetail" data-detail-id="detail-${e.id}">
-          <span class="history-row__id">${escapeHtml(e.id)}</span>
-          <span class="chip chip--muted">${escapeHtml(e.type)}</span>
-          <span class="history-row__time">${escapeHtml(time)}</span>
-          ${statusChip}
-          <span class="history-row__duration">${e.durationMs}ms</span>
-        </div>
-        <div id="detail-${e.id}" class="history-detail">
-          ${renderHistoryDetail(e)}
-        </div>
-      </div>`;
+    html +=
+      "<div>" +
+      '<div class="history-row" data-action="toggleDetail" data-detail-id="detail-' +
+      e.id +
+      '">' +
+      '<span class="history-row__id">' +
+      escapeHtml(e.id) +
+      "</span>" +
+      '<span class="chip chip--muted">' +
+      escapeHtml(e.type) +
+      "</span>" +
+      '<span class="history-row__prompt">' +
+      escapeHtml(prompt) +
+      "</span>" +
+      '<span class="history-row__time">' +
+      escapeHtml(time) +
+      "</span>" +
+      statusChip +
+      '<span class="history-row__duration">' +
+      e.durationMs +
+      "ms</span>" +
+      "</div>" +
+      '<div id="detail-' +
+      e.id +
+      '" class="history-detail">' +
+      renderHistoryDetail(e) +
+      "</div></div>";
   }
-
   html += "</div>";
-  return html;
+  wrap.innerHTML = html; // NOSONAR — all values are escapeHtml-sanitized from our own API
+
+  let pag = $("history-pagination");
+  if (pag) {
+    pag.innerHTML = renderPagination(page, totalPages, items.length, "goHistoryPage");
+  }
+}
+
+function goHistoryPage(p) {
+  _state.historyPage = p;
+  renderHistoryPage();
 }
 
 function renderHistoryDetail(entry) {
@@ -954,16 +1044,36 @@ function renderFindingsSummary(data) {
   return html;
 }
 
+let ACTIVITY_PER_PAGE = 8;
+
 function renderRecentActivity(data) {
   if (data.recentActivity.length === 0) return "";
+  _state.recentActivityData = data.recentActivity;
+  _state.recentActivityPage = 1;
   let html = '<div class="metrics-section">';
   html += '<div class="metrics-section__title">Recent Activity</div>';
-  html += '<div class="timeline-list">';
+  html += '<div id="recent-activity-wrap"></div>';
+  html += '<div id="recent-activity-pagination" class="pagination"></div>';
+  html += "</div>";
+  setTimeout(renderRecentActivityPage, 0);
+  return html;
+}
+
+function renderRecentActivityPage() {
+  let items = _state.recentActivityData || [];
+  let page = _state.recentActivityPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / ACTIVITY_PER_PAGE));
+  if (page > totalPages) page = totalPages;
+  let start = (page - 1) * ACTIVITY_PER_PAGE;
+  let pageItems = items.slice(start, start + ACTIVITY_PER_PAGE);
+  let wrap = $("recent-activity-wrap");
+  if (!wrap) return;
   const dotMap = {
     success: "timeline-entry__dot--success",
     failure: "timeline-entry__dot--failure",
   };
-  for (const item of data.recentActivity.slice(0, 10)) {
+  let html = '<div class="timeline-list">';
+  for (const item of pageItems) {
     const dotClass = dotMap[item.status] || "timeline-entry__dot--unknown";
     const statusChip = statusToChip(item.status);
     html +=
@@ -981,17 +1091,44 @@ function renderRecentActivity(data) {
       (item.planId ? '<span class="chip chip--muted">' + escapeHtml(item.planId) + "</span>" : "") +
       "</div>";
   }
-  html += "</div></div>";
-  return html;
+  html += "</div>";
+  wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
+  let pag = $("recent-activity-pagination");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goRecentActivityPage");
 }
+
+function goRecentActivityPage(p) {
+  _state.recentActivityPage = p;
+  renderRecentActivityPage();
+}
+
+let COMMANDS_PER_PAGE = 8;
 
 function renderAgentUsageTable(data) {
   if (data.mostUsedAgents.length === 0) return "";
+  _state.commandsData = data.mostUsedAgents;
+  _state.commandsPage = 1;
   let html = '<div class="metrics-section glass-card">';
   html += '<div class="metrics-section__title">Most Used Commands</div>';
-  html +=
+  html += '<div id="commands-table-wrap"></div>';
+  html += '<div id="commands-pagination" class="pagination"></div>';
+  html += "</div>";
+  setTimeout(renderCommandsPage, 0);
+  return html;
+}
+
+function renderCommandsPage() {
+  let items = _state.commandsData || [];
+  let page = _state.commandsPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / COMMANDS_PER_PAGE));
+  if (page > totalPages) page = totalPages;
+  let start = (page - 1) * COMMANDS_PER_PAGE;
+  let pageItems = items.slice(start, start + COMMANDS_PER_PAGE);
+  let wrap = $("commands-table-wrap");
+  if (!wrap) return;
+  let html =
     '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-  for (const item of data.mostUsedAgents.slice(0, 8)) {
+  for (const item of pageItems) {
     html +=
       '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
       escapeHtml(item.agent) +
@@ -999,19 +1136,46 @@ function renderAgentUsageTable(data) {
       item.count +
       "</td></tr>";
   }
-  html += "</tbody></table></div>";
-  return html;
+  html += "</tbody></table>";
+  wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
+  let pag = $("commands-pagination");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goCommandsPage");
 }
+
+function goCommandsPage(p) {
+  _state.commandsPage = p;
+  renderCommandsPage();
+}
+
+let FAILURES_PER_PAGE = 8;
 
 function renderFailureReasonsTable(data) {
   if (data.failureReasons.length === 0) {
     return '<div class="metrics-section glass-card"><div class="metrics-section__title">Failure Reasons</div><div style="color:var(--text-muted);font-size:13px;padding:8px 0">No failures recorded</div></div>';
   }
+  _state.failureReasonsData = data.failureReasons;
+  _state.failureReasonsPage = 1;
   let html = '<div class="metrics-section glass-card">';
   html += '<div class="metrics-section__title">Failure Reasons</div>';
-  html +=
+  html += '<div id="failures-table-wrap"></div>';
+  html += '<div id="failures-pagination" class="pagination"></div>';
+  html += "</div>";
+  setTimeout(renderFailuresPage, 0);
+  return html;
+}
+
+function renderFailuresPage() {
+  let items = _state.failureReasonsData || [];
+  let page = _state.failureReasonsPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / FAILURES_PER_PAGE));
+  if (page > totalPages) page = totalPages;
+  let start = (page - 1) * FAILURES_PER_PAGE;
+  let pageItems = items.slice(start, start + FAILURES_PER_PAGE);
+  let wrap = $("failures-table-wrap");
+  if (!wrap) return;
+  let html =
     '<table class="metric-table"><thead><tr><th>Reason</th><th>Count</th></tr></thead><tbody>';
-  for (const item of data.failureReasons.slice(0, 8)) {
+  for (const item of pageItems) {
     html +=
       '<tr><td style="color:var(--error)">' +
       escapeHtml(item.reason) +
@@ -1019,8 +1183,15 @@ function renderFailureReasonsTable(data) {
       item.count +
       "</td></tr>";
   }
-  html += "</tbody></table></div>";
-  return html;
+  html += "</tbody></table>";
+  wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
+  let pag = $("failures-pagination");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goFailuresPage");
+}
+
+function goFailuresPage(p) {
+  _state.failureReasonsPage = p;
+  renderFailuresPage();
 }
 
 function renderOverview(data) {
@@ -1420,13 +1591,33 @@ function renderIntegrityDetail(data) {
   );
 }
 
+let CMD_DIST_PER_PAGE = 8;
+
 function renderCommandDistribution(data) {
   if (data.byCommand.length === 0) return "";
+  _state.cmdDistData = data.byCommand;
+  _state.cmdDistPage = 1;
   let html = '<div class="metrics-section glass-card">';
   html += '<div class="metrics-section__title">Command Distribution</div>';
-  html +=
+  html += '<div id="cmd-dist-table-wrap"></div>';
+  html += '<div id="cmd-dist-pagination" class="pagination"></div>';
+  html += "</div>";
+  setTimeout(renderCmdDistPage, 0);
+  return html;
+}
+
+function renderCmdDistPage() {
+  let items = _state.cmdDistData || [];
+  let page = _state.cmdDistPage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / CMD_DIST_PER_PAGE));
+  if (page > totalPages) page = totalPages;
+  let start = (page - 1) * CMD_DIST_PER_PAGE;
+  let pageItems = items.slice(start, start + CMD_DIST_PER_PAGE);
+  let wrap = $("cmd-dist-table-wrap");
+  if (!wrap) return;
+  let html =
     '<table class="metric-table"><thead><tr><th>Command</th><th>Count</th></tr></thead><tbody>';
-  for (const item of data.byCommand) {
+  for (const item of pageItems) {
     html +=
       '<tr><td><code style="font-family:var(--font-mono);font-size:12px;color:var(--cyan)">' +
       escapeHtml(item.command) +
@@ -1434,18 +1625,44 @@ function renderCommandDistribution(data) {
       item.count +
       "</td></tr>";
   }
-  html += "</tbody></table></div>";
-  return html;
+  html += "</tbody></table>";
+  wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
+  let pag = $("cmd-dist-pagination");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goCmdDistPage");
 }
+
+function goCmdDistPage(p) {
+  _state.cmdDistPage = p;
+  renderCmdDistPage();
+}
+
+let AUDIT_TIMELINE_PER_PAGE = 10;
 
 function renderRecentAuditEntries(data) {
   if (data.timeline.length === 0) return "";
+  _state.auditTimelineData = data.timeline;
+  _state.auditTimelinePage = 1;
   let html = '<div class="metrics-section">';
   html += '<div class="metrics-section__title">Recent Entries</div>';
-  html += '<div class="audit-entries-grid">';
-  let max = Math.min(data.timeline.length, 20);
-  for (let j = 0; j < max; j++) {
-    let entry = data.timeline[j];
+  html += '<div id="audit-timeline-wrap"></div>';
+  html += '<div id="audit-timeline-pagination" class="pagination"></div>';
+  html += "</div>";
+  setTimeout(renderAuditTimelinePage, 0);
+  return html;
+}
+
+function renderAuditTimelinePage() {
+  let items = _state.auditTimelineData || [];
+  let page = _state.auditTimelinePage || 1;
+  let totalPages = Math.max(1, Math.ceil(items.length / AUDIT_TIMELINE_PER_PAGE));
+  if (page > totalPages) page = totalPages;
+  let start = (page - 1) * AUDIT_TIMELINE_PER_PAGE;
+  let pageItems = items.slice(start, start + AUDIT_TIMELINE_PER_PAGE);
+  let wrap = $("audit-timeline-wrap");
+  if (!wrap) return;
+  let html = '<div class="audit-entries-grid">';
+  for (let j = 0; j < pageItems.length; j++) {
+    let entry = pageItems[j];
     let statusChip = statusToChip(entry.status);
     let hashDisplay = entry.hash
       ? '<span class="audit-entry-card__hash" title="' +
@@ -1467,12 +1684,19 @@ function renderRecentAuditEntries(data) {
       statusChip +
       hashDisplay +
       "</div>";
-    if (j < max - 1 && entry.hash) {
+    if (j < pageItems.length - 1 && entry.hash) {
       html += '<div class="audit-entry-card__chain-arrow">&#x25BC;</div>';
     }
   }
-  html += "</div></div>";
-  return html;
+  html += "</div>";
+  wrap.innerHTML = html; // NOSONAR — values from own API, escapeHtml-sanitized
+  let pag = $("audit-timeline-pagination");
+  if (pag) pag.innerHTML = renderPagination(page, totalPages, items.length, "goAuditTimelinePage");
+}
+
+function goAuditTimelinePage(p) {
+  _state.auditTimelinePage = p;
+  renderAuditTimelinePage();
 }
 
 function renderAudit(data) {
@@ -1864,6 +2088,12 @@ async function init() {
 let PAGINATE_FUNCTIONS = {
   goIssuesPage: goIssuesPage,
   goScanHistoryPage: goScanHistoryPage,
+  goHistoryPage: goHistoryPage,
+  goRecentActivityPage: goRecentActivityPage,
+  goCommandsPage: goCommandsPage,
+  goFailuresPage: goFailuresPage,
+  goCmdDistPage: goCmdDistPage,
+  goAuditTimelinePage: goAuditTimelinePage,
 };
 
 // ── CSP-safe event delegation ────────────────────────────
